@@ -11,7 +11,7 @@ const COLORS = [
 const MainOrb = memo(({ isListening, onVoiceClick }: { isListening: boolean, onVoiceClick: () => void }) => (
     <div
         data-interaction-target="main-orb"
-        className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[160px] h-[160px] rounded-full flex items-center justify-center cursor-pointer transition-all duration-300 z-30
+        className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[160px] h-[160px] md:w-[220px] md:h-[220px] rounded-full flex items-center justify-center cursor-pointer transition-all duration-300 z-30
         border-[3px] ${isListening ? 'border-white shadow-[0_0_60px_rgba(255,255,255,0.8)]' : 'border-gray-300 shadow-[0_0_50px_rgba(255,255,255,0.3)]'}
         bg-orange-500 hover:scale-105 overflow-hidden`}
         onClickCapture={(e) => {
