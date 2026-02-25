@@ -25,7 +25,7 @@ export interface TourStep {
 }
 
 export interface Tour {
-    id:string;
+    id: string;
     name: string;
     steps: TourStep[];
 }
