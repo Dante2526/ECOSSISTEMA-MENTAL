@@ -212,15 +212,11 @@ const OrbitalSystemComponent: React.ForwardRefRenderFunction<OrbitalSystemRef, O
 
     const updateTransform = useCallback((animate = false) => {
         if (containerRef.current) {
-            if (animate) {
-                // Force reflow to ensure transition applies if it was previously 'none'
-                if (containerRef.current.style.transition === 'none') {
-                    void containerRef.current.offsetWidth;
-                }
-                containerRef.current.style.transition = 'transform 0.8s cubic-bezier(0.33, 1, 0.68, 1)';
-            } else {
-                containerRef.current.style.transition = 'none';
-            }
+            // Use a near-instant transition for drag/pan (feels instantaneous)
+            // and a smooth transition for animated resets — no force reflow needed.
+            containerRef.current.style.transition = animate
+                ? 'transform 0.8s cubic-bezier(0.33, 1, 0.68, 1)'
+                : 'transform 0ms linear';
             const { pan, zoom } = viewStateRef.current;
             // Use translate3d to force hardware acceleration on mobile
             containerRef.current.style.transform = `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`;
