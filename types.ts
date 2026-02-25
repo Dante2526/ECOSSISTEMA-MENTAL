@@ -1,0 +1,36 @@
+
+export interface Satellite {
+    name: string;
+    style?: string;
+}
+
+export interface OrbitalSystem {
+    id: string;
+    name: string;
+    iconUrl: string;
+    modalUrls: string[];
+    satellites: Satellite[];
+    mapCoordinates?: { x: number, y: number };
+}
+
+export interface SearchItem {
+    systemId: string;
+    text: string;
+    imageUrls: string[];
+    type: 'fulltext' | 'keyword';
+}
+
+export interface TourStep {
+    systemId: string;
+}
+
+export interface Tour {
+    id:string;
+    name: string;
+    steps: TourStep[];
+}
+
+export interface OrbitalSystemRef {
+    highlightSystemsByIds: (ids: string[]) => void;
+    focusSystem: (id: string | null) => void;
+}

@@ -1,0 +1,7 @@
+{
+  "name": "ECOSSISTEMA MENTAL",
+  "description": "Uma visualização 3D interativa e controlada por voz de sistemas orbitais, permitindo aos usuários explorar e pesquisar informações de satélites em um ambiente espacial dinâmico.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
