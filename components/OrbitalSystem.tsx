@@ -151,7 +151,10 @@ const SatelliteNode: React.FC<{
                                 className={`text-[9px] font-bold text-center leading-[0.9rem] block px-0.5 w-full break-words ${isHighlighted ? 'text-white' : 'text-gray-100'}`}
                                 dangerouslySetInnerHTML={{ __html: formattedName }}
                                 style={{
-                                    transform: 'rotate(calc(-1 * var(--system-rotation, 0deg)))'
+                                    // translateZ(0) promotes the text to its own GPU compositing layer
+                                    // so the counter-rotation never causes sub-pixel CPU jitter
+                                    transform: 'rotate(calc(-1 * var(--system-rotation, 0deg))) translateZ(0)',
+                                    willChange: 'transform',
                                 }}
                             />
                         </div>
@@ -383,7 +386,9 @@ const OrbitalSystemComponent: React.ForwardRefRenderFunction<OrbitalSystemRef, O
                     velocityRef.current = 0.03;
                 }
 
-                const newRotation = (viewStateRef.current.rotation + velocityRef.current) % 360;
+                // Round to 2 decimal places to prevent floating-point noise accumulation
+                // which causes the satellite text counter-rotation to tremble each frame
+                const newRotation = Math.round((viewStateRef.current.rotation + velocityRef.current) % 360 * 100) / 100;
                 viewStateRef.current.rotation = newRotation;
 
                 if (rotationContainerRef.current) {
