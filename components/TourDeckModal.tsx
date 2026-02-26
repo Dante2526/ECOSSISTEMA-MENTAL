@@ -184,8 +184,8 @@ export const TourDeckModal: React.FC<TourDeckModalProps> = React.memo(({ isOpen,
                 })}
             </div>
 
-            {/* Desktop Navigation Buttons */}
-            <div className="absolute inset-y-0 left-4 md:left-[10%] lg:left-[15%] flex items-center z-[9999] pointer-events-none">
+            {/* Navigation Buttons */}
+            <div className="absolute bottom-8 md:bottom-auto md:inset-y-0 left-0 w-full flex justify-center md:justify-between items-center gap-16 md:gap-0 px-0 md:px-[10%] lg:px-[15%] z-[9999] pointer-events-none">
                 <button
                     onClick={handlePrev}
                     disabled={currentIndex === 0}
@@ -194,9 +194,7 @@ export const TourDeckModal: React.FC<TourDeckModalProps> = React.memo(({ isOpen,
                 >
                     <svg className="w-6 h-6 md:w-8 md:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7"></path></svg>
                 </button>
-            </div>
 
-            <div className="absolute inset-y-0 right-4 md:right-[10%] lg:right-[15%] flex items-center z-[9999] pointer-events-none">
                 <button
                     onClick={handleNext}
                     disabled={currentIndex === slides.length - 1}
