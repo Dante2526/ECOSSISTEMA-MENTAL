@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { OrbitalSystem as OrbitalSystemType, SearchItem, Tour, OrbitalSystemRef } from './types';
 import { orbitalSystemsData as initialSystems } from './data/initialData';
 import { useVoiceRecognition } from './hooks/useVoiceRecognition';
-import { buildSearchCache, findMatchingItems, applyPhoneticCorrections } from './services/searchService';
+import { buildSearchCache, findMatchingItems, applyPhoneticCorrections, normalizeText } from './services/searchService';
 import { ParallaxBackground } from './components/ParallaxBackground';
 import { OrbitalSystem } from './components/OrbitalSystem';
 import { ImageModal } from './components/ImageModal';
@@ -225,6 +225,22 @@ const App: React.FC = () => {
             const correctedTranscript = applyPhoneticCorrections(transcript);
             showFeedback(`VOCÊ DISSE: "${correctedTranscript.toUpperCase()}"`);
 
+            // 1. Check if it matches a Tour name first
+            const normalizedTranscriptForTour = normalizeText(correctedTranscript);
+            const matchingTour = tours.find(t =>
+                normalizeText(t.name).includes(normalizedTranscriptForTour) ||
+                normalizedTranscriptForTour.includes(normalizeText(t.name))
+            );
+
+            if (matchingTour) {
+                showFeedback(`INICIANDO TOUR: ${matchingTour.name.toUpperCase()}`);
+                setTimeout(() => {
+                    startTour(matchingTour);
+                }, 1000);
+                return; // Stop further search if a tour matched
+            }
+
+            // 2. Fallback to normal System/Satellite search
             const found = findMatchingItems(transcript, searchCache);
 
             const systemIdsToHighlight = found.map(item => item.systemId);
