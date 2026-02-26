@@ -11,7 +11,7 @@ import { AdminPanel } from './components/AdminPanel';
 import { AdminLoginModal } from './components/AdminLoginModal';
 import { QuickSearchModal } from './components/QuickSearchModal';
 import { TourSelectionModal } from './components/TourSelectionModal';
-import { TourControls } from './components/TourControls';
+import { TourDeckModal } from './components/TourDeckModal';
 import { FeedbackMessage } from './components/FeedbackMessage';
 import { MapModal } from './components/MapModal';
 
@@ -26,7 +26,7 @@ const App: React.FC = () => {
     const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
     const [isQuickSearchOpen, setIsQuickSearchOpen] = useState(false);
     const [isTourSelectionOpen, setIsTourSelectionOpen] = useState(false);
-    const [activeTour, setActiveTour] = useState<{ tour: Tour; currentStep: number } | null>(null);
+    const [activeTour, setActiveTour] = useState<Tour | null>(null);
 
     const orbitalSystemRef = useRef<OrbitalSystemRef>(null);
 
@@ -51,14 +51,77 @@ const App: React.FC = () => {
         }
     });
 
+    const DEFAULT_TOURS: Tour[] = [
+        {
+            id: 'tour-oficina',
+            name: 'Vamos para a Oficina Central!',
+            steps: [
+                { systemId: 'watchSystem19' }, // PIAL X OFICINA 01
+                { systemId: 'watchSystem30' }, // PIAL X TANCAGEM
+                { systemId: 'watchSystem10' }, // PIAL X OFICINA
+                { systemId: 'watchSystem2' }, // PASSAGEM EM NIVEL 201
+                { systemId: 'watchSystem33' }, // LINHAS SENTIDO OFICINA
+                { systemId: 'watchSystem18' }, // RECLASSIFICAÇÃO E OFICINA
+                { systemId: 'watchSystem4' }, // POR BAIXO DO GALPÃO DA OFICINA
+                { systemId: 'watchSystem14' }, // LINHAS ABAIXO DO GALPÃO DO PIAL
+            ],
+        },
+        {
+            id: 'tour-passageiro',
+            name: 'Vamos para o Passageiro!',
+            steps: [
+                { systemId: 'watchSystem11' }, // PASSAGEIRO 01
+                { systemId: 'watchSystem13' }, // PASSAGEIRO 02
+                { systemId: 'watchSystem25' }, // LOCOMOTIVA PASSAGEIRO
+            ],
+        },
+        {
+            id: 'tour-freio',
+            name: 'Vamos para o Freio!',
+            steps: [
+                { systemId: 'watchSystem3' }, // LINHA DO FREIO
+                { systemId: 'watchSystem5' }, // LINHAS DO FREIO 02
+            ],
+        },
+        {
+            id: 'tour-reclassificacao',
+            name: 'Vamos para a Reclassificação!',
+            steps: [
+                { systemId: 'watchSystem7' }, // RECLASSIFICAÇÃO
+                { systemId: 'watchSystem15' }, // RECLASSIFICAÇÃO 02
+                { systemId: 'watchSystem22' }, // RECLASSIFICAÇÃO 03
+                { systemId: 'watchSystem18' }, // RECLASSIFICAÇÃO E OFICINA
+            ],
+        },
+        {
+            id: 'tour-formacao',
+            name: 'Vamos para a Formação!',
+            steps: [
+                { systemId: 'watchSystem9' }, // PN OFICINA
+                { systemId: 'watchSystem12' }, // POR CIMA DO GALPÃO DA OFICINA
+                { systemId: 'watchSystem17' }, // OFICINA SENTIDO FORMAÇÃO
+                { systemId: 'watchSystem1' }, // LINHAS PROXIMO DO TRIÂNGULO DA OFICINA
+                { systemId: 'watchSystem16' }, // LINHAS DO TRIÂNGULO DA OFICINA
+                { systemId: 'watchSystem23' }, // LINHAS DO TRIÂNGULO DA OFICINA 02
+            ],
+        },
+    ];
+
     const [tours, setTours] = useState<Tour[]>(() => {
         try {
+            const TOURS_VERSION = '1.0';
+            const storedToursVersion = localStorage.getItem('orbitalToursVersion');
+            if (storedToursVersion !== TOURS_VERSION) {
+                localStorage.setItem('orbitalToursVersion', TOURS_VERSION);
+                localStorage.removeItem('orbitalTours');
+                return DEFAULT_TOURS;
+            }
             const storedTours = localStorage.getItem('orbitalTours');
-            return storedTours ? JSON.parse(storedTours) : [];
+            return storedTours ? JSON.parse(storedTours) : DEFAULT_TOURS;
         } catch (error) {
             console.error("Falha ao carregar tours do localStorage", error);
             localStorage.removeItem('orbitalTours');
-            return [];
+            return DEFAULT_TOURS;
         }
     });
 
@@ -286,69 +349,28 @@ const App: React.FC = () => {
     const handleOpenTours = useCallback(() => setIsTourSelectionOpen(true), []);
 
     // --- Tour Logic ---
-    const goToTourStep = useCallback((stepIndex: number) => {
-        if (!activeTour) return;
-
-        const step = activeTour.tour.steps[stepIndex];
-        if (!step) return;
-
-        const system = systems.find(s => s.id === step.systemId);
-        if (!system) return;
-
-        setActiveTour(prev => prev ? { ...prev, currentStep: stepIndex } : null);
-
-        handleCloseModal();
-
-        setTimeout(() => {
-            setModalImages(system.modalUrls);
-            setIsModalOpen(true);
-            orbitalSystemRef.current?.highlightSystemsByIds([system.id]);
-            orbitalSystemRef.current?.focusSystem(system.id);
-        }, 400);
-
-    }, [activeTour, systems, handleCloseModal]);
-
     const startTour = useCallback((tour: Tour) => {
         if (tour.steps.length === 0) {
             showFeedback("Este tour não possui etapas.");
             return;
         }
         setIsTourSelectionOpen(false);
-        setActiveTour({ tour, currentStep: 0 });
-        const step = tour.steps[0];
-        const system = systems.find(s => s.id === step.systemId);
-        if (system) {
-            handleCloseModal();
-            setTimeout(() => {
-                setModalImages(system.modalUrls);
-                setIsModalOpen(true);
-                orbitalSystemRef.current?.highlightSystemsByIds([system.id]);
-            }, 500);
-        }
-    }, [systems, handleCloseModal, showFeedback]);
+        setActiveTour(tour);
+    }, [showFeedback]);
 
     const endTour = useCallback(() => {
         setActiveTour(null);
-        handleCloseModal();
-    }, [handleCloseModal]);
+        // Reset orbital system
+        setTimeout(() => {
+            orbitalSystemRef.current?.highlightSystemsByIds([]);
+            orbitalSystemRef.current?.focusSystem(null);
+        }, 100);
+    }, []);
 
-    const handleTourNext = useCallback(() => {
-        if (activeTour && activeTour.currentStep < activeTour.tour.steps.length - 1) {
-            goToTourStep(activeTour.currentStep + 1);
-        }
-    }, [activeTour, goToTourStep]);
-
-    const handleTourPrev = useCallback(() => {
-        if (activeTour && activeTour.currentStep > 0) {
-            goToTourStep(activeTour.currentStep - 1);
-        }
-    }, [activeTour, goToTourStep]);
-
-    const getSystemForTourStep = () => {
-        if (!activeTour) return null;
-        const currentStep = activeTour.tour.steps[activeTour.currentStep];
-        return currentStep ? currentStep.systemId : null;
-    }
+    const handleTourSystemFocus = useCallback((systemId: string) => {
+        orbitalSystemRef.current?.highlightSystemsByIds([systemId]);
+        orbitalSystemRef.current?.focusSystem(systemId);
+    }, []);
 
     const handleExportSystems = useCallback(() => {
         const dataStr = JSON.stringify(systems, null, 2);
@@ -379,16 +401,13 @@ const App: React.FC = () => {
 
             <ParallaxBackground />
 
-            {activeTour && (
-                <TourControls
-                    tourName={activeTour.tour.name}
-                    currentStep={activeTour.currentStep + 1}
-                    totalSteps={activeTour.tour.steps.length}
-                    onNext={handleTourNext}
-                    onPrev={handleTourPrev}
-                    onExit={endTour}
-                />
-            )}
+            <TourDeckModal
+                isOpen={!!activeTour}
+                tour={activeTour}
+                systems={systems}
+                onClose={endTour}
+                onSystemFocus={handleTourSystemFocus}
+            />
 
             <div className="relative z-10 flex items-center justify-center w-full h-full min-h-screen">
                 <OrbitalSystem
