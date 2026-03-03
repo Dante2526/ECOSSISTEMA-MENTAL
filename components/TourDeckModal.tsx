@@ -118,16 +118,16 @@ export const TourDeckModal: React.FC<TourDeckModalProps> = React.memo(({ isOpen,
         <div className={`fixed inset-0 z-[9999] bg-black/80 flex flex-col items-center justify-center transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
 
             {/* Top Bar for Tour Header */}
-            <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between text-white z-50 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
-                <div className="pointer-events-auto">
-                    <h2 className="text-xl md:text-2xl font-bold drop-shadow-md">{tour?.name}</h2>
-                    <p className="text-sm md:text-md text-gray-300 drop-shadow-md">
+            <div className="absolute top-0 left-0 right-0 p-2 md:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between text-white z-50 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
+                <div className="pointer-events-auto flex-1 pr-2">
+                    <h2 className="text-lg md:text-2xl font-bold drop-shadow-md truncate">{tour?.name}</h2>
+                    <p className="text-xs md:text-md text-gray-300 drop-shadow-md truncate">
                         {slides[currentIndex].systemName} ({currentIndex + 1} / {slides.length})
                     </p>
                 </div>
                 <button
                     onClick={onClose}
-                    className="pointer-events-auto px-4 py-2 bg-red-600/80 hover:bg-red-500 text-white rounded-lg font-bold border border-red-400 backdrop-blur-sm shadow-lg transition-all"
+                    className="pointer-events-auto mt-2 sm:mt-0 whitespace-nowrap px-3 py-1.5 md:px-4 md:py-2 bg-red-600/80 hover:bg-red-500 text-white text-sm md:text-base rounded-lg font-bold border border-red-400 backdrop-blur-sm shadow-lg transition-all"
                 >
                     Sair do Tour
                 </button>
@@ -208,7 +208,7 @@ export const TourDeckModal: React.FC<TourDeckModalProps> = React.memo(({ isOpen,
             </div>
 
             {/* Navigation Buttons */}
-            <div className="absolute top-1/2 -translate-y-1/2 left-0 w-full flex justify-between items-center px-4 md:px-[10%] lg:px-[15%] z-[9999] pointer-events-none">
+            <div className="absolute bottom-[8vh] md:bottom-12 left-0 w-full flex justify-center items-center gap-12 md:gap-24 px-4 z-[9999] pointer-events-none safe-area-pb">
                 <button
                     onClick={handlePrev}
                     disabled={currentIndex === 0}
