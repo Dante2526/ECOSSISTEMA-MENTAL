@@ -135,7 +135,7 @@ export const TourDeckModal: React.FC<TourDeckModalProps> = React.memo(({ isOpen,
 
             {/* Deck Gallery Container */}
             <div
-                className="relative w-full h-full max-h-[80vh] flex items-center justify-center mt-12 overflow-hidden touch-pan-y"
+                className="relative w-full h-full max-h-[70vh] flex items-center justify-center mt-12 mb-24 md:mb-16 overflow-hidden touch-pan-y"
                 onTouchStart={onTouchStart}
                 onTouchMove={onTouchMove}
                 onTouchEnd={onTouchEnd}
@@ -157,7 +157,7 @@ export const TourDeckModal: React.FC<TourDeckModalProps> = React.memo(({ isOpen,
                         <img
                             src={slide.imageUrl}
                             alt={slide.systemName}
-                            className={`max-w-[85vw] md:max-w-[70vw] max-h-[70vh] object-contain rounded-xl border border-white/20 shadow-2xl ${offset === 0 ? '' : 'pointer-events-none'}`}
+                            className={`max-w-[85vw] md:max-w-[70vw] max-h-[60vh] md:max-h-[70vh] object-contain rounded-xl border border-white/20 shadow-2xl ${offset === 0 ? '' : 'pointer-events-none'}`}
                             draggable={false}
                             decoding="async"
                         />
