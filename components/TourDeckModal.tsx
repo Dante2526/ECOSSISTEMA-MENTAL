@@ -186,10 +186,7 @@ export const TourDeckModal: React.FC<TourDeckModalProps> = React.memo(({ isOpen,
                                         centerOnInit={true}
                                         wheel={{ smoothStep: 0.01 }}
                                     >
-                                        <TransformComponent
-                                            wrapperStyle={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                            contentStyle={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                        >
+                                        <TransformComponent>
                                             {imageEl}
                                         </TransformComponent>
                                     </TransformWrapper>

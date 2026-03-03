@@ -98,6 +98,23 @@
     .safe-area-pb {
       padding-bottom: max(1rem, env(safe-area-inset-bottom));
     }
+
+    /* react-zoom-pan-pinch: force wrapper/component to fill parent and center content */
+    .react-transform-wrapper {
+      width: 100% !important;
+      height: 100% !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+
+    .react-transform-component {
+      width: 100% !important;
+      height: 100% !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
   </style>
   <script type="module" src="/index.tsx"></script>
 

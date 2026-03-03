@@ -104,10 +104,7 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
                         centerOnInit={true}
                         wheel={{ smoothStep: 0.01 }}
                     >
-                        <TransformComponent
-                            wrapperStyle={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                            contentStyle={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        >
+                        <TransformComponent>
                             <img
                                 src={imageUrls[currentIndex]}
                                 onLoad={() => setIsLoading(false)}
