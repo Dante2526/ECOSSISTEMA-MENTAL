@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Tour, OrbitalSystem } from '../types';
+import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 
 interface TourDeckModalProps {
     isOpen: boolean;
@@ -152,6 +153,16 @@ export const TourDeckModal: React.FC<TourDeckModalProps> = React.memo(({ isOpen,
                     const opacity = Math.abs(offset) > 1 ? 0 : 1 - Math.abs(offset) * 0.2; // Changed from 0.3 to 0.2 for more visibility
                     const blur = Math.abs(offset) > 0 ? 'blur(2px)' : 'none'; // Reduced blur from 4px to 2px
 
+                    const imageEl = (
+                        <img
+                            src={slide.imageUrl}
+                            alt={slide.systemName}
+                            className={`max-w-[85vw] md:max-w-[70vw] max-h-[70vh] object-contain rounded-xl border border-white/20 shadow-2xl ${offset === 0 ? '' : 'pointer-events-none'}`}
+                            draggable={false}
+                            decoding="async"
+                        />
+                    );
+
                     return (
                         <div
                             key={`slide-${i}`}
@@ -165,13 +176,23 @@ export const TourDeckModal: React.FC<TourDeckModalProps> = React.memo(({ isOpen,
                                 willChange: 'transform, opacity, filter'
                             }}
                         >
-                            <img
-                                src={slide.imageUrl}
-                                alt={slide.systemName}
-                                className="max-w-[85vw] md:max-w-[70vw] max-h-[70vh] object-contain rounded-xl border border-white/20 shadow-2xl"
-                                draggable={false}
-                                decoding="async"
-                            />
+                            {offset === 0 ? (
+                                <TransformWrapper
+                                    key={`transform-tour-${currentIndex}`}
+                                    initialScale={1}
+                                    minScale={0.5}
+                                    maxScale={8}
+                                    centerOnInit={true}
+                                    wheel={{ smoothStep: 0.01 }}
+                                >
+                                    <TransformComponent wrapperClass="!w-full !h-full flex items-center justify-center">
+                                        {imageEl}
+                                    </TransformComponent>
+                                </TransformWrapper>
+                            ) : (
+                                imageEl
+                            )}
+
                             {/* Clickable side-zones for next/prev when visible on desktop */}
                             {offset === -1 && (
                                 <div className="absolute inset-0 cursor-pointer pointer-events-auto" onClick={handlePrev} />
