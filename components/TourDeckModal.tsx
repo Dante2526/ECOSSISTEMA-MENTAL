@@ -208,7 +208,7 @@ export const TourDeckModal: React.FC<TourDeckModalProps> = React.memo(({ isOpen,
             </div>
 
             {/* Navigation Buttons */}
-            <div className="absolute bottom-8 md:bottom-auto md:inset-y-0 left-0 w-full flex justify-center md:justify-between items-center gap-16 md:gap-0 px-0 md:px-[10%] lg:px-[15%] z-[9999] pointer-events-none">
+            <div className="absolute top-1/2 -translate-y-1/2 left-0 w-full flex justify-between items-center px-4 md:px-[10%] lg:px-[15%] z-[9999] pointer-events-none">
                 <button
                     onClick={handlePrev}
                     disabled={currentIndex === 0}
