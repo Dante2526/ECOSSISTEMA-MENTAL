@@ -177,21 +177,23 @@ export const TourDeckModal: React.FC<TourDeckModalProps> = React.memo(({ isOpen,
                             }}
                         >
                             {offset === 0 ? (
-                                <TransformWrapper
-                                    key={`transform-tour-${currentIndex}`}
-                                    initialScale={1}
-                                    minScale={0.5}
-                                    maxScale={8}
-                                    centerOnInit={true}
-                                    wheel={{ smoothStep: 0.01 }}
-                                >
-                                    <TransformComponent
-                                        wrapperClass="!w-full !h-full flex items-center justify-center p-0 m-0"
-                                        contentClass="!flex !items-center !justify-center !w-auto !h-auto p-0 m-0"
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <TransformWrapper
+                                        key={`transform-tour-${currentIndex}`}
+                                        initialScale={1}
+                                        minScale={0.5}
+                                        maxScale={8}
+                                        centerOnInit={true}
+                                        wheel={{ smoothStep: 0.01 }}
                                     >
-                                        {imageEl}
-                                    </TransformComponent>
-                                </TransformWrapper>
+                                        <TransformComponent
+                                            wrapperStyle={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                            contentStyle={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                        >
+                                            {imageEl}
+                                        </TransformComponent>
+                                    </TransformWrapper>
+                                </div>
                             ) : (
                                 imageEl
                             )}
