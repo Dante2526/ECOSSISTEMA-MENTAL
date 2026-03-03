@@ -1,5 +1,5 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
+import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 
 interface ImageModalProps {
     isOpen: boolean;
@@ -36,19 +36,19 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
     // Smart Prefetching: When the current image changes, start loading the NEXT image in the background.
     useEffect(() => {
         if (!isOpen || imageUrls.length <= 1) return;
-        
+
         const nextIndex = (currentIndex + 1) % imageUrls.length;
         const img = new Image();
         img.src = imageUrls[nextIndex];
     }, [currentIndex, isOpen, imageUrls]);
 
     const handleNext = useCallback(() => {
-       if (imageUrls.length > 1) {
-          setIsLoading(true);
-          setCurrentIndex((prev) => (prev + 1) % imageUrls.length);
-       }
+        if (imageUrls.length > 1) {
+            setIsLoading(true);
+            setCurrentIndex((prev) => (prev + 1) % imageUrls.length);
+        }
     }, [imageUrls.length]);
-    
+
     const handlePrev = useCallback(() => {
         if (imageUrls.length > 1) {
             setIsLoading(true);
@@ -79,35 +79,46 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
                 className={`fixed inset-0 bg-black/90 z-[9998] transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
                 onClick={onClose}
             ></div>
-            
+
             {/* Container uses flex to center, pointer-events-none allows clicks to pass to backdrop if clicked outside image */}
             <div
                 className={`fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none p-4 transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
             >
                 {/* Wrapper shrinks to fit image content */}
-                <div 
+                <div
                     className="relative flex items-center justify-center bg-black rounded-lg border border-white/20 shadow-[0_0_50px_rgba(255,255,255,0.1)] overflow-hidden pointer-events-auto min-w-[200px] min-h-[200px]"
                     onClick={(e) => e.stopPropagation()}
                 >
-                    
+
                     {isLoading && (
                         <div className="absolute inset-0 flex items-center justify-center z-50 bg-black">
                             <div className="w-10 h-10 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
                         </div>
                     )}
 
-                    <img
-                        src={imageUrls[currentIndex]}
-                        onLoad={() => setIsLoading(false)}
-                        onError={(e) => { 
-                            setIsLoading(false);
-                            (e.target as HTMLImageElement).src = FALLBACK_IMAGE_URL; 
-                        }}
-                        decoding="async"
-                        // max-h-[90vh] and max-w-[95vw] ensures it fits on screen. w-auto/h-auto maintains aspect ratio.
-                        className={`max-w-[95vw] max-h-[90vh] w-auto h-auto object-contain block transition-opacity duration-300 ${isLoading ? 'opacity-0' : 'opacity-100'}`}
-                        alt={`Diagrama ${currentIndex + 1}`}
-                    />
+                    <TransformWrapper
+                        key={`transform-${currentIndex}`}
+                        initialScale={1}
+                        minScale={0.5}
+                        maxScale={8}
+                        centerOnInit={true}
+                        wheel={{ smoothStep: 0.01 }}
+                    >
+                        <TransformComponent wrapperClass="!w-full !h-full flex items-center justify-center">
+                            <img
+                                src={imageUrls[currentIndex]}
+                                onLoad={() => setIsLoading(false)}
+                                onError={(e) => {
+                                    setIsLoading(false);
+                                    (e.target as HTMLImageElement).src = FALLBACK_IMAGE_URL;
+                                }}
+                                decoding="async"
+                                // max-h-[90vh] and max-w-[95vw] ensures it fits on screen. w-auto/h-auto maintains aspect ratio.
+                                className={`max-w-[95vw] max-h-[90vh] w-auto h-auto object-contain block transition-opacity duration-300 ${isLoading ? 'opacity-0' : 'opacity-100'}`}
+                                alt={`Diagrama ${currentIndex + 1}`}
+                            />
+                        </TransformComponent>
+                    </TransformWrapper>
 
                     <button title="Fechar" onClick={onClose} className="absolute top-4 right-4 w-10 h-10 bg-black/60 text-white border border-white/30 rounded-full grid place-items-center text-xl z-[102] hover:bg-white/20 transition-colors">
                         ✕
