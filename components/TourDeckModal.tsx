@@ -142,7 +142,9 @@ export const TourDeckModal: React.FC<TourDeckModalProps> = React.memo(({ isOpen,
             >
                 {slides.map((slide, i) => {
                     const offset = i - currentIndex;
-                    const isVisibleSlide = Math.abs(offset) <= 2; // only render/show near slides for performance
+                    // Aumenta para 3 de cada lado no PC (total 7 imagens), mantém 2 no mobile (total 5)
+                    const maxVisible = window.innerWidth >= 768 ? 3 : 2;
+                    const isVisibleSlide = Math.abs(offset) <= maxVisible;
 
                     if (!isVisibleSlide) return null;
 
