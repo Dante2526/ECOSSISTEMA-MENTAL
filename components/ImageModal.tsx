@@ -85,15 +85,22 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
                 className={`fixed inset-0 z-[9999] flex items-center justify-center transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
                 onClick={onClose}
             >
-                {/* Wrapper com tamanho máximo da imagem atual - "âncora" de dimensões */}
+                {/* Wrapper que encolhe ao tamanho da imagem - sem espaço preto */}
                 <div
-                    className="relative max-w-[95vw] max-h-[90vh] w-full h-full flex items-center justify-center bg-black rounded-lg border border-white/20 shadow-[0_0_50px_rgba(255,255,255,0.1)] overflow-hidden"
+                    className="relative flex items-center justify-center bg-black rounded-lg border border-white/20 shadow-[0_0_50px_rgba(255,255,255,0.1)] overflow-hidden"
                     onClick={(e) => e.stopPropagation()}
-                    style={{ aspectRatio: 'unset' }}
                 >
+                    {/* Imagem fantasma invisível que define as dimensões reais do container */}
+                    <img
+                        src={imageUrls[currentIndex]}
+                        aria-hidden="true"
+                        decoding="async"
+                        className="max-w-[95vw] max-h-[90vh] w-auto h-auto object-contain block invisible"
+                        alt=""
+                    />
 
                     {isLoading && (
-                        <div className="absolute inset-0 flex items-center justify-center z-[60] bg-black/80 rounded-lg">
+                        <div className="absolute inset-0 flex items-center justify-center z-[60] bg-black rounded-lg">
                             <div className="w-10 h-10 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
                         </div>
                     )}
