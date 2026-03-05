@@ -80,18 +80,20 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
                 onClick={onClose}
             ></div>
 
-            {/* Container uses flex to center, pointer-events-none allows clicks to pass to backdrop if clicked outside image */}
+            {/* Container fixo cobrindo a tela toda, com pointer-events-none no fundo */}
             <div
-                className={`fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none p-4 transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
+                className={`fixed inset-0 z-[9999] flex items-center justify-center transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
+                onClick={onClose}
             >
-                {/* Wrapper shrinks to fit image content */}
+                {/* Wrapper com tamanho máximo da imagem atual - "âncora" de dimensões */}
                 <div
-                    className="relative flex items-center justify-center bg-black rounded-lg border border-white/20 shadow-[0_0_50px_rgba(255,255,255,0.1)] overflow-hidden pointer-events-auto min-w-[200px] min-h-[200px]"
+                    className="relative max-w-[95vw] max-h-[90vh] w-full h-full flex items-center justify-center bg-black rounded-lg border border-white/20 shadow-[0_0_50px_rgba(255,255,255,0.1)] overflow-hidden"
                     onClick={(e) => e.stopPropagation()}
+                    style={{ aspectRatio: 'unset' }}
                 >
 
                     {isLoading && (
-                        <div className="absolute inset-0 flex items-center justify-center z-50 bg-black">
+                        <div className="absolute inset-0 flex items-center justify-center z-[60] bg-black/80 rounded-lg">
                             <div className="w-10 h-10 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
                         </div>
                     )}
@@ -110,7 +112,7 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
                                     centerOnInit={true}
                                     wheel={{ smoothStep: 0.01 }}
                                 >
-                                    <TransformComponent>
+                                    <TransformComponent wrapperStyle={{ width: '100%', height: '100%' }} contentStyle={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                         <img
                                             src={url}
                                             onLoad={() => { if (i === currentIndex) setIsLoading(false); }}
