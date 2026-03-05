@@ -159,7 +159,7 @@ export const TourDeckModal: React.FC<TourDeckModalProps> = React.memo(({ isOpen,
                         <img
                             src={slide.imageUrl}
                             alt={slide.systemName}
-                            className={`w-auto h-auto max-w-[90vw] max-h-[100%] object-contain rounded-xl border border-white/20 shadow-2xl block ${offset === 0 ? '' : 'pointer-events-none'}`}
+                            className={`w-auto h-auto max-w-[90vw] md:max-w-[70vw] max-h-[75vh] md:max-h-[85vh] object-contain rounded-xl border border-white/20 shadow-2xl block ${offset === 0 ? '' : 'pointer-events-none'}`}
                             draggable={false}
                             decoding="async"
                         />
