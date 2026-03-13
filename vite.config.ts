@@ -17,11 +17,25 @@ export default defineConfig(({ mode }) => {
         includeAssets: ['favicon.svg'],
         manifest: false, // Usamos o manifest.json em public/
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,svg,zip,wasm}'],
-          globIgnores: [], // Removido o ignore de node_modules para que o Workbox faça o cache do bundle do Vite que inclui o vosk
-          maximumFileSizeToCacheInBytes: 40000000, // max 40MB para permitir o cache do modelo Vosk
-          // Estratégias de cache para recursos externos
+          globPatterns: ['**/*.{js,css,html,ico,svg,wasm}'],
+          globIgnores: [],
+          maximumFileSizeToCacheInBytes: 100000000, // 100MB para garantir cache do modelo Whisper
           runtimeCaching: [
+            {
+              // Cache de modelos da IA (Whisper) do HuggingFace
+              urlPattern: /^https:\/\/huggingface\.co\/Xenova\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'whisper-model-cache',
+                expiration: {
+                  maxEntries: 20,
+                  maxAgeSeconds: 30 * 24 * 60 * 60, // 30 dias
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
             {
               // Cache de imagens do i.ibb.co / i.ibb.co
               urlPattern: /^https:\/\/i\.ibb\.co\/.*/i,

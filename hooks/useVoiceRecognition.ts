@@ -1,8 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useOnlineStatus } from './useOnlineStatus';
-import { useVoskRecognition } from './useVoskRecognition';
+import { useWhisperRecognition } from './useWhisperRecognition';
 
-// ... (Web Speech API types e interfaces se mantêm iguais)
+// --- Interfaces de Tipagem (Web Speech API) ---
 interface SpeechRecognitionAlternative {
     readonly transcript: string;
     readonly confidence: number;
@@ -54,7 +54,7 @@ interface VoiceRecognitionOptions {
 export const useVoiceRecognition = ({ onStart, onEnd, onError, onResult }: VoiceRecognitionOptions) => {
     const isOnline = useOnlineStatus();
 
-    // --- Estado de Permissão (Comum para ambos) ---
+    // --- Estado de Permissão ---
     const [permissionGranted, setPermissionGranted] = useState<boolean>(() => {
         if (typeof window !== 'undefined') {
             return localStorage.getItem(PERMISSION_STORAGE_KEY) === 'true';
@@ -90,7 +90,7 @@ export const useVoiceRecognition = ({ onStart, onEnd, onError, onResult }: Voice
 
         const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognitionAPI) {
-            console.warn("Web Speech API não suportada no fallback fallback online.");
+            console.warn("Web Speech API não suportada.");
             return;
         }
 
@@ -127,7 +127,7 @@ export const useVoiceRecognition = ({ onStart, onEnd, onError, onResult }: Voice
                 recognitionRef.current.stop();
             }
         };
-    }, [isOnline]); // Recria apenas se o status online mudar
+    }, [isOnline]);
 
     const startOnline = useCallback(() => {
         if (recognitionRef.current && !isListeningOnline) {
@@ -141,9 +141,8 @@ export const useVoiceRecognition = ({ onStart, onEnd, onError, onResult }: Voice
         }
     }, [isListeningOnline]);
 
-
-    // --- Implementação Offline (Vosk WebAssembly) ---
-    const vosk = useVoskRecognition({
+    // --- Implementação Offline (Whisper AI) ---
+    const whisper = useWhisperRecognition({
         onStart: () => callbacksRef.current.onStart?.(),
         onEnd: () => callbacksRef.current.onEnd?.(),
         onError: (e) => callbacksRef.current.onError?.(e),
@@ -151,25 +150,33 @@ export const useVoiceRecognition = ({ onStart, onEnd, onError, onResult }: Voice
     });
 
     // --- Proxy / Router ---
-    const isListening = isOnline ? isListeningOnline : vosk.isListening;
+    const isListening = isOnline ? isListeningOnline : whisper.isListening;
+    const isProcessing = !isOnline && whisper.isProcessing;
 
     const start = useCallback(() => {
         if (isOnline) {
-            console.log("🎤 Voz: Iniciando modo ONLINE (Web Speech API)");
+            console.log("🎤 Voz: Modo ONLINE (Web Speech)");
             startOnline();
         } else {
-            console.log("🎤 Voz: Iniciando modo OFFLINE (Vosk WebAssembly)");
-            vosk.start();
+            console.log("🎤 Voz: Modo OFFLINE (Whisper AI)");
+            whisper.start();
         }
-    }, [isOnline, startOnline, vosk.start]);
+    }, [isOnline, startOnline, whisper]);
 
     const stop = useCallback(() => {
         if (isOnline) {
             stopOnline();
         } else {
-            vosk.stop();
+            whisper.stop();
         }
-    }, [isOnline, stopOnline, vosk.stop]);
+    }, [isOnline, stopOnline, whisper]);
 
-    return { isListening, start, stop, permissionGranted, setPermissionGranted: updatePermission };
+    return { 
+        isListening, 
+        isProcessing,
+        start, 
+        stop, 
+        permissionGranted, 
+        setPermissionGranted: updatePermission 
+    };
 };

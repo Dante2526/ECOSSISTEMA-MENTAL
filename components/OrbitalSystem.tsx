@@ -8,20 +8,20 @@ const COLORS = [
     { name: 'gray', hex: '#D1D5DB', shadow: 'rgba(209, 213, 219, 0.6)' },
 ];
 
-const MainOrb = memo(({ isListening, onVoiceClick }: { isListening: boolean, onVoiceClick: () => void }) => (
+const MainOrb = memo(({ isListening, isProcessing, onVoiceClick }: { isListening: boolean, isProcessing: boolean, onVoiceClick: () => void }) => (
     <div className="relative z-30 flex items-center justify-center">
         {/* Camada externa brilho extra de Voice Ativo */}
-        {isListening && (
-            <div className="absolute inset-[-40px] rounded-full bg-cyan-500/20 blur-xl animate-pulse pointer-events-none"></div>
+        {(isListening || isProcessing) && (
+            <div className={`absolute inset-[-40px] rounded-full blur-xl animate-pulse pointer-events-none ${isProcessing ? 'bg-purple-500/20' : 'bg-cyan-500/20'}`}></div>
         )}
 
         {/* Orbe Central Principal */}
         <div
             data-interaction-target="main-orb"
             className={`relative w-[160px] h-[160px] md:w-[220px] md:h-[220px] rounded-full flex items-center justify-center cursor-pointer transition-all duration-500 transform-gpu
-            border-[4px] ${isListening ? 'border-cyan-400 shadow-[0_0_80px_rgba(34,211,238,0.8),inset_0_0_30px_rgba(34,211,238,0.5)] scale-[1.08]' : 'border-gray-300 shadow-[0_0_50px_rgba(255,255,255,0.3)]'}
+            border-[4px] ${(isListening || isProcessing) ? (isProcessing ? 'border-purple-400 shadow-[0_0_80px_rgba(168,85,247,0.8)]' : 'border-cyan-400 shadow-[0_0_80px_rgba(34,211,238,0.8)]') : 'border-gray-300 shadow-[0_0_50px_rgba(255,255,255,0.3)]'}
             bg-orange-500 hover:scale-[1.02] overflow-hidden group`}
-            style={{ WebkitBackfaceVisibility: 'hidden', backfaceVisibility: 'hidden', transform: isListening ? 'translateZ(0) scale(1.08)' : 'translateZ(0)' }}
+            style={{ WebkitBackfaceVisibility: 'hidden', backfaceVisibility: 'hidden', transform: (isListening || isProcessing) ? 'translateZ(0) scale(1.08)' : 'translateZ(0)' }}
             onClickCapture={(e) => {
                 e.stopPropagation();
                 onVoiceClick();
@@ -29,7 +29,7 @@ const MainOrb = memo(({ isListening, onVoiceClick }: { isListening: boolean, onV
         >
             {/* Wrapper isolado para logo garantir recorte circular sempre e fixar layout box */}
             <div
-                className={`relative w-full h-full bg-white rounded-full overflow-hidden transition-opacity duration-500 transform-gpu ${isListening ? 'opacity-80' : 'opacity-100'}`}
+                className={`relative w-full h-full bg-white rounded-full overflow-hidden transition-opacity duration-500 transform-gpu ${(isListening || isProcessing) ? 'opacity-80' : 'opacity-100'}`}
                 style={{ WebkitBackfaceVisibility: 'hidden', backfaceVisibility: 'hidden', transform: 'translateZ(0)' }}
             >
                 <img
@@ -41,7 +41,7 @@ const MainOrb = memo(({ isListening, onVoiceClick }: { isListening: boolean, onV
                 />
             </div>
 
-            {/* Ícone de Microfone e Overlay Escuro quando ativo */}
+            {/* Ícone de Microfone / Processamento */}
             {isListening && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] z-10">
                     <div className="w-16 h-16 rounded-full bg-cyan-500/30 flex items-center justify-center mb-2 animate-pulse">
@@ -50,6 +50,13 @@ const MainOrb = memo(({ isListening, onVoiceClick }: { isListening: boolean, onV
                         </svg>
                     </div>
                     <span className="text-cyan-300 font-bold tracking-widest text-xs md:text-sm animate-pulse shadow-black">OUVINDO</span>
+                </div>
+            )}
+
+            {isProcessing && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px] z-10">
+                    <div className="w-16 h-16 rounded-full border-4 border-purple-500 border-t-transparent animate-spin mb-2"></div>
+                    <span className="text-purple-300 font-bold tracking-widest text-xs md:text-sm animate-pulse">PENSANDO...</span>
                 </div>
             )}
         </div>
@@ -199,6 +206,7 @@ interface OrbitalSystemProps {
     systems: OrbitalSystemType[];
     onOrbClick: (systemId: string) => void;
     isListening: boolean;
+    isProcessing: boolean;
     onVoiceToggle: () => void;
     isAdmin: boolean;
     onAddSystem: () => void;
@@ -215,6 +223,7 @@ const OrbitalSystemComponent: React.ForwardRefRenderFunction<OrbitalSystemRef, O
     systems,
     onOrbClick,
     isListening,
+    isProcessing,
     onVoiceToggle,
     isAdmin,
     onAddSystem,
@@ -753,7 +762,7 @@ const OrbitalSystemComponent: React.ForwardRefRenderFunction<OrbitalSystemRef, O
                     style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
                 >
 
-                    <MainOrb isListening={isListening} onVoiceClick={handleVoiceClick} />
+                    <MainOrb isListening={isListening} isProcessing={isProcessing} onVoiceClick={handleVoiceClick} />
 
                     <div
                         ref={rotationContainerRef}

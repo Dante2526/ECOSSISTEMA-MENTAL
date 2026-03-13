@@ -48,9 +48,9 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
         });
 
         const urls = Array.from(urlsToCache);
-        // Peso maior pro arquivo zip do Vosk por ter ~31MB, para fluir bem na barra
-        const VOSK_WEIGHT = 50; 
-        const totalDownloads = urls.length + VOSK_WEIGHT;
+        // Peso maior pro arquivo do Whisper por ser maior, para fluir bem na barra
+        const WHISPER_WEIGHT = 70; 
+        const totalDownloads = urls.length + WHISPER_WEIGHT;
 
         progressState.current.total = totalDownloads;
         progressState.current.completed = 0;
@@ -72,14 +72,14 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
             let perc = Math.round((currentComplete / total) * 100);
             if (perc > 100) perc = 100;
 
-            const finished = currentComplete >= total - 0.1; // Tolerância para imprecisões decimais
+            const finished = currentComplete >= total - 0.1;
 
             setProgress({
                 totalItems: total,
                 completedItems: currentComplete,
                 percentage: perc,
                 isFinished: finished,
-                statusText: finished ? "✅ Sistema 100% para uso offline!" : `Baixando arquivos para uso offline: ${perc}% `,
+                statusText: finished ? "✅ Sistema 100% para uso offline!" : `Baixando IA para uso offline: ${perc}% `,
             });
 
             if (finished) {
@@ -107,20 +107,19 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
                     }
                 };
                 img.src = url;
-                // O navegador tentará baixar, o ServiceWorker interceptará e fará CacheFirst
             });
         };
 
-        // Iniciar lotes de imagem
         setTimeout(loadNextBatch, 500);
 
-        // 4. Pré-carregar Model Vosk zip via stream para acompanhar progresso na UI
-        const preloadVoskMap = async () => {
+        // 4. Pré-carregar Model Whisper (Xenova) via fetch para garantir cache
+        const preloadWhisperModel = async () => {
             let lastTickWeight = 0;
             try {
-                const modelUrl = '/models/vosk-model-small-pt-0.3.zip';
+                // Whisper Tiny ~75MB total em vários arquivos, pegamos o maior para o progresso
+                const modelUrl = 'https://huggingface.co/Xenova/whisper-tiny/resolve/main/onnx/encoder_model.onnx';
                 const response = await fetch(modelUrl);
-                const contentLength = +(response.headers.get('Content-Length') || '32453112');
+                const contentLength = +(response.headers.get('Content-Length') || '50000000');
                 const reader = response.body?.getReader();
                 let receivedLength = 0;
 
@@ -129,25 +128,25 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
                         const { done, value } = await reader.read();
                         if (done) break;
                         receivedLength += value?.length || 0;
-                        const currentWeight = Math.min((receivedLength / contentLength) * VOSK_WEIGHT, VOSK_WEIGHT);
+                        const currentWeight = Math.min((receivedLength / contentLength) * WHISPER_WEIGHT, WHISPER_WEIGHT);
                         const tickDiff = currentWeight - lastTickWeight;
-                        if (tickDiff > 0.5 || receivedLength === contentLength) {
+                        if (tickDiff > 0.1 || receivedLength === contentLength) {
                             tickProgress(tickDiff);
                             lastTickWeight = currentWeight;
                         }
                     }
                 }
             } catch (e) {
-                console.warn("Pré-download silencioso do modelo Vosk falhou ou já está no cache", e);
+                console.warn("Pré-download silencioso do modelo Whisper falhou ou já está no cache", e);
             } finally {
-                const remaining = VOSK_WEIGHT - lastTickWeight;
+                const remaining = WHISPER_WEIGHT - lastTickWeight;
                 if (remaining > 0) {
                     tickProgress(remaining);
                 }
             }
         };
 
-        setTimeout(preloadVoskMap, 1000);
+        setTimeout(preloadWhisperModel, 1000);
 
     }, [systems]);
 
