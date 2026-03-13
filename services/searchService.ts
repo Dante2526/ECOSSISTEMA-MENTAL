@@ -53,11 +53,24 @@ export function applyPhoneticCorrections(transcript: string): string {
         corrected = corrected.replace(regex, numberMap[key]);
     });
 
-    // Casos especiais para 151: o Whisper às vezes repete "um um um..."
-    // Quando detectarmos exatamente 3 ou 4 "um" repetidos, tratamos como código 151.
+    // Casos especiais para 151:
+    // 1) Whisper repetindo "um, um, um, um..."
     const repeatedUmPattern = /^(um[, ]+){2,4}um\.?$/;
     if (repeatedUmPattern.test(corrected)) {
         corrected = '151';
+    }
+    // 2) Whisper devolvendo contagem "1, 2, 3, 4, 5, 1"
+    //    (padrão observado ao pedir "linha 151")
+    const countThenOnePattern = /^1(?:[, ]+2[, ]+3[, ]+4[, ]+5[, ]+1\.?)$/;
+    if (countThenOnePattern.test(corrected)) {
+        corrected = '151';
+    }
+
+    // Casos especiais para 167:
+    // Whisper às vezes entende "linha 167" como "minha 1,5,7"
+    const pattern157To167 = /^(minha\s+)?1[, ]+5[, ]+7\.?$/;
+    if (pattern157To167.test(corrected)) {
+        corrected = '167';
     }
 
     // Correções fonéticas específicas
