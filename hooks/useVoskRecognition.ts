@@ -116,13 +116,21 @@ export const useVoskRecognition = ({ onStart, onEnd, onError, onResult }: VoskRe
             recognizer.setWords(true);
 
             recognizer.on("result", (message: any) => {
-                // No Vosk-browser, o resultado final vem em message.text
+                // No Vosk-browser, o resultado final vem em message.text ou message.result.text
                 const transcript = message.text || (message.result && message.result.text);
                 
                 if (transcript && transcript.trim().length > 0) {
                     console.log("🎤 Vosk Result (Final):", transcript);
                     callbacksRef.current.onResult?.(transcript);
                     stop();
+                }
+            });
+
+            recognizer.on("partial", (message: any) => {
+                const partial = message.partial;
+                if (partial && partial.trim().length > 0) {
+                    console.log("🎤 Vosk Partial:", partial);
+                    // Opcional: poderíamos dar feedback em tempo real aqui se desejado
                 }
             });
 
@@ -133,8 +141,17 @@ export const useVoskRecognition = ({ onStart, onEnd, onError, onResult }: VoskRe
             workletNode.port.onmessage = (event) => {
                 if (!recognizerRef.current) return;
                 try {
-                    const audioData = event.data;
-                    recognizerRef.current.acceptWaveform(audioData);
+                    // Conversão de Float32Array para Int16Array
+                    // O Vosk WASM espera PCM 16-bit. Recebemos Float32 do AudioWorklet.
+                    const float32Data = event.data;
+                    const int16Data = new Int16Array(float32Data.length);
+                    
+                    for (let i = 0; i < float32Data.length; i++) {
+                        const s = Math.max(-1, Math.min(1, float32Data[i]));
+                        int16Data[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                    }
+                    
+                    recognizerRef.current.acceptWaveform(int16Data);
                 } catch (err) {
                     console.error("Vosk audio process error", err);
                 }
