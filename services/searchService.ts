@@ -32,7 +32,8 @@ export function applyPhoneticCorrections(transcript: string): string {
         'tp doisb': 'tp2b', 'tepe': 'tp', 'te pe': 'tp', 'tp2 b': 'tp2b',
         'tep dois b': 'tp2b', 'tepê': 'tp', 'tp dois bê': 'tp2b',
         'tp zero um': 'tp01', 'tepe zero um': 'tp01', 'tepe 01': 'tp01',
-        'cento e oitenta e sete': '187', 'oitenta e sete': '187', 'cento oitenta e sete': '187'
+        'cento e oitenta e sete': '187', 'oitenta e sete': '187', 'cento oitenta e sete': '187',
+        '8 7': '187', '87': '187' // Pontes para quando o Whisper "come" o início de 187
     };
 
     let corrected = transcript.toLowerCase()
@@ -182,9 +183,17 @@ export function findMatchingItems(transcript: string, cache: SearchItem[]): Sear
     const numericMatch = textForNumericSearch.match(/\d+/);
     if (numericMatch) {
         const extractedNumber = numericMatch[0];
-        const numberMatches = cache.filter(item => 
-            item.type === 'keyword' && item.text === extractedNumber
-        );
+        const extractedInt = parseInt(extractedNumber, 10);
+        
+        const numberMatches = cache.filter(item => {
+            if (item.type !== 'keyword') return false;
+            // Se o item é numérico (apenas dígitos), comparamos como inteiro
+            if (/^\d+$/.test(item.text)) {
+                return parseInt(item.text, 10) === extractedInt;
+            }
+            // Fallback para alfanuméricos exatos (ex: 65B)
+            return item.text === extractedNumber;
+        });
         if (numberMatches.length > 0) return getUniqueResults(numberMatches);
     }
 
