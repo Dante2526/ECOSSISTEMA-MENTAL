@@ -120,7 +120,7 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
                 const modelUrl = 'https://alphacephei.com/vosk/models/vosk-model-small-pt-0.3.zip';
                 // Usamos mode: no-cors para o service worker interceptar mais limpo se cross-origin bloquear
                 // A regra real CacheFirst cuidará dele.
-                await fetch(modelUrl, { mode: 'no-cors' });
+                await fetch(modelUrl);
             } catch (e) {
                 console.warn("Pré-download silencioso do modelo Vosk falhou (provavelmente já cacheado ou offline)", e);
             } finally {
@@ -159,7 +159,7 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
         };
         setTimeout(loadNextBatch, 2000);
 
-        try { fetch('https://alphacephei.com/vosk/models/vosk-model-small-pt-0.3.zip', { mode: 'no-cors' }); } catch (e) { }
+        try { fetch('https://alphacephei.com/vosk/models/vosk-model-small-pt-0.3.zip'); } catch (e) { }
     };
 
 

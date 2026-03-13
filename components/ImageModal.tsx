@@ -110,37 +110,27 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
                             key={`slide-${url}-${i}`}
                             className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${i === currentIndex ? 'opacity-100 z-50' : 'opacity-0 z-0 pointer-events-none'}`}
                         >
-                            {i === currentIndex ? (
-                                <TransformWrapper
-                                    key={`transform-${currentIndex}`}
-                                    initialScale={1}
-                                    minScale={0.5}
-                                    maxScale={8}
-                                    centerOnInit={true}
-                                    wheel={{ smoothStep: 0.01 }}
-                                >
-                                    <TransformComponent wrapperStyle={{ width: '100%', height: '100%' }} contentStyle={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                        <img
-                                            src={url}
-                                            onLoad={() => { if (i === currentIndex) setIsLoading(false); }}
-                                            onError={(e) => {
-                                                if (i === currentIndex) setIsLoading(false);
-                                                (e.target as HTMLImageElement).src = FALLBACK_IMAGE_URL;
-                                            }}
-                                            decoding="async"
-                                            className={`max-w-[95vw] max-h-[90vh] w-auto h-auto object-contain block transition-opacity duration-300 ${isLoading && i === currentIndex ? 'opacity-0' : 'opacity-100'}`}
-                                            alt={`Diagrama ${i + 1}`}
-                                        />
-                                    </TransformComponent>
-                                </TransformWrapper>
-                            ) : (
-                                <img
-                                    src={url}
-                                    decoding="async"
-                                    className="max-w-[95vw] max-h-[90vh] w-auto h-auto object-contain block"
-                                    alt={`Diagrama pre-carregado ${i + 1}`}
-                                />
-                            )}
+                            <TransformWrapper
+                                initialScale={1}
+                                minScale={0.5}
+                                maxScale={8}
+                                centerOnInit={true}
+                                wheel={{ smoothStep: 0.01 }}
+                            >
+                                <TransformComponent wrapperStyle={{ width: '100%', height: '100%' }} contentStyle={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <img
+                                        src={url}
+                                        onLoad={() => { if (i === currentIndex) setIsLoading(false); }}
+                                        onError={(e) => {
+                                            if (i === currentIndex) setIsLoading(false);
+                                            (e.target as HTMLImageElement).src = FALLBACK_IMAGE_URL;
+                                        }}
+                                        decoding="async"
+                                        className={`max-w-[95vw] max-h-[90vh] w-auto h-auto object-contain block transition-opacity duration-300 ${isLoading && i === currentIndex ? 'opacity-0' : 'opacity-100'}`}
+                                        alt={`Diagrama ${i + 1}`}
+                                    />
+                                </TransformComponent>
+                            </TransformWrapper>
                         </div>
                     ))}
 
