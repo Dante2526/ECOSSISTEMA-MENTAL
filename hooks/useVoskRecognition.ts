@@ -70,9 +70,20 @@ export const useVoskRecognition = ({ onStart, onEnd, onError, onResult }: VoskRe
         if (isListening) return;
 
         try {
+            const waitModel = async (): Promise<boolean> => {
+                let attempts = 0;
+                while (isModelLoadingRef.current && attempts < 20) {
+                    await new Promise(r => setTimeout(r, 500));
+                    attempts++;
+                }
+                return !!modelRef.current;
+            };
+
             const hasModel = await initModel();
-            if (!hasModel || !modelRef.current) {
-                if (!isModelLoadingRef.current) callbacksRef.current.onError?.('model-not-loaded');
+            const modelReady = hasModel || await waitModel();
+
+            if (!modelReady || !modelRef.current) {
+                callbacksRef.current.onError?.('model-not-loaded');
                 return;
             }
 
@@ -135,13 +146,17 @@ export const useVoskRecognition = ({ onStart, onEnd, onError, onResult }: VoskRe
 
 
     useEffect(() => {
+        // Inicializa o modelo (ou puxa do cache do Service Worker) imediatamente
+        // ao invés de esperar o clique do usuário, garantindo prontidão offline veloz.
+        initModel().catch(console.error);
+
         return () => {
             stop();
             if (modelRef.current) {
                 modelRef.current.free();
             }
         };
-    }, [stop]);
+    }, [stop, initModel]);
 
     return { isListening, start, stop };
 };
