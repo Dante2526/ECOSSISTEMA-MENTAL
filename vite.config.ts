@@ -17,9 +17,9 @@ export default defineConfig(({ mode }) => {
         includeAssets: ['favicon.svg'],
         manifest: false, // Usamos o manifest.json em public/
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,svg}'],
+          globPatterns: ['**/*.{js,css,html,ico,svg,zip,wasm}'],
           globIgnores: ['**/node_modules/**/*'],
-          maximumFileSizeToCacheInBytes: 10000000, // max 10MB por arquivo para lidar com Vosk/Chunks pesados
+          maximumFileSizeToCacheInBytes: 40000000, // max 40MB para permitir o cache do modelo Vosk
           // Estratégias de cache para recursos externos
           runtimeCaching: [
             {
@@ -81,22 +81,7 @@ export default defineConfig(({ mode }) => {
                   statuses: [0, 200],
                 },
               },
-            },
-            {
-              // Cache do modelo Vosk (offline speech recognition) de fonte externa
-              urlPattern: /^https:\/\/alphacephei\.com\/vosk\/models\/vosk-model-.*\.zip/i,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'vosk-models-cache',
-                expiration: {
-                  maxEntries: 2,
-                  maxAgeSeconds: 365 * 24 * 60 * 60, // 1 ano
-                },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
-              },
-            },
+            }
           ],
         },
       }),

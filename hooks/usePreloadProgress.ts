@@ -48,8 +48,8 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
         });
 
         const urls = Array.from(urlsToCache);
-        // +1 item no 'total' representando o arquivo ZIP do Vosk Model
-        const VOSK_WEIGHT = 5; // Aumentar peso do arquivo zip por ter 31MB
+        // Peso maior pro arquivo zip do Vosk por ter ~31MB, para fluir bem na barra
+        const VOSK_WEIGHT = 50; 
         const totalDownloads = urls.length + VOSK_WEIGHT;
 
         progressState.current.total = totalDownloads;
@@ -72,14 +72,14 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
             let perc = Math.round((currentComplete / total) * 100);
             if (perc > 100) perc = 100;
 
-            const finished = currentComplete >= total;
+            const finished = currentComplete >= total - 0.1; // Tolerância para imprecisões decimais
 
             setProgress({
                 totalItems: total,
                 completedItems: currentComplete,
                 percentage: perc,
                 isFinished: finished,
-                statusText: finished ? "✅ Sistema 100% Offline!" : `Baixando arquivos para uso offline: ${perc}% `,
+                statusText: finished ? "✅ Sistema 100% para uso offline!" : `Baixando arquivos para uso offline: ${perc}% `,
             });
 
             if (finished) {
@@ -114,17 +114,36 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
         // Iniciar lotes de imagem
         setTimeout(loadNextBatch, 500);
 
-        // 4. Pré-carregar silenciosamente o Modelo Vosk zip (Tratado separadamente do cache)
+        // 4. Pré-carregar Model Vosk zip via stream para acompanhar progresso na UI
         const preloadVoskMap = async () => {
+            let lastTickWeight = 0;
             try {
-                const modelUrl = 'https://alphacephei.com/vosk/models/vosk-model-small-pt-0.3.zip';
-                // Usamos mode: no-cors para o service worker interceptar mais limpo se cross-origin bloquear
-                // A regra real CacheFirst cuidará dele.
-                await fetch(modelUrl);
+                const modelUrl = '/models/vosk-model-small-pt-0.3.zip';
+                const response = await fetch(modelUrl);
+                const contentLength = +(response.headers.get('Content-Length') || '32453112');
+                const reader = response.body?.getReader();
+                let receivedLength = 0;
+
+                if (reader) {
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        receivedLength += value?.length || 0;
+                        const currentWeight = Math.min((receivedLength / contentLength) * VOSK_WEIGHT, VOSK_WEIGHT);
+                        const tickDiff = currentWeight - lastTickWeight;
+                        if (tickDiff > 0.5 || receivedLength === contentLength) {
+                            tickProgress(tickDiff);
+                            lastTickWeight = currentWeight;
+                        }
+                    }
+                }
             } catch (e) {
-                console.warn("Pré-download silencioso do modelo Vosk falhou (provavelmente já cacheado ou offline)", e);
+                console.warn("Pré-download silencioso do modelo Vosk falhou ou já está no cache", e);
             } finally {
-                tickProgress(VOSK_WEIGHT); // Vosk = peso 5
+                const remaining = VOSK_WEIGHT - lastTickWeight;
+                if (remaining > 0) {
+                    tickProgress(remaining);
+                }
             }
         };
 
@@ -159,7 +178,7 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
         };
         setTimeout(loadNextBatch, 2000);
 
-        try { fetch('https://alphacephei.com/vosk/models/vosk-model-small-pt-0.3.zip'); } catch (e) { }
+        try { fetch('/models/vosk-model-small-pt-0.3.zip'); } catch (e) { }
     };
 
 

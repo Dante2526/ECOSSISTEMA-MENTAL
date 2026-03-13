@@ -30,7 +30,7 @@ export const useVoskRecognition = ({ onStart, onEnd, onError, onResult }: VoskRe
         try {
             // @ts-ignore
             vosk.setLogLevel(-1); // Ocultar logs excessivos do C++
-            const modelUrl = 'https://alphacephei.com/vosk/models/vosk-model-small-pt-0.3.zip';
+            const modelUrl = '/models/vosk-model-small-pt-0.3.zip';
             console.log("Iniciando carregamento do modelo Vosk (offline)...");
 
             const model = await vosk.createModel(modelUrl);
