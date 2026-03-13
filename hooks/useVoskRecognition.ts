@@ -13,7 +13,7 @@ export const useVoskRecognition = ({ onStart, onEnd, onError, onResult }: VoskRe
     const recognizerRef = useRef<vosk.KaldiRecognizer | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-    const processorRef = useRef<ScriptProcessorNode | null>(null);
+    const workletNodeRef = useRef<AudioWorkletNode | null>(null);
     const modelRef = useRef<vosk.Model | null>(null);
     const isModelLoadingRef = useRef(false);
 
@@ -48,9 +48,9 @@ export const useVoskRecognition = ({ onStart, onEnd, onError, onResult }: VoskRe
         if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
             audioContextRef.current.close();
         }
-        if (processorRef.current) {
-            processorRef.current.disconnect();
-            processorRef.current = null;
+        if (workletNodeRef.current) {
+            workletNodeRef.current.disconnect();
+            workletNodeRef.current = null;
         }
         if (sourceRef.current) {
             sourceRef.current.disconnect();
@@ -85,6 +85,13 @@ export const useVoskRecognition = ({ onStart, onEnd, onError, onResult }: VoskRe
                 return;
             }
 
+            if (!audioContextRef.current) {
+                audioContextRef.current = new window.AudioContext({ sampleRate: 16000 });
+            }
+            if (audioContextRef.current.state === 'suspended') {
+                await audioContextRef.current.resume();
+            }
+
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                     echoCancellation: true,
@@ -94,12 +101,14 @@ export const useVoskRecognition = ({ onStart, onEnd, onError, onResult }: VoskRe
                 }
             });
 
-            audioContextRef.current = new AudioContext({ sampleRate: 16000 });
             sourceRef.current = audioContextRef.current.createMediaStreamSource(stream);
 
-            // ScriptProcessorNode is deprecated mas funciona universalmente. 
-            // AudioWorklet é melhor para produção futura.
-            processorRef.current = audioContextRef.current.createScriptProcessor(4096, 1, 1);
+            // Fetch the worklet processor module URL relative to root
+            try {
+                await audioContextRef.current.audioWorklet.addModule('/vosk-audio-processor.js');
+            } catch (err) {
+                console.error("AudioWorklet initialization failed. Ensure /vosk-audio-processor.js exists locally.", err);
+            }
 
             const recognizer = new modelRef.current.KaldiRecognizer(16000);
             recognizerRef.current = recognizer;
@@ -107,27 +116,32 @@ export const useVoskRecognition = ({ onStart, onEnd, onError, onResult }: VoskRe
             recognizer.setWords(true);
 
             recognizer.on("result", (message: any) => {
-                const result = message.result;
-                if (result && result.text && result.text.length > 0) {
-                    console.log("Vosk Result:", result.text);
-                    callbacksRef.current.onResult?.(result.text);
-                    // Como o app usa o microfone como "push to talk/listen", paramos após o primeiro resultado útil longo
+                // No Vosk-browser, o resultado final vem em message.text
+                const transcript = message.text || (message.result && message.result.text);
+                
+                if (transcript && transcript.trim().length > 0) {
+                    console.log("🎤 Vosk Result (Final):", transcript);
+                    callbacksRef.current.onResult?.(transcript);
                     stop();
                 }
             });
 
-            processorRef.current.onaudioprocess = (event) => {
+            // Create AudioWorkletNode securely
+            const workletNode = new window.AudioWorkletNode(audioContextRef.current, 'vosk-audio-processor');
+            workletNodeRef.current = workletNode;
+
+            workletNode.port.onmessage = (event) => {
                 if (!recognizerRef.current) return;
                 try {
-                    const audioData = event.inputBuffer.getChannelData(0);
+                    const audioData = event.data;
                     recognizerRef.current.acceptWaveform(audioData);
                 } catch (err) {
                     console.error("Vosk audio process error", err);
                 }
             };
 
-            sourceRef.current.connect(processorRef.current);
-            processorRef.current.connect(audioContextRef.current.destination);
+            sourceRef.current.connect(workletNode);
+            workletNode.connect(audioContextRef.current.destination);
 
             setIsListening(true);
             callbacksRef.current.onStart?.();
