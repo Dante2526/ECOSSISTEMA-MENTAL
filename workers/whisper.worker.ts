@@ -86,8 +86,7 @@ self.onmessage = async (event) => {
         
         // Pré-processamento e Geração
         const inputs = await processor(audio);
-        const output = await model.generate({
-            ...inputs,
+        const output = await model.generate(inputs.input_features, {
             max_new_tokens: 128,
             language: language || 'portuguese',
             task: 'transcribe',
