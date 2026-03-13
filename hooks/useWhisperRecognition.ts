@@ -125,18 +125,51 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
             const source = audioContextRef.current.createMediaStreamSource(stream);
             
             const gainNode = audioContextRef.current.createGain();
-            gainNode.gain.value = 3.0; 
+            gainNode.gain.value = 1.8; 
             
             const processor = audioContextRef.current.createScriptProcessor(4096, 1, 1);
 
             audioChunksRef.current = [];
+            let silenceStartTime = 0;
+            let hasSpeechStarted = false;
+            const SILENCE_THRESHOLD = 0.015; // Ajustável conforme o ruído ambiente
+            const AUTO_STOP_MS = 1500; // 1.5 segundos de silêncio para parar
 
             processor.onaudioprocess = (e) => {
                 const inputData = e.inputBuffer.getChannelData(0);
-                audioChunksRef.current.push(Float32Array.from(inputData));
                 
-                if (audioChunksRef.current.length % 50 === 0) {
-                    console.log(`🎤 [Whisper Hook] Capturando... (${audioChunksRef.current.length} blocos acumulados)`);
+                // Cálculo de Energia (RMS) para detecção de silêncio
+                let sum = 0;
+                for (let i = 0; i < inputData.length; i++) {
+                    sum += inputData[i] * inputData[i];
+                }
+                const rms = Math.sqrt(sum / inputData.length);
+
+                // Detecção de início de fala (evita processar ruído puro)
+                if (!hasSpeechStarted && rms > SILENCE_THRESHOLD) {
+                    hasSpeechStarted = true;
+                    console.log("🎤 [Whisper Hook] Fala detectada!");
+                }
+
+                if (hasSpeechStarted) {
+                    audioChunksRef.current.push(Float32Array.from(inputData));
+                    
+                    // Lógica de Auto-Stop
+                    if (rms < SILENCE_THRESHOLD) {
+                        if (silenceStartTime === 0) silenceStartTime = Date.now();
+                        
+                        const silenceDuration = Date.now() - silenceStartTime;
+                        if (silenceDuration > AUTO_STOP_MS) {
+                            console.log("⚡ [Whisper Hook] Silêncio detectado por 1.5s. Parando automaticamente...");
+                            stop();
+                        }
+                    } else {
+                        silenceStartTime = 0; // Reset se ouvir algo
+                    }
+                }
+                
+                if (audioChunksRef.current.length % 50 === 0 && audioChunksRef.current.length > 0) {
+                    console.log(`🎤 [Whisper Hook] Gravando... (${audioChunksRef.current.length} blocos)`);
                 }
             };
 

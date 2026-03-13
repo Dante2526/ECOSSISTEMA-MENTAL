@@ -12,15 +12,26 @@ export function normalizeText(text: string | null | undefined): string {
 }
 
 export function applyPhoneticCorrections(transcript: string): string {
-    let corrected = transcript.toLowerCase();
+    let corrected = transcript.toLowerCase()
+        .replace(/[,.]/g, ' ') // Remove vírgulas e pontos das alucinações
+        .replace(/\s+/g, ' ')
+        .trim();
     
-    // Fix "Piau" -> "Pial" (Very common phonetic error)
+    // Mapeamento de números por extenso para dígitos (comum no Whisper)
+    const numberMap: { [key: string]: string } = {
+        'um': '1', 'dois': '2', 'tres': '3', 'quatro': '4', 'cinco': '5',
+        'seis': '6', 'sete': '7', 'oito': '8', 'nove': '9', 'zero': '0',
+        'duzentos e um': '201', 'duzentos e dois': '202'
+    };
+
+    Object.keys(numberMap).forEach(key => {
+        const regex = new RegExp(`\\b${key}\\b`, 'g');
+        corrected = corrected.replace(regex, numberMap[key]);
+    });
+
+    // Correções fonéticas específicas
     corrected = corrected.replace(/\bpiau\b/g, 'pial');
-    
-    // Fix "Piaui" -> "Pial" (Another common phonetic error)
     corrected = corrected.replace(/\bpiaui\b/g, 'pial');
-    
-    // Fix "Trangulo" -> "Triangulo"
     corrected = corrected.replace(/\btrangulo\b/g, 'triangulo');
 
     return corrected;
