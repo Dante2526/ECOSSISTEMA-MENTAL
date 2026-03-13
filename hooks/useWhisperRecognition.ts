@@ -141,7 +141,7 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
             const source = audioContextRef.current.createMediaStreamSource(stream);
             
             const gainNode = audioContextRef.current.createGain();
-            gainNode.gain.value = 4.0; // Reforço máximo para vozes baixas
+            gainNode.gain.value = 2.5; // Ajustado para evitar amplificar chiado de fundo
             
             const processor = audioContextRef.current.createScriptProcessor(2048, 1, 1);
 
@@ -149,7 +149,7 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
             let silenceStartTime = 0;
             let hasSpeechStarted = false;
             let smoothedRms = 0;
-            const SILENCE_THRESHOLD = 0.015; // Muito mais sensível
+            const SILENCE_THRESHOLD = 0.025; // Mais firme contra ruído de fundo
             const AUTO_STOP_MS = 1500;      // Mais tempo para pausas naturais
             const MAX_RECORDING_MS = 12000; // Limite de 12 segundos
             const startTime = Date.now();

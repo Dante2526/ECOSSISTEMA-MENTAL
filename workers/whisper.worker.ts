@@ -76,9 +76,9 @@ self.onmessage = async (event) => {
             return_timestamps: false,
             // Parâmetros de geração passados via generate_kwargs
             generate_kwargs: {
-                max_new_tokens: 128,
-                repetition_penalty: 1.6, // Muito mais agressivo
-                no_repeat_ngram_size: 4, // Evita loops de 4 tokens
+                max_new_tokens: 64, // Reduzido para evitar esperas longas em alucinações
+                repetition_penalty: 1.6,
+                no_repeat_ngram_size: 4,
                 do_sample: false
             }
         });
