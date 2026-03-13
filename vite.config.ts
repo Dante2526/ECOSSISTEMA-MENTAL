@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,svg}'],
           globIgnores: ['**/node_modules/**/*'],
-          maximumFileSizeToCacheInBytes: 5000000, // max 5MB por arquivo
+          maximumFileSizeToCacheInBytes: 10000000, // max 10MB por arquivo para lidar com Vosk/Chunks pesados
           // Estratégias de cache para recursos externos
           runtimeCaching: [
             {
