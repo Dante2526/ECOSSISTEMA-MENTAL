@@ -73,11 +73,12 @@ self.onmessage = async (event) => {
             task: 'transcribe',
             chunk_length_s: 30, // Padrão recomendado
             stride_length_s: 5,
+            return_timestamps: false,
             // Parâmetros de geração passados via generate_kwargs
             generate_kwargs: {
                 max_new_tokens: 128,
-                repetition_penalty: 1.3,
-                no_repeat_ngram_size: 5,
+                repetition_penalty: 1.6, // Muito mais agressivo
+                no_repeat_ngram_size: 4, // Evita loops de 4 tokens
                 do_sample: false
             }
         });

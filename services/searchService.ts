@@ -102,7 +102,55 @@ function getUniqueResults(items: SearchItem[]): SearchItem[] {
     return Array.from(uniqueSystems.values());
 }
 
+// Função para detectar alucinações comuns do Whisper (ex: repetições infinitas de números)
+export function isLikelyHallucination(text: string): boolean {
+    if (!text) return false;
+
+    // 1. Detectar repetições de "1, 2, 1, 2" ou padrões similares
+    const numericPatternMatch = text.match(/(\d+[\s,]+){4,}/g);
+    if (numericPatternMatch) {
+        // Extrair apenas os números
+        const numbers = text.match(/\d+/g) || [];
+        if (numbers.length > 8) {
+            const uniqueNumbers = new Set(numbers);
+            // Se tivermos muitos números mas poucos são únicos (ex: 20 números, mas apenas 1 ou 2 diferentes)
+            if (uniqueNumbers.size <= 2 || uniqueNumbers.size < numbers.length / 4) {
+                console.warn("⚠️ [SearchService] Alucinação numérica detectada e bloqueada.");
+                return true;
+            }
+        }
+    }
+
+    // 2. Detectar repetições de palavras curtas (ex: "de de de de")
+    const words = text.toLowerCase().split(/\s+/);
+    if (words.length > 10) {
+        let maxRepetitions = 0;
+        let currentWord = "";
+        let count = 0;
+        for (const word of words) {
+            if (word === currentWord) {
+                count++;
+            } else {
+                currentWord = word;
+                count = 1;
+            }
+            maxRepetitions = Math.max(maxRepetitions, count);
+        }
+        if (maxRepetitions > 5) {
+            console.warn("⚠️ [SearchService] Alucinação de texto repetitivo detectada.");
+            return true;
+        }
+    }
+
+    return false;
+}
+
 export function findMatchingItems(transcript: string, cache: SearchItem[]): SearchItem[] {
+    // --- Camada de Segurança Anti-Alucinação ---
+    if (isLikelyHallucination(transcript)) {
+        return [];
+    }
+
     // --- Phonetic/Correction Layer ---
     const correctedTranscript = applyPhoneticCorrections(transcript);
 
