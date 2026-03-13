@@ -103,11 +103,16 @@ export const useVoskRecognition = ({ onStart, onEnd, onError, onResult }: VoskRe
 
             sourceRef.current = audioContextRef.current.createMediaStreamSource(stream);
 
+            // Adicionar ganho para melhorar detecção offline
+            const gainNode = audioContextRef.current.createGain();
+            gainNode.gain.value = 3.0; // Aumenta o sinal em 3x
+            sourceRef.current.connect(gainNode);
+
             // Fetch the worklet processor module URL relative to root
             try {
                 await audioContextRef.current.audioWorklet.addModule('/vosk-audio-processor.js');
             } catch (err) {
-                console.error("AudioWorklet initialization failed. Ensure /vosk-audio-processor.js exists locally.", err);
+                console.error("AudioWorklet initialization failed.", err);
             }
 
             const recognizer = new modelRef.current.KaldiRecognizer(16000);
@@ -116,48 +121,56 @@ export const useVoskRecognition = ({ onStart, onEnd, onError, onResult }: VoskRe
             recognizer.setWords(true);
 
             recognizer.on("result", (message: any) => {
-                // No Vosk-browser, o resultado final vem em message.text ou message.result.text
-                const transcript = message.text || (message.result && message.result.text);
+                const result = message.text || message.result?.text || (typeof message === 'string' ? message : '');
+                console.log("🎤 Vosk Result Message:", message);
                 
-                if (transcript && transcript.trim().length > 0) {
-                    console.log("🎤 Vosk Result (Final):", transcript);
-                    callbacksRef.current.onResult?.(transcript);
+                if (result && result.trim().length > 0) {
+                    console.log("🎤 Vosk Result (Final):", result);
+                    callbacksRef.current.onResult?.(result);
                     stop();
                 }
             });
 
             recognizer.on("partial", (message: any) => {
-                const partial = message.partial;
+                const partial = message.partial || message.result?.partial;
                 if (partial && partial.trim().length > 0) {
                     console.log("🎤 Vosk Partial:", partial);
-                    // Opcional: poderíamos dar feedback em tempo real aqui se desejado
                 }
             });
 
-            // Create AudioWorkletNode securely
             const workletNode = new window.AudioWorkletNode(audioContextRef.current, 'vosk-audio-processor');
             workletNodeRef.current = workletNode;
 
+            let bufferCount = 0;
             workletNode.port.onmessage = (event) => {
                 if (!recognizerRef.current) return;
+                
+                if (event.data.type === 'PROCESSOR_READY') {
+                    console.log("✅ AudioWorklet Processor pronto!");
+                    return;
+                }
+
                 try {
-                    // Conversão de Float32Array para Int16Array
-                    // O Vosk WASM espera PCM 16-bit. Recebemos Float32 do AudioWorklet.
                     const float32Data = event.data;
+                    if (!(float32Data instanceof Float32Array)) return;
+
                     const int16Data = new Int16Array(float32Data.length);
-                    
                     for (let i = 0; i < float32Data.length; i++) {
                         const s = Math.max(-1, Math.min(1, float32Data[i]));
                         int16Data[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
                     }
                     
-                    recognizerRef.current.acceptWaveform(int16Data);
+                    const finished = recognizerRef.current.acceptWaveform(int16Data);
+                    bufferCount++;
+                    if (bufferCount % 100 === 0) {
+                        console.log(`🎤 Processados ${bufferCount} buffers de áudio...`);
+                    }
                 } catch (err) {
                     console.error("Vosk audio process error", err);
                 }
             };
 
-            sourceRef.current.connect(workletNode);
+            gainNode.connect(workletNode);
             workletNode.connect(audioContextRef.current.destination);
 
             setIsListening(true);

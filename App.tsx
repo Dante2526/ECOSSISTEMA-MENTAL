@@ -198,6 +198,7 @@ const App: React.FC = () => {
             }
         },
         onResult: (transcript) => {
+            console.log("🎤 App: Recebido transcript:", transcript);
             const correctedTranscript = applyPhoneticCorrections(transcript);
             showFeedback(`VOCÊ DISSE: "${correctedTranscript.toUpperCase()}"`);
 
