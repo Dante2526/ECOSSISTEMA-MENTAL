@@ -114,36 +114,53 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
 
         // 4. Pré-carregar Model Whisper (Xenova) via fetch para garantir cache
         const preloadWhisperModel = async () => {
-            let lastTickWeight = 0;
-            try {
-                // Whisper Tiny ~75MB total em vários arquivos, pegamos o maior para o progresso
-                const modelUrl = 'https://huggingface.co/Xenova/whisper-tiny/resolve/main/onnx/encoder_model.onnx';
-                const response = await fetch(modelUrl);
-                const contentLength = +(response.headers.get('Content-Length') || '50000000');
-                const reader = response.body?.getReader();
-                let receivedLength = 0;
+            const files = [
+                'config.json',
+                'generation_config.json',
+                'preprocessor_config.json',
+                'tokenizer_config.json',
+                'tokenizer.json',
+                'onnx/encoder_model.onnx',
+                'onnx/decoder_model_merged.onnx'
+            ];
+            
+            const baseUrl = 'https://huggingface.co/Xenova/whisper-tiny/resolve/main/';
+            let totalWeightUsed = 0;
+            const weightPerFile = WHISPER_WEIGHT / files.length;
 
-                if (reader) {
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
-                        receivedLength += value?.length || 0;
-                        const currentWeight = Math.min((receivedLength / contentLength) * WHISPER_WEIGHT, WHISPER_WEIGHT);
-                        const tickDiff = currentWeight - lastTickWeight;
-                        if (tickDiff > 0.1 || receivedLength === contentLength) {
-                            tickProgress(tickDiff);
-                            lastTickWeight = currentWeight;
+            for (const file of files) {
+                try {
+                    const url = `${baseUrl}${file}`;
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error(`Failed to fetch ${file}`);
+                    
+                    const contentLength = +(response.headers.get('Content-Length') || '1000000');
+                    const reader = response.body?.getReader();
+                    let receivedLength = 0;
+                    let fileWeightUsed = 0;
+
+                    if (reader) {
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+                            receivedLength += value?.length || 0;
+                            const currentFileWeight = Math.min((receivedLength / contentLength) * weightPerFile, weightPerFile);
+                            const tickDiff = currentFileWeight - fileWeightUsed;
+                            if (tickDiff > 0.05 || receivedLength === contentLength) {
+                                tickProgress(tickDiff);
+                                fileWeightUsed = currentFileWeight;
+                                totalWeightUsed += tickDiff;
+                            }
                         }
                     }
-                }
-            } catch (e) {
-                console.warn("Pré-download silencioso do modelo Whisper falhou ou já está no cache", e);
-            } finally {
-                const remaining = WHISPER_WEIGHT - lastTickWeight;
-                if (remaining > 0) {
-                    tickProgress(remaining);
+                } catch (e) {
+                    console.warn(`Pré-download do arquivo ${file} do Whisper falhou`, e);
                 }
             }
+            
+            // Garantir que o peso total foi preenchido
+            const remaining = WHISPER_WEIGHT - totalWeightUsed;
+            if (remaining > 0) tickProgress(remaining);
         };
 
         setTimeout(preloadWhisperModel, 1000);

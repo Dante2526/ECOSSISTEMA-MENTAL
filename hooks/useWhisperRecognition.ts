@@ -94,28 +94,35 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
             streamRef.current = stream;
 
             audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({
-                sampleRate: 16000, // Whisper tiny espera 16kHz
+                sampleRate: 16000,
             });
 
             const source = audioContextRef.current.createMediaStreamSource(stream);
+            
+            // Adicionar GainNode para garantir que a voz está alta o suficiente para a IA
+            const gainNode = audioContextRef.current.createGain();
+            gainNode.gain.value = 3.0; 
+            
             const processor = audioContextRef.current.createScriptProcessor(4096, 1, 1);
 
             audioChunksRef.current = [];
 
             processor.onaudioprocess = (e) => {
                 const inputData = e.inputBuffer.getChannelData(0);
-                // Clonar o buffer pois ele é reutilizado
-                audioChunksRef.current.push(new Float32Array(inputData));
+                // Usamos Float32Array.from para garantir uma cópia real e evitar mutações
+                audioChunksRef.current.push(Float32Array.from(inputData));
+                
+                if (audioChunksRef.current.length % 50 === 0) {
+                    console.log(`🎤 Whisper: Capturando áudio (${audioChunksRef.current.length} blocks)...`);
+                }
             };
 
-            source.connect(processor);
+            source.connect(gainNode);
+            gainNode.connect(processor);
             processor.connect(audioContextRef.current.destination);
 
             setIsListening(true);
             callbacksRef.current.onStart?.();
-
-            // Timeout de segurança após 10 segundos de silêncio/fala
-            // (Opcional, mas ajuda no modo offline)
 
         } catch (err: any) {
             console.error('Erro ao acessar microfone para Whisper:', err);
