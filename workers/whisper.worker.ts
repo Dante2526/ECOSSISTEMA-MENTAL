@@ -10,9 +10,9 @@ class WhisperWorker {
 
     static async getInstance(progress_callback = null) {
         if (this.instance === null) {
-            console.log("⚡ [Whisper Worker] Carregando Pipeline ASR (OpenAI Whisper)...");
+            console.log("⚡ [Whisper Worker] Carregando Pipeline ASR (OpenAI Whisper - modo alta precisão)...");
             try {
-                this.instance = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
+                this.instance = await pipeline('automatic-speech-recognition', 'Xenova/whisper-base', {
                     quantized: true,
                     progress_callback
                 });
