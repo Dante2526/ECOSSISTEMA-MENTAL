@@ -140,10 +140,12 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
             audioChunksRef.current = [];
             let silenceStartTime = 0;
             let hasSpeechStarted = false;
-            const SILENCE_THRESHOLD = 0.025; // Mais sensível (para parar mais fácil)
-            const AUTO_STOP_MS = 1500; // 1.5 segundos de silêncio para parar
+            const SILENCE_THRESHOLD = 0.035; // Aumentado para ignorar mais ruído e parar mais firme
+            const AUTO_STOP_MS = 1000; // 1 segundo de silêncio para parar
 
             processor.onaudioprocess = (e) => {
+                if (isStoppingRef.current) return;
+                
                 const inputData = e.inputBuffer.getChannelData(0);
                 
                 // Cálculo de Energia (RMS) para detecção de silêncio
@@ -168,7 +170,7 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
                         
                         const silenceDuration = Date.now() - silenceStartTime;
                         if (silenceDuration > AUTO_STOP_MS) {
-                            console.log("⚡ [Whisper Hook] Silêncio detectado por 1.5s. Parando automaticamente...");
+                            console.log(`⚡ [Whisper Hook] Silêncio de ${AUTO_STOP_MS}ms atingido. Parando...`);
                             stop();
                         }
                     } else {

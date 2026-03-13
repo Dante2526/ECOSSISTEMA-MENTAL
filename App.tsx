@@ -200,6 +200,12 @@ const App: React.FC = () => {
         onResult: (transcript) => {
             console.log("🎤 App: Recebido transcript:", transcript);
             const correctedTranscript = applyPhoneticCorrections(transcript);
+            
+            if (!correctedTranscript || correctedTranscript.trim().length === 0) {
+                showFeedback("NÃO CONSEGUI ENTENDER. TENTE NOVAMENTE.");
+                return;
+            }
+
             showFeedback(`VOCÊ DISSE: "${correctedTranscript.toUpperCase()}"`);
 
             // 1. Check if it matches a Tour name first
@@ -511,33 +517,6 @@ const App: React.FC = () => {
                 )}
             </div>
 
-            {/* Microfone Flutuante Global (Centro Inferior) */}
-            {!editingSystem && !activeTour && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center">
-                    <button
-                        title={isListening ? "Parar Ouvinte" : "Ouvir Comando"}
-                        onClick={handleVoiceToggle}
-                        className={`w-14 h-14 rounded-full border-2 flex items-center justify-center text-white transition-all duration-300 shadow-xl ${
-                            isListening
-                                ? 'bg-cyan-600/80 border-cyan-400 animate-pulse scale-110 shadow-cyan-500/50'
-                                : 'bg-black/60 border-cyan-500 hover:bg-cyan-500/30 hover:scale-105'
-                        }`}
-                    >
-                        {isListening ? (
-                            <div className="w-5 h-5 bg-white rounded-sm animate-pulse"></div> // Square stop icon
-                        ) : (
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                            </svg>
-                        )}
-                    </button>
-                    {isListening && (
-                        <span className="mt-2 text-cyan-300 font-bold tracking-widest text-xs animate-pulse drop-shadow-md">
-                            OUVINDO...
-                        </span>
-                    )}
-                </div>
-            )}
         </div>
     );
 };

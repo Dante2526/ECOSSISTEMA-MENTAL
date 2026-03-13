@@ -18,11 +18,14 @@ export function applyPhoneticCorrections(transcript: string): string {
         'seis': '6', 'sete': '7', 'oito': '8', 'nove': '9', 'zero': '0',
         'duzentos e um': '201', 'duzentos e dois': '202',
         'cento e cinquenta e um': '151', 'cento e cinquenta': '150',
-        'tp dois b': 'tp2b', 'tp 2b': 'tp2b', 'tp 02b': 'tp2b'
+        '150 y 50': '151', // Alucinação comum do Whisper para 151
+        'tp dois b': 'tp2b', 'tp 2 b': 'tp2b', 'tp 02b': 'tp2b',
+        'tp doisb': 'tp2b', 'tepe': 'tp', 'te pe': 'tp', 'tp2 b': 'tp2b'
     };
 
     let corrected = transcript.toLowerCase()
         .replace(/[、,.]/g, ' ') // Remove vírgulas, pontos e separadores orientais
+        .replace(/\by\b/g, ' e ') // Corrige "y" para "e" (espanholismo do Whisper)
         .replace(/\s+/g, ' ')
         .trim();
 
