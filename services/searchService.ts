@@ -53,6 +53,13 @@ export function applyPhoneticCorrections(transcript: string): string {
         corrected = corrected.replace(regex, numberMap[key]);
     });
 
+    // Casos especiais para 151: o Whisper às vezes repete "um um um..."
+    // Quando detectarmos exatamente 3 ou 4 "um" repetidos, tratamos como código 151.
+    const repeatedUmPattern = /^(um[, ]+){2,4}um\.?$/;
+    if (repeatedUmPattern.test(corrected)) {
+        corrected = '151';
+    }
+
     // Correções fonéticas específicas
     corrected = corrected.replace(/\bpiau\b/g, 'pial');
     corrected = corrected.replace(/\bpiaui\b/g, 'pial');
@@ -198,7 +205,22 @@ export function findMatchingItems(transcript: string, cache: SearchItem[]): Sear
         if (numberMatches.length > 0) return getUniqueResults(numberMatches);
     }
 
-    // Tentativa 3: Busca por Substring no nome do sistema
+    // Se havia algum componente numérico e não houve match exato (Tentativa 2),
+    // NÃO fazemos buscas fuzzy por texto (Tentativas 3 e 4). Em vez disso,
+    // vamos direto para o matching por código comprimido (Tentativa 5),
+    // que é seguro para coisas como "TP 2B" ou "Orbe 151".
+    if (hadNumeric) {
+        const compressedTerm = correctedTranscript.replace(/\s+/g, '').toLowerCase();
+        const compressedMatches = cache.filter(item => {
+            if (item.type !== 'keyword') return false;
+            const normalizedItem = normalizeText(item.text);
+            return normalizedItem === normalizeText(compressedTerm) ||
+                compressedTerm.includes(normalizedItem);
+        });
+        return getUniqueResults(compressedMatches);
+    }
+
+    // Tentativa 3: Busca por Substring no nome do sistema (apenas quando NÃO há número)
     const normalizedNoAccents = correctedTranscript.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     const fullTextMatches = cache.filter(item =>
         item.type === 'fulltext' && item.text.includes(normalizedNoAccents)
@@ -220,19 +242,13 @@ export function findMatchingItems(transcript: string, cache: SearchItem[]): Sear
         if (flexibleMatches.length > 0) return getUniqueResults(flexibleMatches);
     }
 
-    // Se a frase tinha número, mas não achamos nenhum código correspondente,
-    // preferimos NÃO fazer match aproximado em outros textos para evitar abrir orbes errados.
-    if (hadNumeric) {
-        return [];
-    }
-
-    // Tentativa 5: Remoção total de espaços para códigos alfanuméricos (ex: "TP 2B", "Orbe 151")
+    // Tentativa 5 (fallback geral, sem números): termo comprimido
     const compressedTerm = correctedTranscript.replace(/\s+/g, '').toLowerCase();
     const compressedMatches = cache.filter(item => {
         if (item.type !== 'keyword') return false;
         const normalizedItem = normalizeText(item.text);
-        return normalizedItem === normalizeText(compressedTerm) || 
-               compressedTerm.includes(normalizedItem);
+        return normalizedItem === normalizeText(compressedTerm) ||
+            compressedTerm.includes(normalizedItem);
     });
 
     return getUniqueResults(compressedMatches);
