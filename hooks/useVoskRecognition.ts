@@ -28,8 +28,6 @@ export const useVoskRecognition = ({ onStart, onEnd, onError, onResult }: VoskRe
 
         isModelLoadingRef.current = true;
         try {
-            // @ts-ignore
-            vosk.setLogLevel(-1); // Ocultar logs excessivos do C++
             const modelUrl = '/models/vosk-model-small-pt-0.3.zip';
             console.log("Iniciando carregamento do modelo Vosk (offline)...");
 
