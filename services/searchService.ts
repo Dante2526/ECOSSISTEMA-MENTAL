@@ -73,6 +73,14 @@ export function applyPhoneticCorrections(transcript: string): string {
         corrected = '167';
     }
 
+    // Casos especiais para 65B:
+    // Whisper já retornou "Meia 5p" e "e meia cinco de" ao pedir "65B"
+    const pattern65B_digits = /^meia\s*5p\.?$/;
+    const pattern65B_words = /^(e\s+)?meia\s+cinco( de)?\.?$/;
+    if (pattern65B_digits.test(corrected) || pattern65B_words.test(corrected)) {
+        corrected = '65b';
+    }
+
     // Correções fonéticas específicas
     corrected = corrected.replace(/\bpiau\b/g, 'pial');
     corrected = corrected.replace(/\bpiaui\b/g, 'pial');
