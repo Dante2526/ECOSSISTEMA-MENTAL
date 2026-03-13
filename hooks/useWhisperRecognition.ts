@@ -42,7 +42,9 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
             } else if (type === 'RESULT') {
                 setIsProcessing(false);
                 setIsLoadingModel(false);
-                console.log("⚡ [Whisper Hook] Resultado recebido do worker:", text);
+                console.log("------------------------------------------");
+                console.log("🎤 WHISPER TRANSCRIPTION:", text);
+                console.log("------------------------------------------");
                 if (text && text.trim().length > 0) {
                     callbacksRef.current.onResult?.(text);
                 }
@@ -62,14 +64,20 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
         };
     }, []);
 
+    const isListeningRef = useRef(false);
     const isStoppingRef = useRef(false);
 
     const stop = useCallback(async () => {
-        if (!isListening || isStoppingRef.current) return;
+        // Usa o Ref para evitar stale closures
+        if (!isListeningRef.current || isStoppingRef.current) {
+            return;
+        }
+        
         isStoppingRef.current = true;
+        isListeningRef.current = false;
+        setIsListening(false);
 
         console.log("⚡ [Whisper Hook] Parando gravação e enviando para processamento...");
-        setIsListening(false);
         
         if (streamRef.current) {
             streamRef.current.getTracks().forEach(track => track.stop());
@@ -107,7 +115,7 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
         }
 
         audioChunksRef.current = [];
-    }, [isListening]);
+    }, []); // Sem dependências para ser estável
 
     const start = useCallback(async () => {
         if (isListening || isProcessing || isLoadingModel) return;
@@ -201,13 +209,14 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
             processor.connect(audioContextRef.current.destination);
 
             setIsListening(true);
+            isListeningRef.current = true;
             callbacksRef.current.onStart?.();
 
         } catch (err: any) {
             console.error('❌ [Whisper Hook] Erro ao acessar microfone:', err);
             callbacksRef.current.onError?.(err.name === 'NotAllowedError' ? 'not-allowed' : 'mic-error');
         }
-    }, [isListening, isProcessing, isLoadingModel]);
+    }, [isListening, isProcessing, isLoadingModel, stop]);
 
     return { isListening, isProcessing, isLoadingModel, start, stop };
 };

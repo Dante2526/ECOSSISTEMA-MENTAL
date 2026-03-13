@@ -110,13 +110,24 @@ export function findMatchingItems(transcript: string, cache: SearchItem[]): Sear
 
     if (exactMatches.length > 0) return getUniqueResults(exactMatches);
 
-    // Tentativa 2: Busca por Substring no nome do sistema
+    // Tentativa 2: Extração de Números (Prioridade Segura para códigos)
+    const numericMatch = correctedTranscript.match(/\d+/);
+    if (numericMatch) {
+        const extractedNumber = numericMatch[0];
+        const numberMatches = cache.filter(item => 
+            item.type === 'keyword' && item.text === extractedNumber
+        );
+        if (numberMatches.length > 0) return getUniqueResults(numberMatches);
+    }
+
+    // Tentativa 3: Busca por Substring no nome do sistema
+    const normalizedNoAccents = correctedTranscript.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     const fullTextMatches = cache.filter(item =>
-        item.type === 'fulltext' && item.text.includes(correctedTranscript.normalize("NFD").replace(/[\u0300-\u036f]/g, ""))
+        item.type === 'fulltext' && item.text.includes(normalizedNoAccents)
     );
     if (fullTextMatches.length > 0) return getUniqueResults(fullTextMatches);
 
-    // Tentativa 3: Busca de Palavras-chave Individuais (Fuzzy Fallback)
+    // Tentativa 4: Busca de Palavras-chave Individuais (Fuzzy Fallback)
     const ignoreWords = ['de', 'da', 'do', 'em', 'no', 'na', 'por', 'para', 'o', 'a', 'os', 'as', 'um', 'uma', 'linhas', 'linha', 'dos'];
     const searchKeywords = correctedTranscript
         .split(/\s+/)
@@ -126,20 +137,19 @@ export function findMatchingItems(transcript: string, cache: SearchItem[]): Sear
     if (searchKeywords.length > 0) {
         const flexibleMatches = cache.filter(item => {
             const itemText = item.type === 'fulltext' ? item.text : normalizeText(item.text);
-            // Se o termo de busca for apenas números, deve ser um match exato na keyword
-            if (/^\d+$/.test(searchKeywords[0]) && item.type === 'keyword') {
-                return itemText === searchKeywords[0];
-            }
             return searchKeywords.every(keyword => itemText.includes(keyword));
         });
         if (flexibleMatches.length > 0) return getUniqueResults(flexibleMatches);
     }
 
-    // Tentativa 4: Remoção total de espaços para códigos alfanuméricos (ex: "TP 2B")
+    // Tentativa 5: Remoção total de espaços para códigos alfanuméricos (ex: "TP 2B", "Orbe 151")
     const compressedTerm = correctedTranscript.replace(/\s+/g, '').toLowerCase();
-    const compressedMatches = cache.filter(item =>
-         item.type === 'keyword' && item.text === normalizeText(compressedTerm)
-    );
+    const compressedMatches = cache.filter(item => {
+        if (item.type !== 'keyword') return false;
+        const normalizedItem = normalizeText(item.text);
+        return normalizedItem === normalizeText(compressedTerm) || 
+               compressedTerm.includes(normalizedItem);
+    });
 
     return getUniqueResults(compressedMatches);
 }
