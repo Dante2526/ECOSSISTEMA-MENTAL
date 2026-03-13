@@ -10,6 +10,8 @@ interface WhisperRecognitionOptions {
 export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: WhisperRecognitionOptions) => {
     const [isListening, setIsListening] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isLoadingModel, setIsLoadingModel] = useState(false);
+    
     const workerRef = useRef<Worker | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
@@ -22,30 +24,40 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
 
     // Inicializar Worker
     useEffect(() => {
+        console.log("⚡ [Whisper Hook] Inicializando worker de voz...");
         workerRef.current = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), {
             type: 'module'
         });
 
         workerRef.current.onmessage = (event) => {
-            const { type, text, error, status, progress } = event.data;
+            const { type, text, error, status } = event.data;
 
             if (type === 'STATUS') {
-                if (status === 'processing') setIsProcessing(true);
-                // console.log(`Whisper status: ${status}`, progress);
+                if (status === 'loading') {
+                    setIsLoadingModel(true);
+                } else if (status === 'processing') {
+                    setIsLoadingModel(false);
+                    setIsProcessing(true);
+                }
             } else if (type === 'RESULT') {
                 setIsProcessing(false);
-                if (text) {
+                setIsLoadingModel(false);
+                console.log("⚡ [Whisper Hook] Resultado recebido do worker:", text);
+                if (text && text.trim().length > 0) {
                     callbacksRef.current.onResult?.(text);
                 }
                 callbacksRef.current.onEnd?.();
             } else if (type === 'ERROR') {
                 setIsProcessing(false);
+                setIsLoadingModel(false);
+                console.error("⚡ [Whisper Hook] Erro no worker:", error);
                 callbacksRef.current.onError?.(error);
                 callbacksRef.current.onEnd?.();
             }
         };
 
         return () => {
+            console.log("⚡ [Whisper Hook] Terminando worker.");
             workerRef.current?.terminate();
         };
     }, []);
@@ -53,19 +65,22 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
     const stop = useCallback(async () => {
         if (!isListening) return;
 
+        console.log("⚡ [Whisper Hook] Parando gravação e enviando para processamento...");
         setIsListening(false);
         
         if (streamRef.current) {
             streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
         }
 
         if (audioContextRef.current) {
-            await audioContextRef.current.close();
+            if (audioContextRef.current.state !== 'closed') {
+               await audioContextRef.current.close();
+            }
+            audioContextRef.current = null;
         }
 
-        // Processar os chunks acumulados
         if (audioChunksRef.current.length > 0) {
-            // Concatenar todos os Float32Arrays
             const totalLength = audioChunksRef.current.reduce((acc, chunk) => acc + chunk.length, 0);
             const mergedArray = new Float32Array(totalLength);
             let offset = 0;
@@ -74,12 +89,13 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
                 offset += chunk.length;
             }
 
-            // Enviar para o worker
+            console.log(`⚡ [Whisper Hook] Enviando ${mergedArray.length} samples para o worker.`);
             workerRef.current?.postMessage({
                 audio: mergedArray,
                 language: 'portuguese'
             });
         } else {
+            console.warn("⚡ [Whisper Hook] Nenhum áudio capturado para processar.");
             callbacksRef.current.onEnd?.();
         }
 
@@ -87,10 +103,19 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
     }, [isListening]);
 
     const start = useCallback(async () => {
-        if (isListening || isProcessing) return;
+        if (isListening || isProcessing || isLoadingModel) return;
 
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            console.log("⚡ [Whisper Hook] Iniciando captura de áudio...");
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    channelCount: 1,
+                    sampleRate: 16000
+                } 
+            });
             streamRef.current = stream;
 
             audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({
@@ -99,7 +124,6 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
 
             const source = audioContextRef.current.createMediaStreamSource(stream);
             
-            // Adicionar GainNode para garantir que a voz está alta o suficiente para a IA
             const gainNode = audioContextRef.current.createGain();
             gainNode.gain.value = 3.0; 
             
@@ -109,11 +133,10 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
 
             processor.onaudioprocess = (e) => {
                 const inputData = e.inputBuffer.getChannelData(0);
-                // Usamos Float32Array.from para garantir uma cópia real e evitar mutações
                 audioChunksRef.current.push(Float32Array.from(inputData));
                 
                 if (audioChunksRef.current.length % 50 === 0) {
-                    console.log(`🎤 Whisper: Capturando áudio (${audioChunksRef.current.length} blocks)...`);
+                    console.log(`🎤 [Whisper Hook] Capturando... (${audioChunksRef.current.length} blocos acumulados)`);
                 }
             };
 
@@ -125,10 +148,10 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
             callbacksRef.current.onStart?.();
 
         } catch (err: any) {
-            console.error('Erro ao acessar microfone para Whisper:', err);
+            console.error('❌ [Whisper Hook] Erro ao acessar microfone:', err);
             callbacksRef.current.onError?.(err.name === 'NotAllowedError' ? 'not-allowed' : 'mic-error');
         }
-    }, [isListening, isProcessing]);
+    }, [isListening, isProcessing, isLoadingModel]);
 
-    return { isListening, isProcessing, start, stop };
+    return { isListening, isProcessing, isLoadingModel, start, stop };
 };

@@ -179,7 +179,7 @@ const App: React.FC = () => {
         feedbackTimeoutRef.current = window.setTimeout(() => setFeedbackMessage(''), duration);
     }, []);
 
-    const { isListening, isProcessing, start, stop, permissionGranted, setPermissionGranted } = useVoiceRecognition({
+    const { isListening, isProcessing, isLoadingModel, start, stop, permissionGranted, setPermissionGranted } = useVoiceRecognition({
         onStart: () => {
             showFeedback("OUVINDO...");
             if (!permissionGranted) setPermissionGranted(true);
@@ -240,10 +240,12 @@ const App: React.FC = () => {
 
     // Feedback visual para o processamento do Whisper
     useEffect(() => {
-        if (isProcessing) {
-            showFeedback("IA PROCESSANDO...", 15000); // 15s de timeout visual
+        if (isLoadingModel) {
+            showFeedback("INICIANDO IA...", 5000);
+        } else if (isProcessing) {
+            showFeedback("IA PROCESSANDO...", 15000);
         }
-    }, [isProcessing, showFeedback]);
+    }, [isLoadingModel, isProcessing, showFeedback]);
 
     const handleOrbClick = useCallback((systemId: string) => {
         if (activeTour) return;
@@ -416,7 +418,7 @@ const App: React.FC = () => {
                     systems={systems}
                     onOrbClick={handleOrbClick}
                     isListening={isListening}
-                    isProcessing={isProcessing}
+                    isProcessing={isProcessing || isLoadingModel}
                     onVoiceToggle={handleVoiceToggle}
                     isAdmin={isAdmin}
                     onAddSystem={handleAddNewSystem}

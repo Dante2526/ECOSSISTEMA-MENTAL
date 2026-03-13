@@ -194,7 +194,20 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
         };
         setTimeout(loadNextBatch, 2000);
 
-        try { fetch('/models/vosk-model-small-pt-0.3.zip'); } catch (e) { }
+        // Preload dos arquivos do Whisper silenciosamente
+        const whisperFiles = [
+            'config.json',
+            'generation_config.json',
+            'preprocessor_config.json',
+            'tokenizer_config.json',
+            'tokenizer.json',
+            'onnx/encoder_model.onnx',
+            'onnx/decoder_model_merged.onnx'
+        ];
+        const baseUrl = 'https://huggingface.co/Xenova/whisper-tiny/resolve/main/';
+        whisperFiles.forEach(file => {
+            try { fetch(`${baseUrl}${file}`); } catch (e) { }
+        });
     };
 
 

@@ -152,6 +152,7 @@ export const useVoiceRecognition = ({ onStart, onEnd, onError, onResult }: Voice
     // --- Proxy / Router ---
     const isListening = isOnline ? isListeningOnline : whisper.isListening;
     const isProcessing = !isOnline && whisper.isProcessing;
+    const isLoadingModel = !isOnline && whisper.isLoadingModel;
 
     const start = useCallback(() => {
         if (isOnline) {
@@ -174,6 +175,7 @@ export const useVoiceRecognition = ({ onStart, onEnd, onError, onResult }: Voice
     return { 
         isListening, 
         isProcessing,
+        isLoadingModel,
         start, 
         stop, 
         permissionGranted, 
