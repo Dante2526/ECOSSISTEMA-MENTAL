@@ -181,6 +181,7 @@ export function findMatchingItems(transcript: string, cache: SearchItem[]): Sear
     }
 
     const numericMatch = textForNumericSearch.match(/\d+/);
+    const hadNumeric = !!numericMatch;
     if (numericMatch) {
         const extractedNumber = numericMatch[0];
         const extractedInt = parseInt(extractedNumber, 10);
@@ -217,6 +218,12 @@ export function findMatchingItems(transcript: string, cache: SearchItem[]): Sear
             return searchKeywords.every(keyword => itemText.includes(keyword));
         });
         if (flexibleMatches.length > 0) return getUniqueResults(flexibleMatches);
+    }
+
+    // Se a frase tinha número, mas não achamos nenhum código correspondente,
+    // preferimos NÃO fazer match aproximado em outros textos para evitar abrir orbes errados.
+    if (hadNumeric) {
+        return [];
     }
 
     // Tentativa 5: Remoção total de espaços para códigos alfanuméricos (ex: "TP 2B", "Orbe 151")
