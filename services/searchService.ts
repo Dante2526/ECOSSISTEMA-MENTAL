@@ -31,7 +31,8 @@ export function applyPhoneticCorrections(transcript: string): string {
         'tp dois b': 'tp2b', 'tp 2 b': 'tp2b', 'tp 02b': 'tp2b',
         'tp doisb': 'tp2b', 'tepe': 'tp', 'te pe': 'tp', 'tp2 b': 'tp2b',
         'tep dois b': 'tp2b', 'tepê': 'tp', 'tp dois bê': 'tp2b',
-        'tp zero um': 'tp01', 'tepe zero um': 'tp01', 'tepe 01': 'tp01'
+        'tp zero um': 'tp01', 'tepe zero um': 'tp01', 'tepe 01': 'tp01',
+        'cento e oitenta e sete': '187', 'oitenta e sete': '187', 'cento oitenta e sete': '187'
     };
 
     let corrected = transcript.toLowerCase()
@@ -166,7 +167,19 @@ export function findMatchingItems(transcript: string, cache: SearchItem[]): Sear
     if (exactMatches.length > 0) return getUniqueResults(exactMatches);
 
     // Tentativa 2: Extração de Números (Prioridade Segura para códigos)
-    const numericMatch = correctedTranscript.match(/\d+/);
+    // Refinamento: Ignorar prefixos comuns que confundem a extração
+    const prefixesToIgnore = ['linha', 'orbe', 'sistema', 'ir para', 'ir', 'para', 'estação', 'camera', 'câmera'];
+    let textForNumericSearch = correctedTranscript.toLowerCase();
+    
+    // Remover prefixos se eles existirem no início da frase
+    for (const prefix of prefixesToIgnore) {
+        if (textForNumericSearch.startsWith(prefix)) {
+            textForNumericSearch = textForNumericSearch.substring(prefix.length).trim();
+            break;
+        }
+    }
+
+    const numericMatch = textForNumericSearch.match(/\d+/);
     if (numericMatch) {
         const extractedNumber = numericMatch[0];
         const numberMatches = cache.filter(item => 

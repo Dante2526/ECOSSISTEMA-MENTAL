@@ -57,6 +57,12 @@ self.onmessage = async (event) => {
     console.log(`⚡ [Whisper Worker] Recebidos ${audio.length} samples. Energia RMS: ${energy.toFixed(6)}`);
 
     try {
+        // Monitoramento de memória (Chromium)
+        if ((performance as any).memory) {
+            const memory = (performance as any).memory;
+            console.log(`📊 [Whisper Worker] Memória: ${(memory.usedJSHeapSize / 1024 / 1024).toFixed(1)}MB / ${(memory.jsHeapSizeLimit / 1024 / 1024).toFixed(1)}MB`);
+        }
+
         const transcriber = await WhisperWorker.getInstance((progress) => {
             if (progress.status === 'progress') {
                 self.postMessage({ type: 'STATUS', status: 'loading', progress: progress.progress });

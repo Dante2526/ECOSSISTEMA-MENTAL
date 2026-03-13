@@ -176,10 +176,19 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
                 // Suavização moderada
                 smoothedRms = (smoothedRms * 0.65) + (rms * 0.35);
 
+                // --- Ganho Adaptativo (Especial para Mobile/Notebook) ---
+                // Se após 1.2s o sinal ainda estiver muito fraco (< 40% do limiar), aumentamos o ganho
+                if (Date.now() - startTime > 1200 && !hasSpeechStarted && smoothedRms < (SILENCE_THRESHOLD * 0.4)) {
+                    if (gainNode.gain.value < 5.0) {
+                        console.log(`🔊 [Whisper Hook] Sinal fraco detectado (${smoothedRms.toFixed(4)}). Aumentando ganho para 5.0x`);
+                        gainNode.gain.value = 5.0;
+                    }
+                }
+
                 // Detecção de início de fala
                 if (!hasSpeechStarted && smoothedRms > SILENCE_THRESHOLD) {
                     hasSpeechStarted = true;
-                    console.log("🎤 [Whisper Hook] Fala detectada!");
+                    console.log(`🎤 [Whisper Hook] Fala detectada! (RMS: ${smoothedRms.toFixed(4)})`);
                 }
 
                 if (hasSpeechStarted) {
