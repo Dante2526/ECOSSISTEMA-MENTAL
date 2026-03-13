@@ -112,70 +112,44 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
 
         setTimeout(loadNextBatch, 500);
 
-        // 4. Pré-carregar Model Whisper (Xenova) via fetch para garantir cache
-        const preloadWhisperModel = async () => {
-            const files = [
-                'config.json',
-                'generation_config.json',
-                'preprocessor_config.json',
-                'tokenizer_config.json',
-                'tokenizer.json',
-                'onnx/encoder_model_quantized.onnx',
-                'onnx/decoder_model_merged_quantized.onnx'
-            ];
+        // 4. Pré-carregar Model Whisper (Xenova) via Worker para garantir cache 100%
+        const preloadWhisperModel = () => {
+            console.log("⚡ [PWA] Iniciando Worker para download da IA...");
             
-            const baseUrl = 'https://huggingface.co/Xenova/whisper-tiny/resolve/main/';
-            let totalWeightUsed = 0;
-            const weightPerFile = WHISPER_WEIGHT / files.length;
-            
-            // Reduzir o log para não inundar o console
-            console.log("⚡ [PWA] Iniciando download da IA (Whisper Quantized)...");
+            // Criamos um worker temporário apenas para o preload
+            const preloadWorker = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), {
+                type: 'module'
+            });
 
-            for (const file of files) {
-                try {
-                    const url = `${baseUrl}${file}`;
-                    const response = await fetch(url);
-                    if (!response.ok) throw new Error(`Status ${response.status}`);
+            let lastTickWeight = 0;
+
+            preloadWorker.onmessage = (event) => {
+                const { type, progress, status } = event.data;
+
+                if (type === 'PRELOAD_PROGRESS') {
+                    // progress vem de 0 a 100
+                    const currentWeight = (progress / 100) * WHISPER_WEIGHT;
+                    const tickDiff = currentWeight - lastTickWeight;
                     
-                    const contentLength = +(response.headers.get('Content-Length') || '1000000');
-                    const reader = response.body?.getReader();
-                    let receivedLength = 0;
-                    let fileWeightUsed = 0;
-
-                    if (reader) {
-                        while (true) {
-                            const { done, value } = await reader.read();
-                            if (done) break;
-                            receivedLength += value?.length || 0;
-                            
-                            const currentFileWeight = Math.min((receivedLength / contentLength) * weightPerFile, weightPerFile);
-                            const tickDiff = currentFileWeight - fileWeightUsed;
-                            
-                            if (tickDiff > 0.05 || receivedLength === contentLength) {
-                                tickProgress(tickDiff);
-                                fileWeightUsed = currentFileWeight;
-                                totalWeightUsed += tickDiff;
-                            }
-                        }
-                    } else {
-                        // Fallback se não tiver reader
-                        tickProgress(weightPerFile);
-                        totalWeightUsed += weightPerFile;
+                    if (tickDiff > 0.1 || progress === 100) {
+                        tickProgress(tickDiff);
+                        lastTickWeight = currentWeight;
                     }
-                } catch (e) {
-                    console.warn(`[PWA] Arquivo ${file} falhou (provavelmente já em cache ou rede offline)`, e);
-                    // No caso de erro, pulamos o peso para não travar a barra
-                    const remainingForThisFile = weightPerFile - totalWeightUsed % weightPerFile;
-                    if (remainingForThisFile > 0) {
-                        tickProgress(remainingForThisFile);
-                        totalWeightUsed += remainingForThisFile;
-                    }
+                } else if (type === 'PRELOAD_DONE') {
+                    console.log("⚡ [PWA] Worker finalizou download da IA com sucesso.");
+                    const remaining = WHISPER_WEIGHT - lastTickWeight;
+                    if (remaining > 0) tickProgress(remaining);
+                    preloadWorker.terminate();
+                } else if (type === 'PRELOAD_ERROR') {
+                    console.error("❌ [PWA] Worker falhou no download:", event.data.error);
+                    // Pular peso para não travar a barra se falhar (ex: sem internet já no começo)
+                    const remaining = WHISPER_WEIGHT - lastTickWeight;
+                    if (remaining > 0) tickProgress(remaining);
+                    preloadWorker.terminate();
                 }
-            }
-            
-            // Garantir que o peso total foi preenchido
-            const remaining = WHISPER_WEIGHT - totalWeightUsed;
-            if (remaining > 0) tickProgress(remaining);
+            };
+
+            preloadWorker.postMessage({ type: 'PRELOAD' });
         };
 
         setTimeout(preloadWhisperModel, 1000);
@@ -209,20 +183,16 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
         };
         setTimeout(loadNextBatch, 2000);
 
-        // Preload dos arquivos do Whisper silenciosamente
-        const whisperFiles = [
-            'config.json',
-            'generation_config.json',
-            'preprocessor_config.json',
-            'tokenizer_config.json',
-            'tokenizer.json',
-            'onnx/encoder_model_quantized.onnx',
-            'onnx/decoder_model_merged_quantized.onnx'
-        ];
-        const baseUrl = 'https://huggingface.co/Xenova/whisper-tiny/resolve/main/';
-        whisperFiles.forEach(file => {
-            try { fetch(`${baseUrl}${file}`); } catch (e) { }
+        // Preload do Whisper via Worker (silencioso e sem barra de progresso)
+        const silentWorker = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), {
+            type: 'module'
         });
+        silentWorker.onmessage = (e) => {
+            if (e.data.type === 'PRELOAD_DONE' || e.data.type === 'PRELOAD_ERROR') {
+                silentWorker.terminate();
+            }
+        };
+        silentWorker.postMessage({ type: 'PRELOAD' });
     };
 
 

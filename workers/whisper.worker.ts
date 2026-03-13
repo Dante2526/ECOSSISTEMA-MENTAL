@@ -28,7 +28,30 @@ class WhisperWorker {
 }
 
 self.onmessage = async (event) => {
-    const { audio, language } = event.data;
+    const { type, audio, language } = event.data;
+
+    // Comando especial para pré-carregar o modelo enquanto há internet
+    if (type === 'PRELOAD') {
+        console.log("⚡ [Whisper Worker] Recebido comando PRELOAD. Iniciando aquecimento do cache...");
+        try {
+            await WhisperWorker.getInstance((progress) => {
+                if (progress.status === 'progress' || progress.status === 'done') {
+                    self.postMessage({ 
+                        type: 'PRELOAD_PROGRESS', 
+                        file: progress.file,
+                        progress: progress.progress || 100,
+                        status: progress.status
+                    });
+                }
+            });
+            console.log("⚡ [Whisper Worker] Pré-carregamento concluído com sucesso!");
+            self.postMessage({ type: 'PRELOAD_DONE' });
+        } catch (error) {
+            console.error("❌ [Whisper Worker] Falha no pré-carregamento:", error);
+            self.postMessage({ type: 'PRELOAD_ERROR', error: error.message });
+        }
+        return;
+    }
 
     if (!audio) {
         console.warn("⚠️ [Whisper Worker] Recebida mensagem sem áudio.");
