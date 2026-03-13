@@ -74,10 +74,11 @@ export function applyPhoneticCorrections(transcript: string): string {
     }
 
     // Casos especiais para 65B:
-    // Whisper já retornou "Meia 5p" e "e meia cinco de" ao pedir "65B"
+    // Whisper já retornou "Meia 5p", "e meia cinco de" e "Néia 5b" ao pedir "65B"
     const pattern65B_digits = /^meia\s*5p\.?$/;
     const pattern65B_words = /^(e\s+)?meia\s+cinco( de)?\.?$/;
-    if (pattern65B_digits.test(corrected) || pattern65B_words.test(corrected)) {
+    const pattern65B_neia = /^n[eé]ia\s*5b\.?$/;
+    if (pattern65B_digits.test(corrected) || pattern65B_words.test(corrected) || pattern65B_neia.test(corrected)) {
         corrected = '65b';
     }
 
