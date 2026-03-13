@@ -2,9 +2,14 @@ import { pipeline, env } from '@xenova/transformers';
 
 // Configuração para uso do cache do navegador (Cache API)
 env.allowLocalModels = false;
+env.allowRemoteModels = true;
 env.useBrowserCache = true;
 
-console.log("⚡ [Whisper Worker] Worker iniciado e pronto para carregar.");
+console.log("⚡ [Whisper Worker] Worker iniciado. Env:", {
+    allowLocalModels: env.allowLocalModels,
+    allowRemoteModels: env.allowRemoteModels,
+    useBrowserCache: env.useBrowserCache
+});
 
 class WhisperWorker {
     static instance = null;
