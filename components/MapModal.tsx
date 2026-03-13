@@ -12,7 +12,7 @@ interface MapModalProps {
     onExport?: () => void;
 }
 
-export const MapModal: React.FC<MapModalProps> = ({
+export const MapModal: React.FC<MapModalProps> = React.memo(({
     isOpen,
     onClose,
     systems,
@@ -428,4 +428,4 @@ export const MapModal: React.FC<MapModalProps> = ({
             </div>
         </div>
     );
-};
+});

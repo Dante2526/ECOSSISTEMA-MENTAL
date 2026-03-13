@@ -9,12 +9,12 @@ interface TourSelectionModalProps {
     onSelectTour: (tour: Tour) => void;
 }
 
-export const TourSelectionModal: React.FC<TourSelectionModalProps> = ({ isOpen, onClose, tours, onSelectTour }) => {
+export const TourSelectionModal: React.FC<TourSelectionModalProps> = React.memo(({ isOpen, onClose, tours, onSelectTour }) => {
     if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 bg-black/70 z-[9990] flex items-center justify-center p-4" onClick={onClose}>
-            <div 
+            <div
                 className="w-full max-w-md bg-slate-900/80 border border-purple-500/30 rounded-lg shadow-2xl flex flex-col text-white overflow-hidden"
                 onClick={e => e.stopPropagation()}
             >
@@ -27,7 +27,7 @@ export const TourSelectionModal: React.FC<TourSelectionModalProps> = ({ isOpen, 
                         <ul className="space-y-2">
                             {tours.map(tour => (
                                 <li key={tour.id}>
-                                    <button 
+                                    <button
                                         onClick={() => onSelectTour(tour)}
                                         className="w-full text-left p-4 bg-slate-800/50 rounded-md border border-slate-700 hover:bg-purple-600/30 hover:border-purple-500 transition-all"
                                     >
@@ -44,4 +44,4 @@ export const TourSelectionModal: React.FC<TourSelectionModalProps> = ({ isOpen, 
             </div>
         </div>
     );
-};
+});

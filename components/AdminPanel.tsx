@@ -20,7 +20,7 @@ const NEW_SYSTEM_TEMPLATE: Omit<OrbitalSystem, 'id'> = {
     satellites: [],
 };
 
-export const AdminPanel: React.FC<AdminPanelProps> = ({ systemToEdit, systems, tours, setTours, onSave, onDelete, onClose }) => {
+export const AdminPanel: React.FC<AdminPanelProps> = React.memo(({ systemToEdit, systems, tours, setTours, onSave, onDelete, onClose }) => {
     const [formState, setFormState] = useState<OrbitalSystem | null>(null);
     const [activeTab, setActiveTab] = useState<'systems' | 'tours'>('systems');
 
@@ -36,7 +36,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ systemToEdit, systems, t
             setFormState(null);
         }
     }, [systemToEdit]);
-    
+
     const handleInputChange = (field: keyof OrbitalSystem, value: any) => {
         if (!formState) return;
         setFormState({ ...formState, [field]: value });
@@ -78,15 +78,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ systemToEdit, systems, t
 
     const inputClasses = "w-full bg-slate-800/50 border-b-2 border-slate-600 rounded-t px-3 py-2 text-white placeholder-slate-400 transition-colors focus:outline-none focus:border-purple-500 focus:bg-slate-800";
     const labelClasses = "block text-sm font-bold text-purple-300 mb-2 tracking-wider uppercase";
-    
+
     const TabButton: React.FC<{ tabId: 'systems' | 'tours'; children: React.ReactNode }> = ({ tabId, children }) => (
         <button
             onClick={() => setActiveTab(tabId)}
-            className={`px-4 py-2 text-sm font-bold tracking-wider uppercase transition-colors rounded-t-md ${
-                activeTab === tabId
+            className={`px-4 py-2 text-sm font-bold tracking-wider uppercase transition-colors rounded-t-md ${activeTab === tabId
                 ? 'bg-slate-900 text-white'
                 : 'bg-transparent text-slate-400 hover:text-white hover:bg-slate-800/50'
-            }`}
+                }`}
         >
             {children}
         </button>
@@ -94,7 +93,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ systemToEdit, systems, t
 
     return (
         <div className="fixed inset-0 bg-black/70 z-40 flex items-center justify-center p-2 md:p-4" onClick={onClose}>
-            <div 
+            <div
                 className="w-full max-w-2xl flex flex-col bg-slate-900/95 border border-purple-500/30 rounded-lg shadow-2xl text-white overflow-hidden max-h-[85dvh] md:max-h-[90vh]"
                 onClick={e => e.stopPropagation()}
             >
@@ -104,13 +103,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ systemToEdit, systems, t
                     </h3>
                     <button onClick={onClose} className="text-2xl text-slate-400 hover:text-white transition-colors p-1">&times;</button>
                 </div>
-                
+
                 <div className="px-4 pt-2 border-b border-purple-500/20 flex items-end gap-2 bg-slate-900/50 justify-between">
                     <div className="flex gap-2">
                         <TabButton tabId="systems">Sistemas</TabButton>
                         <TabButton tabId="tours">Tours</TabButton>
                     </div>
-                    <button 
+                    <button
                         onClick={() => {
                             const dataStr = JSON.stringify(systems, null, 2);
                             navigator.clipboard.writeText(dataStr).then(() => {
@@ -129,68 +128,68 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ systemToEdit, systems, t
                         Exportar Dados
                     </button>
                 </div>
-                
+
                 <div className="flex-grow overflow-y-auto p-4 md:p-6 space-y-4 md:space-y-6 bg-slate-900 overscroll-contain">
-                   {activeTab === 'tours' ? (
+                    {activeTab === 'tours' ? (
                         <TourAdmin systems={systems} tours={tours} setTours={setTours} />
-                   ) : (
-                    <>
-                    {formState ? (
+                    ) : (
                         <>
-                        <div className="space-y-4">
-                            <div>
-                                <label htmlFor="sys-name" className={labelClasses}>Nome do Sistema</label>
-                                <input id="sys-name" type="text" value={formState.name} onChange={e => handleInputChange('name', e.target.value)} className={inputClasses} placeholder="Ex: Linhas do Freio" />
-                            </div>
-                            <div>
-                                <label htmlFor="sys-icon" className={labelClasses}>URL do Ícone</label>
-                                <input id="sys-icon" type="text" value={formState.iconUrl} onChange={e => handleInputChange('iconUrl', e.target.value)} className={inputClasses} />
-                            </div>
-                            <div>
-                                <label htmlFor="sys-modals" className={labelClasses}>URLs do Modal (um por linha)</label>
-                                <textarea id="sys-modals" rows={3} value={formState.modalUrls.join('\n')} onChange={e => handleInputChange('modalUrls', e.target.value.split('\n').filter(url => url.trim() !== ''))} className={inputClasses}></textarea>
-                            </div>
-                        </div>
-                        
-                        <div className="border-t border-purple-500/20 pt-6">
-                            <h4 className={`${labelClasses} mb-4`}>Satélites</h4>
-                            <div className="space-y-3 max-h-[25vh] overflow-y-auto pr-2 -mr-2">
-                                {formState.satellites.map((sat, index) => (
-                                    <div key={index} className="flex items-end gap-3 p-3 bg-slate-800/50 rounded-md border border-slate-700">
-                                        <div className="flex-grow">
-                                            <label className="text-xs text-slate-400 mb-1 block">Nome</label>
-                                            <input type="text" value={sat.name} onChange={e => handleSatelliteChange(index, 'name', e.target.value)} className={inputClasses} />
+                            {formState ? (
+                                <>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label htmlFor="sys-name" className={labelClasses}>Nome do Sistema</label>
+                                            <input id="sys-name" type="text" value={formState.name} onChange={e => handleInputChange('name', e.target.value)} className={inputClasses} placeholder="Ex: Linhas do Freio" />
                                         </div>
-                                        <div className="w-1/3">
-                                            <label className="text-xs text-slate-400 mb-1 block">Estilo</label>
-                                            <select value={sat.style || 'default'} onChange={e => handleSatelliteChange(index, 'style', e.target.value === 'default' ? undefined : e.target.value)} className={inputClasses}>
-                                                <option value="default">Padrão</option>
-                                                <option value="neon-red">Neon Vermelho</option>
-                                                <option value="neon-yellow">Neon Amarelo</option>
-                                                <option value="neon-green">Neon Verde</option>
-                                            </select>
+                                        <div>
+                                            <label htmlFor="sys-icon" className={labelClasses}>URL do Ícone</label>
+                                            <input id="sys-icon" type="text" value={formState.iconUrl} onChange={e => handleInputChange('iconUrl', e.target.value)} className={inputClasses} />
                                         </div>
-                                        <button onClick={() => handleRemoveSatellite(index)} className="w-10 h-10 flex-shrink-0 rounded-md bg-red-600/50 border border-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-all duration-300 hover:shadow-[0_0_10px_rgba(239,68,68,0.5)]">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                            </svg>
+                                        <div>
+                                            <label htmlFor="sys-modals" className={labelClasses}>URLs do Modal (um por linha)</label>
+                                            <textarea id="sys-modals" rows={3} value={formState.modalUrls.join('\n')} onChange={e => handleInputChange('modalUrls', e.target.value.split('\n').filter(url => url.trim() !== ''))} className={inputClasses}></textarea>
+                                        </div>
+                                    </div>
+
+                                    <div className="border-t border-purple-500/20 pt-6">
+                                        <h4 className={`${labelClasses} mb-4`}>Satélites</h4>
+                                        <div className="space-y-3 max-h-[25vh] overflow-y-auto pr-2 -mr-2">
+                                            {formState.satellites.map((sat, index) => (
+                                                <div key={index} className="flex items-end gap-3 p-3 bg-slate-800/50 rounded-md border border-slate-700">
+                                                    <div className="flex-grow">
+                                                        <label className="text-xs text-slate-400 mb-1 block">Nome</label>
+                                                        <input type="text" value={sat.name} onChange={e => handleSatelliteChange(index, 'name', e.target.value)} className={inputClasses} />
+                                                    </div>
+                                                    <div className="w-1/3">
+                                                        <label className="text-xs text-slate-400 mb-1 block">Estilo</label>
+                                                        <select value={sat.style || 'default'} onChange={e => handleSatelliteChange(index, 'style', e.target.value === 'default' ? undefined : e.target.value)} className={inputClasses}>
+                                                            <option value="default">Padrão</option>
+                                                            <option value="neon-red">Neon Vermelho</option>
+                                                            <option value="neon-yellow">Neon Amarelo</option>
+                                                            <option value="neon-green">Neon Verde</option>
+                                                        </select>
+                                                    </div>
+                                                    <button onClick={() => handleRemoveSatellite(index)} className="w-10 h-10 flex-shrink-0 rounded-md bg-red-600/50 border border-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-all duration-300 hover:shadow-[0_0_10px_rgba(239,68,68,0.5)]">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <button onClick={handleAddSatellite} className="px-4 py-2 rounded-md font-bold transition-all duration-300 text-sm border-2 bg-blue-600/50 border-blue-500 hover:bg-blue-600 hover:text-white hover:shadow-[0_0_15px_rgba(59,130,246,0.5)] mt-4">
+                                            Adicionar Satélite
                                         </button>
                                     </div>
-                                ))}
-                            </div>
-                            <button onClick={handleAddSatellite} className="px-4 py-2 rounded-md font-bold transition-all duration-300 text-sm border-2 bg-blue-600/50 border-blue-500 hover:bg-blue-600 hover:text-white hover:shadow-[0_0_15px_rgba(59,130,246,0.5)] mt-4">
-                                Adicionar Satélite
-                            </button>
-                        </div>
+                                </>
+                            ) : (
+                                <div className='text-center text-slate-400 py-10'>
+                                    <p>Nenhum sistema selecionado para edição.</p>
+                                    <p className='mt-2 text-sm'>Clique em um sistema na visualização principal para editá-lo, ou use o botão (+) para adicionar um novo.</p>
+                                </div>
+                            )}
                         </>
-                        ) : (
-                            <div className='text-center text-slate-400 py-10'>
-                                <p>Nenhum sistema selecionado para edição.</p>
-                                <p className='mt-2 text-sm'>Clique em um sistema na visualização principal para editá-lo, ou use o botão (+) para adicionar um novo.</p>
-                            </div>
-                        )}
-                    </>
-                   )}
+                    )}
                 </div>
                 {isEditingOrAddingSystem && (
                     <div className="p-3 md:p-4 border-t border-purple-500/20 flex flex-col sm:flex-row justify-between items-center gap-3 md:gap-4 flex-shrink-0 bg-slate-900/80 safe-area-pb">
@@ -212,4 +211,4 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ systemToEdit, systems, t
             </div>
         </div>
     );
-};
+});

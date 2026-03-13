@@ -14,6 +14,10 @@ import { TourSelectionModal } from './components/TourSelectionModal';
 import { TourDeckModal } from './components/TourDeckModal';
 import { FeedbackMessage } from './components/FeedbackMessage';
 import { MapModal } from './components/MapModal';
+import { UpdatePrompt } from './components/UpdatePrompt';
+import { useRegisterSW } from 'virtual:pwa-register/react';
+import { usePreloadProgress } from './hooks/usePreloadProgress';
+import { OfflineSetupProgress } from './components/OfflineSetupProgress';
 
 const App: React.FC = () => {
     const [modalImages, setModalImages] = useState<string[]>([]);
@@ -29,6 +33,20 @@ const App: React.FC = () => {
     const [activeTour, setActiveTour] = useState<Tour | null>(null);
 
     const orbitalSystemRef = useRef<OrbitalSystemRef>(null);
+
+    // PWA Service Worker registration
+    const {
+        offlineReady: [offlineReady],
+        needRefresh: [needRefresh, setNeedRefresh],
+        updateServiceWorker,
+    } = useRegisterSW({
+        onRegistered(r) {
+            console.log('SW Registrado:', r);
+        },
+        onRegisterError(error) {
+            console.error('Erro ao registrar SW:', error);
+        },
+    });
 
     const [systems, setSystems] = useState<OrbitalSystemType[]>(() => {
         try {
@@ -136,49 +154,7 @@ const App: React.FC = () => {
         }
     }, [systems, tours]);
 
-    useEffect(() => {
-        console.log("Pré-carregando todas as imagens do sistema em background...");
-        const imageUrlsToPreload = new Set<string>();
-
-        imageUrlsToPreload.add("https://i.ibb.co/DPMyNGvd/MINHA-LOGO.png");
-        imageUrlsToPreload.add("https://i.ibb.co/fzpVkfb1/Layout-1-page-0001.jpg"); // Map image
-        systems.forEach(system => {
-            imageUrlsToPreload.add(system.iconUrl);
-            system.modalUrls.forEach(url => imageUrlsToPreload.add(url));
-        });
-
-        const urls = Array.from(imageUrlsToPreload);
-
-        // Load images in parallel batches of 4 for fast preloading
-        // without overwhelming the browser or network
-        const BATCH_SIZE = 4;
-        let i = 0;
-
-        const loadBatch = () => {
-            if (i >= urls.length) return;
-
-            const batch = urls.slice(i, i + BATCH_SIZE);
-            i += BATCH_SIZE;
-
-            let completed = 0;
-            batch.forEach(url => {
-                const img = new Image();
-                img.onload = img.onerror = () => {
-                    completed++;
-                    if (completed === batch.length) {
-                        // Small delay between batches to keep UI responsive
-                        setTimeout(loadBatch, 100);
-                    }
-                };
-                img.src = url;
-            });
-        };
-
-        // Start preloading after a short delay to not interfere with initial render
-        setTimeout(loadBatch, 200);
-
-        console.log(`${urls.length} imagens agendadas para pré-carregamento otimizado.`);
-    }, [systems]);
+    const offlineProgress = usePreloadProgress(systems);
 
     useEffect(() => {
         setSearchCache(buildSearchCache(systems));
@@ -415,6 +391,7 @@ const App: React.FC = () => {
     return (
         <div className="relative w-screen h-screen overflow-hidden font-sans cursor-grab touch-none transition-colors duration-500 bg-[radial-gradient(ellipse_at_center,_#1a0b2e_0%,_#000000_100%)]">
 
+            <OfflineSetupProgress progress={offlineProgress} />
             <ParallaxBackground />
 
             <TourDeckModal
@@ -478,6 +455,13 @@ const App: React.FC = () => {
                 isOpen={isModalOpen}
                 imageUrls={modalImages}
                 onClose={handleCloseModal}
+            />
+
+            <UpdatePrompt
+                offlineReady={offlineReady}
+                needRefresh={needRefresh}
+                onUpdate={useCallback(() => updateServiceWorker(true), [updateServiceWorker])}
+                onClose={useCallback(() => setNeedRefresh(false), [setNeedRefresh])}
             />
 
             <MapModal

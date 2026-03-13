@@ -8,7 +8,7 @@ interface TourAdminProps {
     setTours: React.Dispatch<React.SetStateAction<Tour[]>>;
 }
 
-export const TourAdmin: React.FC<TourAdminProps> = ({ systems, tours, setTours }) => {
+export const TourAdmin: React.FC<TourAdminProps> = React.memo(({ systems, tours, setTours }) => {
     const [editingTour, setEditingTour] = useState<Tour | null>(null);
     const [isDraggingOver, setIsDraggingOver] = useState(false);
     const draggedOverIndex = useRef<number | null>(null);
@@ -233,4 +233,4 @@ export const TourAdmin: React.FC<TourAdminProps> = ({ systems, tours, setTours }
             </div>
         </div>
     );
-};
+});

@@ -10,7 +10,7 @@ interface QuickSearchModalProps {
     onSelect: (systemId: string) => void;
 }
 
-export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({ isOpen, onClose, systems, onSelect }) => {
+export const QuickSearchModal: React.FC<QuickSearchModalProps> = React.memo(({ isOpen, onClose, systems, onSelect }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [activeIndex, setActiveIndex] = useState(0);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -75,13 +75,13 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({ isOpen, onCl
 
     return (
         <div className="fixed inset-0 bg-black/70 z-[9990] flex items-start justify-center pt-[15vh] p-4" onClick={onClose}>
-            <div 
+            <div
                 className="w-full max-w-2xl bg-slate-900/80 border border-purple-500/30 rounded-lg shadow-2xl flex flex-col text-white overflow-hidden"
                 onClick={e => e.stopPropagation()}
                 onKeyDown={handleKeyDown}
             >
                 <div className="p-3 border-b border-purple-500/20 flex items-center gap-3">
-                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                     <input
@@ -101,9 +101,8 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({ isOpen, onCl
                                 key={system.id}
                                 onClick={() => onSelect(system.id)}
                                 onMouseEnter={() => setActiveIndex(index)}
-                                className={`p-4 flex items-center gap-4 border-b border-slate-800 cursor-pointer transition-colors duration-150 ${
-                                    index === activeIndex ? 'bg-purple-600/30' : 'hover:bg-slate-800/60'
-                                }`}
+                                className={`p-4 flex items-center gap-4 border-b border-slate-800 cursor-pointer transition-colors duration-150 ${index === activeIndex ? 'bg-purple-600/30' : 'hover:bg-slate-800/60'
+                                    }`}
                                 role="option"
                                 aria-selected={index === activeIndex}
                             >
@@ -121,4 +120,4 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({ isOpen, onCl
             </div>
         </div>
     );
-};
+});

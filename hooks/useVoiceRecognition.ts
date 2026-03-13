@@ -1,33 +1,29 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { useOnlineStatus } from './useOnlineStatus';
+import { useVoskRecognition } from './useVoskRecognition';
 
-// FIX: Add type definitions for the Web Speech API which are not included in standard TypeScript DOM typings.
-// This resolves errors related to SpeechRecognition and its associated event types.
+// ... (Web Speech API types e interfaces se mantêm iguais)
 interface SpeechRecognitionAlternative {
     readonly transcript: string;
     readonly confidence: number;
 }
-
 interface SpeechRecognitionResult {
     readonly isFinal: boolean;
     readonly length: number;
     item(index: number): SpeechRecognitionAlternative;
     [index: number]: SpeechRecognitionAlternative;
 }
-
 interface SpeechRecognitionResultList {
     readonly length: number;
     item(index: number): SpeechRecognitionResult;
     [index: number]: SpeechRecognitionResult;
 }
-
 interface SpeechRecognitionEvent extends Event {
     readonly results: SpeechRecognitionResultList;
 }
-
 interface SpeechRecognitionErrorEvent extends Event {
     readonly error: string;
 }
-
 interface SpeechRecognition extends EventTarget {
     continuous: boolean;
     interimResults: boolean;
@@ -39,11 +35,10 @@ interface SpeechRecognition extends EventTarget {
     start(): void;
     stop(): void;
 }
-
 declare global {
     interface Window {
-        SpeechRecognition: { new (): SpeechRecognition; };
-        webkitSpeechRecognition: { new (): SpeechRecognition; };
+        SpeechRecognition: { new(): SpeechRecognition; };
+        webkitSpeechRecognition: { new(): SpeechRecognition; };
     }
 }
 
@@ -57,22 +52,45 @@ interface VoiceRecognitionOptions {
 }
 
 export const useVoiceRecognition = ({ onStart, onEnd, onError, onResult }: VoiceRecognitionOptions) => {
-    const [isListening, setIsListening] = useState(false);
+    const isOnline = useOnlineStatus();
+
+    // --- Estado de Permissão (Comum para ambos) ---
     const [permissionGranted, setPermissionGranted] = useState<boolean>(() => {
         if (typeof window !== 'undefined') {
             return localStorage.getItem(PERMISSION_STORAGE_KEY) === 'true';
         }
         return false;
     });
+
+    const updatePermission = useCallback((granted: boolean) => {
+        setPermissionGranted(granted);
+        if (granted) {
+            localStorage.setItem(PERMISSION_STORAGE_KEY, 'true');
+        } else {
+            localStorage.removeItem(PERMISSION_STORAGE_KEY);
+        }
+    }, []);
+
+    // --- Implementação Online (Web Speech API) ---
+    const [isListeningOnline, setIsListeningOnline] = useState(false);
     const recognitionRef = useRef<SpeechRecognition | null>(null);
-    // Use a ref to hold the latest callbacks, preventing the main effect from re-running
     const callbacksRef = useRef({ onStart, onEnd, onError, onResult });
-    callbacksRef.current = { onStart, onEnd, onError, onResult };
 
     useEffect(() => {
+        callbacksRef.current = { onStart, onEnd, onError, onResult };
+    }, [onStart, onEnd, onError, onResult]);
+
+    useEffect(() => {
+        if (!isOnline) {
+            if (isListeningOnline && recognitionRef.current) {
+                recognitionRef.current.stop();
+            }
+            return;
+        }
+
         const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognitionAPI) {
-            callbacksRef.current.onError?.('not-supported');
+            console.warn("Web Speech API não suportada no fallback fallback online.");
             return;
         }
 
@@ -83,59 +101,75 @@ export const useVoiceRecognition = ({ onStart, onEnd, onError, onResult }: Voice
         recognition.interimResults = false;
 
         recognition.onstart = () => {
-            setIsListening(true);
+            setIsListeningOnline(true);
             callbacksRef.current.onStart?.();
         };
 
         recognition.onend = () => {
-            setIsListening(false);
+            setIsListeningOnline(false);
             callbacksRef.current.onEnd?.();
         };
 
         recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-            setIsListening(false);
+            setIsListeningOnline(false);
             callbacksRef.current.onError?.(event.error);
         };
 
         recognition.onresult = (event: SpeechRecognitionEvent) => {
-             if (event.results && event.results[0] && event.results[0][0]) {
+            if (event.results && event.results[0] && event.results[0][0]) {
                 const transcript = event.results[0][0].transcript;
                 callbacksRef.current.onResult?.(transcript);
             }
         };
 
-        // Cleanup on unmount
         return () => {
-            if (recognition) {
-                recognition.stop();
+            if (recognitionRef.current && isListeningOnline) {
+                recognitionRef.current.stop();
             }
         };
-    }, []); // Empty dependency array ensures this runs only ONCE.
+    }, [isOnline]); // Recria apenas se o status online mudar
 
-    const start = useCallback(() => {
-        if (recognitionRef.current && !isListening) {
-             try {
-                recognitionRef.current.start();
-             } catch(e) {
-                // May throw if already started, ignore.
-             }
+    const startOnline = useCallback(() => {
+        if (recognitionRef.current && !isListeningOnline) {
+            try { recognitionRef.current.start(); } catch (e) { }
         }
-    }, [isListening]);
+    }, [isListeningOnline]);
 
-    const stop = useCallback(() => {
-        if (recognitionRef.current && isListening) {
+    const stopOnline = useCallback(() => {
+        if (recognitionRef.current && isListeningOnline) {
             recognitionRef.current.stop();
         }
-    }, [isListening]);
-    
-    const updatePermission = useCallback((granted: boolean) => {
-        setPermissionGranted(granted);
-        if (granted) {
-            localStorage.setItem(PERMISSION_STORAGE_KEY, 'true');
+    }, [isListeningOnline]);
+
+
+    // --- Implementação Offline (Vosk WebAssembly) ---
+    const vosk = useVoskRecognition({
+        onStart: () => callbacksRef.current.onStart?.(),
+        onEnd: () => callbacksRef.current.onEnd?.(),
+        onError: (e) => callbacksRef.current.onError?.(e),
+        onResult: (t) => callbacksRef.current.onResult?.(t)
+    });
+
+    // --- Proxy / Router ---
+    const isListening = isOnline ? isListeningOnline : vosk.isListening;
+
+    const start = useCallback(() => {
+        if (isOnline) {
+            console.log("🎤 Voz: Iniciando modo ONLINE (Web Speech API)");
+            startOnline();
         } else {
-            localStorage.removeItem(PERMISSION_STORAGE_KEY);
+            console.log("🎤 Voz: Iniciando modo OFFLINE (Vosk WebAssembly)");
+            vosk.start();
         }
-    }, []);
+    }, [isOnline, startOnline, vosk.start]);
+
+    const stop = useCallback(() => {
+        if (isOnline) {
+            stopOnline();
+        } else {
+            vosk.stop();
+        }
+    }, [isOnline, stopOnline, vosk.stop]);
 
     return { isListening, start, stop, permissionGranted, setPermissionGranted: updatePermission };
 };

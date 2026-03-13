@@ -7,7 +7,7 @@ interface AdminLoginModalProps {
     onLogin: (email: string) => void;
 }
 
-export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClose, onLogin }) => {
+export const AdminLoginModal: React.FC<AdminLoginModalProps> = React.memo(({ isOpen, onClose, onLogin }) => {
     const [email, setEmail] = useState('');
 
     useEffect(() => {
@@ -67,4 +67,4 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ isOpen, onClos
             </div>
         </div>
     );
-};
+});

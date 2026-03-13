@@ -9,32 +9,60 @@ const COLORS = [
 ];
 
 const MainOrb = memo(({ isListening, onVoiceClick }: { isListening: boolean, onVoiceClick: () => void }) => (
-    <div
-        data-interaction-target="main-orb"
-        className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[160px] h-[160px] md:w-[220px] md:h-[220px] rounded-full flex items-center justify-center cursor-pointer transition-all duration-300 z-30
-        border-[3px] ${isListening ? 'border-white shadow-[0_0_60px_rgba(255,255,255,0.8)]' : 'border-gray-300 shadow-[0_0_50px_rgba(255,255,255,0.3)]'}
-        bg-orange-500 hover:scale-105 overflow-hidden`}
-        onClickCapture={(e) => {
-            e.stopPropagation();
-            onVoiceClick();
-        }}
-    >
-        <div className="relative w-full h-full bg-white">
-            <img
-                src="https://i.ibb.co/DPMyNGvd/MINHA-LOGO.png"
-                onError={(e) => { e.currentTarget.src = 'https://placehold.co/200/ff8800/ffffff?text=KAIZEN%0ANAYLAN'; }}
-                alt="KAIZEN POR: NAYLAN"
-                className="w-full h-full object-cover"
-            />
+    <div className="relative z-30 flex items-center justify-center">
+        {/* Camada externa brilho extra de Voice Ativo */}
+        {isListening && (
+            <div className="absolute inset-[-40px] rounded-full bg-cyan-500/20 blur-xl animate-pulse pointer-events-none"></div>
+        )}
+
+        {/* Orbe Central Principal */}
+        <div
+            data-interaction-target="main-orb"
+            className={`relative w-[160px] h-[160px] md:w-[220px] md:h-[220px] rounded-full flex items-center justify-center cursor-pointer transition-all duration-500 transform-gpu
+            border-[4px] ${isListening ? 'border-cyan-400 shadow-[0_0_80px_rgba(34,211,238,0.8),inset_0_0_30px_rgba(34,211,238,0.5)] scale-[1.08]' : 'border-gray-300 shadow-[0_0_50px_rgba(255,255,255,0.3)]'}
+            bg-orange-500 hover:scale-[1.02] overflow-hidden group`}
+            style={{ WebkitBackfaceVisibility: 'hidden', backfaceVisibility: 'hidden', transform: isListening ? 'translateZ(0) scale(1.08)' : 'translateZ(0)' }}
+            onClickCapture={(e) => {
+                e.stopPropagation();
+                onVoiceClick();
+            }}
+        >
+            {/* Wrapper isolado para logo garantir recorte circular sempre e fixar layout box */}
+            <div
+                className={`relative w-full h-full bg-white rounded-full overflow-hidden transition-opacity duration-500 transform-gpu ${isListening ? 'opacity-80' : 'opacity-100'}`}
+                style={{ WebkitBackfaceVisibility: 'hidden', backfaceVisibility: 'hidden', transform: 'translateZ(0)' }}
+            >
+                <img
+                    src="https://i.ibb.co/DPMyNGvd/MINHA-LOGO.png"
+                    onError={(e) => { e.currentTarget.src = 'https://placehold.co/200/ff8800/ffffff?text=KAIZEN%0ANAYLAN'; }}
+                    alt="KAIZEN POR: NAYLAN"
+                    className="w-full h-full object-cover rounded-full pointer-events-none select-none transform-gpu"
+                    draggable="false"
+                />
+            </div>
+
+            {/* Ícone de Microfone e Overlay Escuro quando ativo */}
+            {isListening && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] z-10">
+                    <div className="w-16 h-16 rounded-full bg-cyan-500/30 flex items-center justify-center mb-2 animate-pulse">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-cyan-300 animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                        </svg>
+                    </div>
+                    <span className="text-cyan-300 font-bold tracking-widest text-xs md:text-sm animate-pulse shadow-black">OUVINDO</span>
+                </div>
+            )}
         </div>
 
-        {/* Decorative Rings */}
-        <div className={`absolute inset-[-10px] rounded-full border border-white/30 pointer-events-none ${isListening ? 'animate-ping opacity-30' : 'opacity-10'}`}></div>
-        <div className="absolute inset-[-20px] rounded-full border border-white/10 border-dashed animate-[spin_60s_linear_infinite] pointer-events-none"></div>
+        {/* Decorative Rings - Ficam atrás do Orbe  */}
+        <div className={`absolute inset-[-10px] rounded-full border border-white/30 pointer-events-none transition-all duration-300 ${isListening ? 'border-cyan-400/60 animate-ping opacity-50 scale-125' : 'opacity-10'}`}></div>
+        <div className={`absolute inset-[-20px] rounded-full border border-dashed pointer-events-none transition-all duration-300 ${isListening ? 'border-cyan-300/40 animate-[spin_10s_linear_infinite] scale-110' : 'animate-[spin_60s_linear_infinite] border-white/10'}`}></div>
 
+        {/* Sonar Pura Energia quando ativo */}
         {isListening && (
-            <div className="absolute inset-0 z-[1] pointer-events-none">
-                <div className="absolute inset-0 border-2 border-white rounded-full animate-sonar-pulse opacity-50"></div>
+            <div className="absolute inset-[-30px] z-[1] pointer-events-none rounded-full">
+                <div className="absolute inset-0 border-[3px] border-cyan-400 rounded-full animate-sonar-pulse opacity-70"></div>
+                <div className="absolute inset-[-20px] border-[2px] border-blue-400 rounded-full animate-sonar-pulse opacity-40" style={{ animationDelay: '0.4s' }}></div>
             </div>
         )}
     </div>

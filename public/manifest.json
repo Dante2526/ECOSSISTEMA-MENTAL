@@ -1,0 +1,22 @@
+{
+    "name": "Ecossistema Mental",
+    "short_name": "EcoMental",
+    "description": "Sistema de visualização orbital de linhas ferroviárias",
+    "start_url": "/",
+    "display": "standalone",
+    "orientation": "portrait",
+    "background_color": "#000000",
+    "theme_color": "#1a0b2e",
+    "icons": [
+        {
+            "src": "/favicon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
+        }
+    ],
+    "categories": [
+        "productivity",
+        "utilities"
+    ]
+}
