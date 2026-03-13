@@ -1,48 +1,28 @@
-import { env, AutoTokenizer, AutoProcessor, AutoModelForSpeechSeq2Seq } from '@xenova/transformers';
+import { env, pipeline } from '@xenova/transformers';
 
 // Configuração para uso do cache do navegador (Cache API)
 env.allowLocalModels = false;
 env.allowRemoteModels = true;
 env.useBrowserCache = true;
 
-console.log("⚡ [Whisper Worker] Worker iniciado. Env:", {
-    allowLocalModels: env.allowLocalModels,
-    allowRemoteModels: env.allowRemoteModels,
-    useBrowserCache: env.useBrowserCache
-});
-
 class WhisperWorker {
-    static model = null;
-    static processor = null;
-    static tokenizer = null;
+    static instance = null;
 
     static async getInstance(progress_callback = null) {
-        if (this.model === null) {
-            console.log("⚡ [Whisper Worker] Carregando Modelos de Baixo Nível (Seq2Seq)...");
-            const model_id = 'Xenova/whisper-tiny';
-            
+        if (this.instance === null) {
+            console.log("⚡ [Whisper Worker] Carregando Pipeline ASR (OpenAI Whisper)...");
             try {
-                // Carregamento explícito de cada componente
-                [this.tokenizer, this.model, this.processor] = await Promise.all([
-                    AutoTokenizer.from_pretrained(model_id, { progress_callback }),
-                    AutoModelForSpeechSeq2Seq.from_pretrained(model_id, { 
-                        quantized: true, 
-                        progress_callback 
-                    }),
-                    AutoProcessor.from_pretrained(model_id, { progress_callback }),
-                ]);
-
-                console.log("✅ [Whisper Worker] Componentes carregados com sucesso!");
+                this.instance = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
+                    quantized: true,
+                    progress_callback
+                });
+                console.log("✅ [Whisper Worker] Pipeline carregado com sucesso!");
             } catch (err) {
-                console.error("❌ [Whisper Worker] Erro ao carregar componentes:", err);
+                console.error("❌ [Whisper Worker] Erro ao carregar pipeline:", err);
                 throw err;
             }
         }
-        return { 
-            model: this.model, 
-            processor: this.processor, 
-            tokenizer: this.tokenizer 
-        };
+        return this.instance;
     }
 }
 
@@ -50,17 +30,14 @@ self.onmessage = async (event) => {
     const { type, audio, language } = event.data;
 
     if (type === 'PRELOAD') {
-        console.log("⚡ [Whisper Worker] Comando PRELOAD recebido.");
         try {
             await WhisperWorker.getInstance((progress) => {
-                if (progress.status === 'progress' || progress.status === 'done') {
-                    self.postMessage({ 
-                        type: 'PRELOAD_PROGRESS', 
-                        file: progress.file,
-                        progress: progress.progress || 100,
-                        status: progress.status
-                    });
-                }
+                self.postMessage({ 
+                    type: 'PRELOAD_PROGRESS', 
+                    file: progress.file,
+                    progress: progress.progress || 100,
+                    status: progress.status
+                });
             });
             self.postMessage({ type: 'PRELOAD_DONE' });
         } catch (error) {
@@ -71,10 +48,16 @@ self.onmessage = async (event) => {
 
     if (!audio) return;
 
-    console.log(`⚡ [Whisper Worker] Transcrevendo ${audio.length} samples...`);
+    // Cálculo básico de energia para debug de sinal
+    let sum = 0;
+    for (let i = 0; i < audio.length; i++) {
+        sum += audio[i] * audio[i];
+    }
+    const energy = Math.sqrt(sum / audio.length);
+    console.log(`⚡ [Whisper Worker] Recebidos ${audio.length} samples. Energia RMS: ${energy.toFixed(6)}`);
 
     try {
-        const { model, processor, tokenizer } = await WhisperWorker.getInstance((progress) => {
+        const transcriber = await WhisperWorker.getInstance((progress) => {
             if (progress.status === 'progress') {
                 self.postMessage({ type: 'STATUS', status: 'loading', progress: progress.progress });
             }
@@ -84,23 +67,25 @@ self.onmessage = async (event) => {
 
         const startTime = performance.now();
         
-        // Pré-processamento e Geração
-        const inputs = await processor(audio);
-        const output = await model.generate(inputs.input_features, {
-            max_new_tokens: 128,
-            repetition_penalty: 1.3, // Mais agressivo contra repetições
-            no_repeat_ngram_size: 5, // Evita loops de números
-            do_sample: false, // Busca determinística/estável
+        // Geração via Pipeline (ASR)
+        const output = await transcriber(audio, {
             language: language || 'portuguese',
             task: 'transcribe',
+            chunk_length_s: 30, // Padrão recomendado
+            stride_length_s: 5,
+            // Parâmetros de geração passados via generate_kwargs
+            generate_kwargs: {
+                max_new_tokens: 128,
+                repetition_penalty: 1.3,
+                no_repeat_ngram_size: 5,
+                do_sample: false
+            }
         });
 
-        const decoded = tokenizer.batch_decode(output, { skip_special_tokens: true });
-        const transcript = decoded[0].trim();
-        
+        const transcript = output.text.trim();
         const duration = ((performance.now() - startTime) / 1000).toFixed(2);
+        
         console.log(`✅ [Whisper Worker] Resultado (${duration}s): "${transcript}"`);
-
         self.postMessage({ type: 'RESULT', text: transcript });
 
     } catch (error) {

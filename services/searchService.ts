@@ -13,18 +13,24 @@ export function normalizeText(text: string | null | undefined): string {
 
 export function applyPhoneticCorrections(transcript: string): string {
     // Palavras de preenchimento (filler words) e comandos irrelevantes para ignorar
-    const fillerWords = ['então', 'tipo', 'eh', 'ah', 'hmm', 'quero', 'procurar', 'ir', 'no', 'na', 'para', 'veja', 'mostre', 'me'];
+    const fillerWords = ['então', 'tipo', 'eh', 'ah', 'hmm', 'quero', 'procurar', 'ir', 'no', 'na', 'para', 'veja', 'mostre', 'me', 'por', 'favor', 'linhas', 'dos', 'das'];
     
-    // Mapeamento de números por extenso para dígitos (comum no Whisper)
+    // Mapeamento exaustivo de números por extenso para dígitos
     const numberMap: { [key: string]: string } = {
-        'um': '1', 'dois': '2', 'tres': '3', 'quatro': '4', 'cinco': '5',
-        'seis': '6', 'sete': '7', 'oito': '8', 'nove': '9', 'zero': '0',
-        'duzentos e um': '201', 'duzentos e dois': '202',
+        'um': '1', 'uma': '1', 'dois': '2', 'duas': '2', 'tres': '3', 'três': '3',
+        'quatro': '4', 'cinco': '5', 'seis': '6', 'meia': '6', 'sete': '7',
+        'oito': '8', 'nove': '9', 'dez': '10', 'onze': '11', 'doze': '12',
+        'treze': '13', 'quatorze': '14', 'quinze': '15', 'dezesseis': '16',
+        'dezessete': '17', 'dezoito': '18', 'dezenove': '19', 'vinte': '20',
+        'trinta': '30', 'quarenta': '40', 'cinquenta': '50', 'sessenta': '60',
+        'setenta': '70', 'oitenta': '80', 'noventa': '90', 'cem': '100',
+        'cento': '100', 'duzentos': '200', 'trezentos': '300',
         'cento e cinquenta e um': '151', 'cento e cinquenta': '150',
-        '150 y 50': '151', // Alucinação comum do Whisper para 151
+        'duzentos e um': '201', 'duzentos e dois': '202',
+        '150 y 50': '151', '150 e 50': '151',
         'tp dois b': 'tp2b', 'tp 2 b': 'tp2b', 'tp 02b': 'tp2b',
         'tp doisb': 'tp2b', 'tepe': 'tp', 'te pe': 'tp', 'tp2 b': 'tp2b',
-        'tep dois b': 'tp2b', 'tepê': 'tp'
+        'tep dois b': 'tp2b', 'tepê': 'tp', 'tp dois bê': 'tp2b'
     };
 
     let corrected = transcript.toLowerCase()
