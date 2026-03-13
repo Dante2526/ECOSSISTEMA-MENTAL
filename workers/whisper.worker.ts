@@ -11,9 +11,10 @@ class WhisperWorker {
 
     static async getInstance(progress_callback = null) {
         if (this.instance === null) {
-            console.log("⚡ [Whisper Worker] Criando nova instância de pipeline...");
+            console.log("⚡ [Whisper Worker] Criando nova instância de pipeline (Quantized)...");
             try {
                 this.instance = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
+                    quantized: true, // Forçar uso dos arquivos _quantized.onnx
                     progress_callback,
                 });
                 console.log("⚡ [Whisper Worker] Pipeline do Whisper carregado com sucesso!");

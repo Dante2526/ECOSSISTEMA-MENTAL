@@ -120,19 +120,22 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
                 'preprocessor_config.json',
                 'tokenizer_config.json',
                 'tokenizer.json',
-                'onnx/encoder_model.onnx',
-                'onnx/decoder_model_merged.onnx'
+                'onnx/encoder_model_quantized.onnx',
+                'onnx/decoder_model_merged_quantized.onnx'
             ];
             
             const baseUrl = 'https://huggingface.co/Xenova/whisper-tiny/resolve/main/';
             let totalWeightUsed = 0;
             const weightPerFile = WHISPER_WEIGHT / files.length;
+            
+            // Reduzir o log para não inundar o console
+            console.log("⚡ [PWA] Iniciando download da IA (Whisper Quantized)...");
 
             for (const file of files) {
                 try {
                     const url = `${baseUrl}${file}`;
                     const response = await fetch(url);
-                    if (!response.ok) throw new Error(`Failed to fetch ${file}`);
+                    if (!response.ok) throw new Error(`Status ${response.status}`);
                     
                     const contentLength = +(response.headers.get('Content-Length') || '1000000');
                     const reader = response.body?.getReader();
@@ -144,17 +147,29 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
                             const { done, value } = await reader.read();
                             if (done) break;
                             receivedLength += value?.length || 0;
+                            
                             const currentFileWeight = Math.min((receivedLength / contentLength) * weightPerFile, weightPerFile);
                             const tickDiff = currentFileWeight - fileWeightUsed;
+                            
                             if (tickDiff > 0.05 || receivedLength === contentLength) {
                                 tickProgress(tickDiff);
                                 fileWeightUsed = currentFileWeight;
                                 totalWeightUsed += tickDiff;
                             }
                         }
+                    } else {
+                        // Fallback se não tiver reader
+                        tickProgress(weightPerFile);
+                        totalWeightUsed += weightPerFile;
                     }
                 } catch (e) {
-                    console.warn(`Pré-download do arquivo ${file} do Whisper falhou`, e);
+                    console.warn(`[PWA] Arquivo ${file} falhou (provavelmente já em cache ou rede offline)`, e);
+                    // No caso de erro, pulamos o peso para não travar a barra
+                    const remainingForThisFile = weightPerFile - totalWeightUsed % weightPerFile;
+                    if (remainingForThisFile > 0) {
+                        tickProgress(remainingForThisFile);
+                        totalWeightUsed += remainingForThisFile;
+                    }
                 }
             }
             
@@ -201,8 +216,8 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
             'preprocessor_config.json',
             'tokenizer_config.json',
             'tokenizer.json',
-            'onnx/encoder_model.onnx',
-            'onnx/decoder_model_merged.onnx'
+            'onnx/encoder_model_quantized.onnx',
+            'onnx/decoder_model_merged_quantized.onnx'
         ];
         const baseUrl = 'https://huggingface.co/Xenova/whisper-tiny/resolve/main/';
         whisperFiles.forEach(file => {
