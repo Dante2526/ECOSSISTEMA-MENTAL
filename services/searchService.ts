@@ -27,10 +27,11 @@ export function applyPhoneticCorrections(transcript: string): string {
         'cento': '100', 'duzentos': '200', 'trezentos': '300',
         'cento e cinquenta e um': '151', 'cento e cinquenta': '150',
         'duzentos e um': '201', 'duzentos e dois': '202',
-        '150 y 50': '151', '150 e 50': '151',
+        '150 y 50': '151', '150 e 50': '151', 'zero': '0', 'zero um': '01',
         'tp dois b': 'tp2b', 'tp 2 b': 'tp2b', 'tp 02b': 'tp2b',
         'tp doisb': 'tp2b', 'tepe': 'tp', 'te pe': 'tp', 'tp2 b': 'tp2b',
-        'tep dois b': 'tp2b', 'tepê': 'tp', 'tp dois bê': 'tp2b'
+        'tep dois b': 'tp2b', 'tepê': 'tp', 'tp dois bê': 'tp2b',
+        'tp zero um': 'tp01', 'tepe zero um': 'tp01', 'tepe 01': 'tp01'
     };
 
     let corrected = transcript.toLowerCase()

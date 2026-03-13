@@ -247,9 +247,9 @@ const App: React.FC = () => {
     // Feedback visual para o processamento do Whisper
     useEffect(() => {
         if (isLoadingModel) {
-            showFeedback("INICIANDO IA...", 5000);
+            showFeedback("INICIANDO...", 5000);
         } else if (isProcessing) {
-            showFeedback("IA PROCESSANDO...", 15000);
+            showFeedback("PROCESSANDO...", 15000);
         }
     }, [isLoadingModel, isProcessing, showFeedback]);
 

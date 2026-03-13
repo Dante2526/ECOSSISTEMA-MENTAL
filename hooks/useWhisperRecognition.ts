@@ -183,7 +183,14 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
                 }
 
                 if (hasSpeechStarted) {
-                    audioChunksRef.current.push(Float32Array.from(inputData));
+                    // --- Noise Gate: Zerar amostras de chiado abaixo do limiar ---
+                    const cleanedData = new Float32Array(inputData.length);
+                    for (let i = 0; i < inputData.length; i++) {
+                        // Se a amplitude instantânea for muito baixa, vira silêncio absoluto
+                        cleanedData[i] = Math.abs(inputData[i]) < (SILENCE_THRESHOLD * 0.8) ? 0 : inputData[i];
+                    }
+                    
+                    audioChunksRef.current.push(cleanedData);
                     
                     // Lógica de Auto-Stop com RMS suavizado
                     if (smoothedRms < SILENCE_THRESHOLD) {

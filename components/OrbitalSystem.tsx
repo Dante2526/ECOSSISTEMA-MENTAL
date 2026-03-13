@@ -56,7 +56,7 @@ const MainOrb = memo(({ isListening, isProcessing, onVoiceClick }: { isListening
             {isProcessing && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px] z-10">
                     <div className="w-16 h-16 rounded-full border-4 border-purple-500 border-t-transparent animate-spin mb-2"></div>
-                    <span className="text-purple-300 font-bold tracking-widest text-xs md:text-sm animate-pulse">PENSANDO...</span>
+                    <span className="text-purple-300 font-bold tracking-widest text-xs md:text-sm animate-pulse">PROCESSANDO...</span>
                 </div>
             )}
         </div>
