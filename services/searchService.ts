@@ -12,6 +12,9 @@ export function normalizeText(text: string | null | undefined): string {
 }
 
 export function applyPhoneticCorrections(transcript: string): string {
+    // Palavras de preenchimento (filler words) e comandos irrelevantes para ignorar
+    const fillerWords = ['então', 'tipo', 'eh', 'ah', 'hmm', 'quero', 'procurar', 'ir', 'no', 'na', 'para', 'veja', 'mostre', 'me'];
+    
     // Mapeamento de números por extenso para dígitos (comum no Whisper)
     const numberMap: { [key: string]: string } = {
         'um': '1', 'dois': '2', 'tres': '3', 'quatro': '4', 'cinco': '5',
@@ -20,7 +23,8 @@ export function applyPhoneticCorrections(transcript: string): string {
         'cento e cinquenta e um': '151', 'cento e cinquenta': '150',
         '150 y 50': '151', // Alucinação comum do Whisper para 151
         'tp dois b': 'tp2b', 'tp 2 b': 'tp2b', 'tp 02b': 'tp2b',
-        'tp doisb': 'tp2b', 'tepe': 'tp', 'te pe': 'tp', 'tp2 b': 'tp2b'
+        'tp doisb': 'tp2b', 'tepe': 'tp', 'te pe': 'tp', 'tp2 b': 'tp2b',
+        'tep dois b': 'tp2b', 'tepê': 'tp'
     };
 
     let corrected = transcript.toLowerCase()
@@ -28,6 +32,12 @@ export function applyPhoneticCorrections(transcript: string): string {
         .replace(/\by\b/g, ' e ') // Corrige "y" para "e" (espanholismo do Whisper)
         .replace(/\s+/g, ' ')
         .trim();
+
+    // Remover filler words no início da frase
+    fillerWords.forEach(word => {
+        const regex = new RegExp(`^${word}\\s+`, 'i');
+        corrected = corrected.replace(regex, '');
+    });
 
     Object.keys(numberMap).forEach(key => {
         const regex = new RegExp(`\\b${key}\\b`, 'g');
@@ -88,51 +98,48 @@ function getUniqueResults(items: SearchItem[]): SearchItem[] {
 
 export function findMatchingItems(transcript: string, cache: SearchItem[]): SearchItem[] {
     // --- Phonetic/Correction Layer ---
-    // Corrects common speech-to-text errors before normalization
     const correctedTranscript = applyPhoneticCorrections(transcript);
 
+    // Tentativa 1: Busca Exata (Normalizada)
     const searchTerm = normalizeText(correctedTranscript);
     if (!searchTerm) return [];
 
-    // --- Tier 1: Exact Keyword Match (Highest Priority) ---
-    // This is for exact satellite codes like "201a".
-    const exactKeywordMatches = cache.filter(item =>
+    const exactMatches = cache.filter(item =>
         item.type === 'keyword' && item.text === searchTerm
     );
 
-    if (exactKeywordMatches.length > 0) {
-        // If we find an exact match for a satellite code, we trust it completely
-        // and don't need to look for other, less precise matches.
-        return getUniqueResults(exactKeywordMatches);
-    }
+    if (exactMatches.length > 0) return getUniqueResults(exactMatches);
 
-    // --- Tier 2: Full Text Search (for system names) ---
-    // This is for searches like "oficina central" or "pial".
-    // We search using the corrected transcript (but un-normalized for spaces) to allow partial matches
+    // Tentativa 2: Busca por Substring no nome do sistema
     const fullTextMatches = cache.filter(item =>
         item.type === 'fulltext' && item.text.includes(correctedTranscript.normalize("NFD").replace(/[\u0300-\u036f]/g, ""))
     );
+    if (fullTextMatches.length > 0) return getUniqueResults(fullTextMatches);
 
-    // --- Tier 3: Flexible Multi-word Search (Fallback) ---
+    // Tentativa 3: Busca de Palavras-chave Individuais (Fuzzy Fallback)
     const ignoreWords = ['de', 'da', 'do', 'em', 'no', 'na', 'por', 'para', 'o', 'a', 'os', 'as', 'um', 'uma', 'linhas', 'linha', 'dos'];
-    
-    // Correctly split transcript into words using the corrected version
     const searchKeywords = correctedTranscript
-        .split(/\s+/) // Split by spaces
-        .map(k => normalizeText(k)) // Normalize each word individually
+        .split(/\s+/)
+        .map(k => normalizeText(k))
         .filter(k => k && k.length > 0 && !ignoreWords.includes(k));
 
-    let flexibleMatches: SearchItem[] = [];
     if (searchKeywords.length > 0) {
-        flexibleMatches = cache.filter(item => {
-            // All keywords must be present in the item's text for it to be a match.
-            const itemTextForFlex = item.type === 'fulltext' ? item.text : normalizeText(item.text);
-            return searchKeywords.every(keyword => itemTextForFlex.includes(keyword));
+        const flexibleMatches = cache.filter(item => {
+            const itemText = item.type === 'fulltext' ? item.text : normalizeText(item.text);
+            // Se o termo de busca for apenas números, deve ser um match exato na keyword
+            if (/^\d+$/.test(searchKeywords[0]) && item.type === 'keyword') {
+                return itemText === searchKeywords[0];
+            }
+            return searchKeywords.every(keyword => itemText.includes(keyword));
         });
+        if (flexibleMatches.length > 0) return getUniqueResults(flexibleMatches);
     }
 
-    // Combine results from Tier 2 and Tier 3, as they can overlap in relevance
-    const combinedResults = [...fullTextMatches, ...flexibleMatches];
+    // Tentativa 4: Remoção total de espaços para códigos alfanuméricos (ex: "TP 2B")
+    const compressedTerm = correctedTranscript.replace(/\s+/g, '').toLowerCase();
+    const compressedMatches = cache.filter(item =>
+         item.type === 'keyword' && item.text === normalizeText(compressedTerm)
+    );
 
-    return getUniqueResults(combinedResults);
+    return getUniqueResults(compressedMatches);
 }

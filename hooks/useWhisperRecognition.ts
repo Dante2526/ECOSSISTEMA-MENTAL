@@ -133,30 +133,43 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
             const source = audioContextRef.current.createMediaStreamSource(stream);
             
             const gainNode = audioContextRef.current.createGain();
-            gainNode.gain.value = 1.8; 
+            gainNode.gain.value = 3.0; // Aumentado para dar mais destaque à voz
             
-            const processor = audioContextRef.current.createScriptProcessor(4096, 1, 1);
+            const processor = audioContextRef.current.createScriptProcessor(2048, 1, 1);
 
             audioChunksRef.current = [];
             let silenceStartTime = 0;
             let hasSpeechStarted = false;
-            const SILENCE_THRESHOLD = 0.035; // Aumentado para ignorar mais ruído e parar mais firme
-            const AUTO_STOP_MS = 1000; // 1 segundo de silêncio para parar
+            let smoothedRms = 0;
+            const SILENCE_THRESHOLD = 0.045; // Mais alto para ser mais firme no auto-stop
+            const AUTO_STOP_MS = 1000; // 1 segundo de silêncio
+            const MAX_RECORDING_MS = 12000; // Limite de 12 segundos
+            const startTime = Date.now();
 
             processor.onaudioprocess = (e) => {
                 if (isStoppingRef.current) return;
                 
+                // Fallback: Limite máximo de tempo
+                if (Date.now() - startTime > MAX_RECORDING_MS) {
+                    console.log("⚡ [Whisper Hook] Limite máximo de tempo atingido (12s). Parando...");
+                    stop();
+                    return;
+                }
+
                 const inputData = e.inputBuffer.getChannelData(0);
                 
-                // Cálculo de Energia (RMS) para detecção de silêncio
+                // Cálculo de Energia (RMS)
                 let sum = 0;
                 for (let i = 0; i < inputData.length; i++) {
                     sum += inputData[i] * inputData[i];
                 }
                 const rms = Math.sqrt(sum / inputData.length);
+                
+                // Suavização (Low-pass filter) para evitar oscilações rápidas
+                smoothedRms = (smoothedRms * 0.7) + (rms * 0.3);
 
-                // Detecção de início de fala (evita processar ruído puro)
-                if (!hasSpeechStarted && rms > SILENCE_THRESHOLD) {
+                // Detecção de início de fala
+                if (!hasSpeechStarted && smoothedRms > SILENCE_THRESHOLD) {
                     hasSpeechStarted = true;
                     console.log("🎤 [Whisper Hook] Fala detectada!");
                 }
@@ -164,22 +177,22 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
                 if (hasSpeechStarted) {
                     audioChunksRef.current.push(Float32Array.from(inputData));
                     
-                    // Lógica de Auto-Stop
-                    if (rms < SILENCE_THRESHOLD) {
+                    // Lógica de Auto-Stop com RMS suavizado
+                    if (smoothedRms < SILENCE_THRESHOLD) {
                         if (silenceStartTime === 0) silenceStartTime = Date.now();
                         
                         const silenceDuration = Date.now() - silenceStartTime;
                         if (silenceDuration > AUTO_STOP_MS) {
-                            console.log(`⚡ [Whisper Hook] Silêncio de ${AUTO_STOP_MS}ms atingido. Parando...`);
+                            console.log(`⚡ [Whisper Hook] Silêncio de ${AUTO_STOP_MS}ms atingido (RMS: ${smoothedRms.toFixed(4)}). Parando...`);
                             stop();
                         }
                     } else {
-                        silenceStartTime = 0; // Reset se ouvir algo
+                        silenceStartTime = 0; // Reset se ouvir algo real
                     }
                 }
                 
                 if (audioChunksRef.current.length % 50 === 0 && audioChunksRef.current.length > 0) {
-                    console.log(`🎤 [Whisper Hook] Gravando... (${audioChunksRef.current.length} blocos)`);
+                    console.log(`🎤 [Whisper Hook] Gravando... (${audioChunksRef.current.length} blocos) - RMS Atual: ${smoothedRms.toFixed(4)}`);
                 }
             };
 
