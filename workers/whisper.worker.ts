@@ -88,9 +88,9 @@ self.onmessage = async (event) => {
         const inputs = await processor(audio);
         const output = await model.generate(inputs.input_features, {
             max_new_tokens: 128,
-            repetition_penalty: 1.2, // Penaliza repetições como "2, 1, 2, 1..."
-            no_repeat_ngram_size: 4, // Evita loops de sequências curtas
-            do_sample: false, // Menos alucinações ("greedy search")
+            repetition_penalty: 1.3, // Mais agressivo contra repetições
+            no_repeat_ngram_size: 5, // Evita loops de números
+            do_sample: false, // Busca determinística/estável
             language: language || 'portuguese',
             task: 'transcribe',
         });

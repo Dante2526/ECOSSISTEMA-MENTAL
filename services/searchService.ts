@@ -12,17 +12,19 @@ export function normalizeText(text: string | null | undefined): string {
 }
 
 export function applyPhoneticCorrections(transcript: string): string {
-    let corrected = transcript.toLowerCase()
-        .replace(/[,.]/g, ' ') // Remove vírgulas e pontos das alucinações
-        .replace(/\s+/g, ' ')
-        .trim();
-    
     // Mapeamento de números por extenso para dígitos (comum no Whisper)
     const numberMap: { [key: string]: string } = {
         'um': '1', 'dois': '2', 'tres': '3', 'quatro': '4', 'cinco': '5',
         'seis': '6', 'sete': '7', 'oito': '8', 'nove': '9', 'zero': '0',
-        'duzentos e um': '201', 'duzentos e dois': '202'
+        'duzentos e um': '201', 'duzentos e dois': '202',
+        'cento e cinquenta e um': '151', 'cento e cinquenta': '150',
+        'tp dois b': 'tp2b', 'tp 2b': 'tp2b', 'tp 02b': 'tp2b'
     };
+
+    let corrected = transcript.toLowerCase()
+        .replace(/[、,.]/g, ' ') // Remove vírgulas, pontos e separadores orientais
+        .replace(/\s+/g, ' ')
+        .trim();
 
     Object.keys(numberMap).forEach(key => {
         const regex = new RegExp(`\\b${key}\\b`, 'g');

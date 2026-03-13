@@ -62,8 +62,11 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
         };
     }, []);
 
+    const isStoppingRef = useRef(false);
+
     const stop = useCallback(async () => {
-        if (!isListening) return;
+        if (!isListening || isStoppingRef.current) return;
+        isStoppingRef.current = true;
 
         console.log("⚡ [Whisper Hook] Parando gravação e enviando para processamento...");
         setIsListening(false);
@@ -74,8 +77,12 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
         }
 
         if (audioContextRef.current) {
-            if (audioContextRef.current.state !== 'closed') {
-               await audioContextRef.current.close();
+            try {
+                if (audioContextRef.current.state !== 'closed') {
+                    await audioContextRef.current.close();
+                }
+            } catch (e) {
+                console.error("⚡ [Whisper Hook] Erro ao fechar AudioContext:", e);
             }
             audioContextRef.current = null;
         }
@@ -104,6 +111,7 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
 
     const start = useCallback(async () => {
         if (isListening || isProcessing || isLoadingModel) return;
+        isStoppingRef.current = false;
 
         try {
             console.log("⚡ [Whisper Hook] Iniciando captura de áudio...");
@@ -132,7 +140,7 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
             audioChunksRef.current = [];
             let silenceStartTime = 0;
             let hasSpeechStarted = false;
-            const SILENCE_THRESHOLD = 0.015; // Ajustável conforme o ruído ambiente
+            const SILENCE_THRESHOLD = 0.025; // Mais sensível (para parar mais fácil)
             const AUTO_STOP_MS = 1500; // 1.5 segundos de silêncio para parar
 
             processor.onaudioprocess = (e) => {
