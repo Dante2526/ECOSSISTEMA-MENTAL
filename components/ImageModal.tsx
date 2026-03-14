@@ -99,39 +99,41 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
                         alt=""
                     />
 
+                    {imageUrls.map((url, i) => (
+                        <div
+                            key={`slide-${i}`}
+                            className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 ${i === currentIndex ? 'opacity-100 z-50' : 'opacity-0 z-0 pointer-events-none'}`}
+                        >
+                            <TransformWrapper
+                                initialScale={1}
+                                minScale={0.5}
+                                maxScale={8}
+                                centerOnInit={true}
+                                wheel={{ smoothStep: 0.01 }}
+                            >
+                                <TransformComponent wrapperStyle={{ width: '100%', height: '100%' }} contentStyle={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <img
+                                        src={url}
+                                        onLoad={() => { if (i === currentIndex) setIsLoading(false); }}
+                                        onError={(e) => {
+                                            if (i === currentIndex) setIsLoading(false);
+                                            (e.target as HTMLImageElement).src = FALLBACK_IMAGE_URL;
+                                        }}
+                                        decoding="async"
+                                        className={`max-w-[95vw] max-h-[90vh] min-w-[300px] min-h-[200px] w-auto h-auto object-contain block transition-opacity duration-500 ${isLoading && i === currentIndex ? 'opacity-0' : 'opacity-100'}`}
+                                        alt={`Foto ${i + 1}`}
+                                    />
+                                </TransformComponent>
+                            </TransformWrapper>
+                        </div>
+                    ))}
+
+                    {/* Spinner com delay para não piscar em fotos rápidas/cache */}
                     {isLoading && (
-                        <div className="absolute inset-0 flex items-center justify-center z-[60] bg-black rounded-lg">
-                            <div className="w-10 h-10 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        <div className="absolute inset-0 flex items-center justify-center z-[60] bg-black/20 animate-[fadeIn_0.3s_0.3s_both]">
+                            <div className="w-10 h-10 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin shadow-[0_0_15px_rgba(16,185,129,0.5)]"></div>
                         </div>
                     )}
-
-                    {/* Renderização dinâmica da imagem atual com 'key' para resetar o TransformWrapper e estados de loading */}
-                    <div
-                        key={`slide-${currentIndex}-${imageUrls[currentIndex]}`}
-                        className="absolute inset-0 flex items-center justify-center transition-opacity duration-300 opacity-100 z-50"
-                    >
-                        <TransformWrapper
-                            initialScale={1}
-                            minScale={0.5}
-                            maxScale={8}
-                            centerOnInit={true}
-                            wheel={{ smoothStep: 0.01 }}
-                        >
-                            <TransformComponent wrapperStyle={{ width: '100%', height: '100%' }} contentStyle={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <img
-                                    src={imageUrls[currentIndex]}
-                                    onLoad={() => setIsLoading(false)}
-                                    onError={(e) => {
-                                        setIsLoading(false);
-                                        (e.target as HTMLImageElement).src = FALLBACK_IMAGE_URL;
-                                    }}
-                                    decoding="async"
-                                    className={`max-w-[95vw] max-h-[90vh] min-w-[300px] min-h-[200px] w-auto h-auto object-contain block transition-opacity duration-300 ${isLoading ? 'opacity-0' : 'opacity-100'}`}
-                                    alt={`Foto ${currentIndex + 1}`}
-                                />
-                            </TransformComponent>
-                        </TransformWrapper>
-                    </div>
 
                     <button title="Fechar" onClick={onClose} className="absolute top-4 right-4 w-10 h-10 bg-black/60 text-white border border-white/30 rounded-full grid place-items-center text-xl z-[102] hover:bg-white/20 transition-colors">
                         ✕
