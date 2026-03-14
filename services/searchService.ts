@@ -41,7 +41,15 @@ export function applyPhoneticCorrections(transcript: string): string {
         'dois zero um b': '201b', 'dois zero um bê': '201b',
         'um meia sete': '167', 'um meia set': '167', 'um me sete': '167',
         'cento e sessenta e sete': '167', 'cento sessenta e sete': '167',
-        'um oito sete': '187', '87': '187'
+        'um oito sete': '187', '87': '187',
+        'um seis um': '161', '11': '161',
+        'um seis dois': '162', '12': '162',
+        'um seis tres': '163', '13': '163',
+        'um seis quatro': '164', '14': '164',
+        'um seis cinco': '165', '15': '165',
+        'um seis seis': '166', '16': '166',
+        'um seis sete': '167', '17': '167',
+        'um seis oito': '168', '18': '168'
     };
 
     let corrected = transcript.toLowerCase()
