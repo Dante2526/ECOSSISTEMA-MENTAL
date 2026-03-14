@@ -160,8 +160,8 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
             let energyVariance = 0;
             
             const SILENCE_THRESHOLD_STRICT = 0.045; 
-            const AUTO_STOP_MS = 1500;
-            const MAX_RECORDING_MS = 10000;
+            const AUTO_STOP_MS = 1000; // Parada mais rápida (1s)
+            const MAX_RECORDING_MS = 7000; // Timeout de segurança menor (7s)
             const CALIBRATION_FRAMES = 4;
             const startTime = Date.now();
 
@@ -169,7 +169,7 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
                 if (isStoppingRef.current) return;
                 
                 if (Date.now() - startTime > MAX_RECORDING_MS) {
-                    console.log("⚡ [Whisper Hook] Timeout máximo.");
+                    console.log("⚡ [Whisper Hook] Timeout máximo atingido.");
                     stop();
                     return;
                 }
@@ -182,36 +182,35 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
                 }
                 const rms = Math.sqrt(sum / inputData.length);
                 
-                smoothedRms = (smoothedRms * 0.75) + (rms * 0.25);
+                // Suavização mais rápida para acompanhar a voz (0.6 em vez de 0.75)
+                smoothedRms = (smoothedRms * 0.6) + (rms * 0.4);
                 framesAnalyzed++;
 
                 if (framesAnalyzed < CALIBRATION_FRAMES) {
+                    // Calibração inicial do ruído ambiente
                     noiseFloor = Math.max(noiseFloor, smoothedRms);
                     return;
                 }
 
                 energyVariance = Math.abs(rms - smoothedRms);
-                const dynamicThreshold = Math.max(SILENCE_THRESHOLD_STRICT, noiseFloor * 1.8);
+                // Threshold dinâmico mais agressivo contra ventilador (2.5x o ruído base)
+                const dynamicThreshold = Math.max(SILENCE_THRESHOLD_STRICT, noiseFloor * 2.5);
 
                 if (!hasSpeechStarted) {
                     // Exigência maior de variação para ignorar ventilador constante
-                    if (smoothedRms > dynamicThreshold && energyVariance > (dynamicThreshold * 0.35)) {
+                    // Voz humana varia muito, ventilador é constante.
+                    if (smoothedRms > dynamicThreshold && energyVariance > (dynamicThreshold * 0.4)) {
                         hasSpeechStarted = true;
                         console.log(`🎤 [Whisper Hook] Voz detectada! RMS: ${smoothedRms.toFixed(4)} | Variância: ${energyVariance.toFixed(4)}`);
-                    } else if (smoothedRms > dynamicThreshold) {
-                        if (framesAnalyzed % 30 === 0) console.log("💨 [Whisper Hook] Ruído constante detectado (Ignorando ventilador...)");
                     }
                 }
 
                 if (hasSpeechStarted) {
-                    const cleanedData = new Float32Array(inputData.length);
-                    for (let i = 0; i < inputData.length; i++) {
-                        cleanedData[i] = Math.abs(inputData[i]) < (dynamicThreshold * 0.5) ? 0 : inputData[i];
-                    }
-                    
-                    audioChunksRef.current.push(cleanedData);
-                    
+                    // Sensor de silêncio: Se a energia cair abaixo do threshold OU 
+                    // se a variância for muito baixa (indicando ruído de ventilador constante)
                     const isSilent = smoothedRms < dynamicThreshold || energyVariance < (dynamicThreshold * 0.15);
+                    
+                    audioChunksRef.current.push(new Float32Array(inputData));
                     
                     if (isSilent) {
                         if (silenceStartTime === 0) silenceStartTime = Date.now();

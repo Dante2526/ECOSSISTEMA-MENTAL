@@ -54,30 +54,23 @@ export function applyPhoneticCorrections(transcript: string): string {
     };
 
     let corrected = transcript.toLowerCase()
-        .replace(/\b1\/2\b/g, '16') // Whisper entende "um meia" como "1/2". Convertemos para 16.
-        .replace(/½/g, '16')        // Caractere unicode meio -> 16
-        .replace(/\b1,5\b/g, '16')  // "1,5" -> "um e meio" -> "um meia" -> 16
-        .replace(/[、,.]/g, ' ')    // Remove vírgulas e pontos
-        .replace(/\by\b/g, ' e ')    // Corrige "y" para "e"
+        .replace(/½/g, ' meia ')
+        .replace(/\b1\/2\b/g, ' um meia ') // "1/2" -> "um meia"
+        // Whisper transcreve "um meia cinco" como "1,5" ou "1.5"
+        // Capturamos (\d)[,.](\d) e se o primeiro for 1, transformamos em "16" + segundo dígito
+        .replace(/\b1[,.](\d)\b/g, '16$1')
+        .replace(/[、,.]/g, ' ') 
+        .replace(/\by\b/g, ' e ') 
         .replace(/\s+/g, ' ')
         .trim();
 
-    // Caso específico do log: "1 5 3" quando o usuário quis dizer "1 6 3" (meia confundido com 5)
-    // ou "1,5,3" vindo de um erro de transcrição de "um meia três"
-    if (corrected.includes('1 5 3') || corrected.includes('153')) {
-        // Se o orbe 153 não existir mas o 163 sim, podemos fazer o swap, 
-        // mas por enquanto vamos focar no mapeamento de strings.
-    }
-
-    // 1. Aplicar mapeamento de números (incluindo dígitos individuais)
+    // 1. Aplicar mapeamento de números
     Object.keys(numberMap).forEach(key => {
         const regex = new RegExp(`\\b${key}\\b`, 'g');
         corrected = corrected.replace(regex, numberMap[key]);
     });
 
-    // 2. Compactação de dígitos falados pausadamente
-    // Se tivermos "1 5 1" ou "1, 5, 1", transformamos em "151"
-    // Regex procura por 2 a 5 dígitos separados por espaços ou vírgulas
+    // 2. Compactação de dígitos final (ex: "1 6 5" ou "1 15 1" dependendo do step anterior)
     const digitCompaction3 = /\b(\d)[, ]+(\d)[, ]+(\d)\b/g; 
     corrected = corrected.replace(digitCompaction3, '$1$2$3');
     
@@ -86,8 +79,18 @@ export function applyPhoneticCorrections(transcript: string): string {
     
     const digitCompaction4 = /\b(\d)[, ]+(\d)[, ]+(\d)[, ]+(\d)\b/g;
     corrected = corrected.replace(digitCompaction4, '$1$2$3$4');
-    
-    // 3. Remover filler words redundantes AGORA que os números estão compactados
+
+    // 3. Inteligência de Troca (Swap) para a faixa 160/150:
+    // Evita o erro comum onde "meia" (6) é entendido como "meio" (5)
+    const invalid150s = ['150', '153', '154', '155', '156', '157', '158'];
+    invalid150s.forEach(num => {
+        if (corrected.includes(num)) {
+            const mappedNum = num.replace('15', '16');
+            corrected = corrected.replace(num, mappedNum);
+        }
+    });
+
+    // 4. Remover filler words
     fillerWords.forEach(word => {
         const regex = new RegExp(`^${word}\\s+`, 'i');
         corrected = corrected.replace(regex, '');
