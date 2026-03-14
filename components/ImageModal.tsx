@@ -56,6 +56,23 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
         }
     }, [imageUrls.length]);
 
+    // Efeito para tratar imagens que já estão no cache (evita spinner travado)
+    useEffect(() => {
+        if (!isOpen) return;
+        
+        // Pequeno delay para garantir que o DOM atualizou
+        const checkImageRef = setTimeout(() => {
+            const imgElements = document.querySelectorAll('.react-transform-component img') as NodeListOf<HTMLImageElement>;
+            // Como temos várias no DOM devido ao cross-fade, procuramos a do currentIndex
+            const currentImg = imgElements[currentIndex];
+            if (currentImg && currentImg.complete && currentImg.naturalHeight !== 0) {
+                setIsLoading(false);
+            }
+        }, 50);
+
+        return () => clearTimeout(checkImageRef);
+    }, [currentIndex, isOpen, imageUrls]);
+
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (!isOpen) return;
