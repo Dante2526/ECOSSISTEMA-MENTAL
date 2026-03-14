@@ -150,6 +150,7 @@ export const useVoiceRecognition = ({ onStart, onEnd, onError, onResult }: Voice
     });
 
     // --- Proxy / Router ---
+    // Agora o sistema alterna apenas entre Google/WebSpeech (Online) e Whisper (Offline)
     const isListening = isOnline ? isListeningOnline : whisper.isListening;
     const isProcessing = !isOnline && whisper.isProcessing;
     const isLoadingModel = !isOnline && whisper.isLoadingModel;
