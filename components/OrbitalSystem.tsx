@@ -818,7 +818,7 @@ const OrbitalSystemComponent: React.ForwardRefRenderFunction<OrbitalSystemRef, O
                             <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <span className={`absolute right-14 whitespace-nowrap bg-black/80 px-2 py-1 rounded text-xs font-bold border border-yellow-500/50 transition-all duration-1000 ${showLabels ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-                            LAYOUT
+                            TOUR
                         </span>
                     </button>
                 )}
