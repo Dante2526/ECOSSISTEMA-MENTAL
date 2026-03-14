@@ -36,7 +36,9 @@ export function applyPhoneticCorrections(transcript: string): string {
         'tp doisb': 'tp2b', 'tepe': 'tp', 'te pe': 'tp', 'tp2 b': 'tp2b',
         'tep dois b': 'tp2b', 'tepê': 'tp', 'tp dois bê': 'tp2b',
         'tp zero um': 'tp01', 'tepe zero um': 'tp01', 'tepe 01': 'tp01',
-        'dois zero um b': '201b', 'dois zero um bê': '201b'
+        'dois zero um b': '201b', 'dois zero um bê': '201b',
+        'um meia sete': '167', 'um meia set': '167', 'um me sete': '167',
+        'cento e sessenta e sete': '167', 'cento sessenta e sete': '167'
     };
 
     let corrected = transcript.toLowerCase()
@@ -52,13 +54,16 @@ export function applyPhoneticCorrections(transcript: string): string {
     });
 
     // 2. Compactação de dígitos falados pausadamente
-    // Se tivermos "1 5 1", transformamos em "151"
-    // Regex procura por 2 a 5 dígitos separados por espaços
-    const digitCompactionPattern = /\b(\d)\s+(\d)\s+(\d)\b/g; // Para "1 5 1" -> "151"
-    corrected = corrected.replace(digitCompactionPattern, '$1$2$3');
+    // Se tivermos "1 5 1" ou "1, 5, 1", transformamos em "151"
+    // Regex procura por 2 a 5 dígitos separados por espaços ou vírgulas
+    const digitCompaction3 = /\b(\d)[, ]+(\d)[, ]+(\d)\b/g; 
+    corrected = corrected.replace(digitCompaction3, '$1$2$3');
     
-    // Segunda passada para casos de 4 dígitos ou 2 dígitos (opcional, mas seguro)
-    corrected = corrected.replace(/\b(\d)\s+(\d)\b/g, '$1$2'); // Para "2 0" -> "20"
+    const digitCompaction2 = /\b(\d)[, ]+(\d)\b/g;
+    corrected = corrected.replace(digitCompaction2, '$1$2');
+    
+    const digitCompaction4 = /\b(\d)[, ]+(\d)[, ]+(\d)[, ]+(\d)\b/g;
+    corrected = corrected.replace(digitCompaction4, '$1$2$3$4');
     
     // 3. Remover filler words redundantes AGORA que os números estão compactados
     fillerWords.forEach(word => {
@@ -84,9 +89,9 @@ export function applyPhoneticCorrections(transcript: string): string {
         corrected = '151';
     }
 
-    // Casos especiais para 167:
-    const pattern157To167 = /^(minha\s+)?1[, ]+5[, ]+7\.?$/;
-    if (pattern157To167.test(corrected)) {
+    // Casos especiais para 167: fala rápida ou erros fonéticos comuns
+    const patternFast167 = /^(um\s+meia\s+sete|um\s+me\s+sete|um\s+meio\s+sete|cento\s+sessenta\s+sete|um\s+6\s+7|um\s+seis\s+sete|minha\s+1\s+5\s+7)\.?$/i;
+    if (patternFast167.test(corrected)) {
         corrected = '167';
     }
 

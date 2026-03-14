@@ -87,7 +87,7 @@ self.onmessage = async (event) => {
                 no_repeat_ngram_size: 3, // Mais rigoroso
                 do_sample: false,
                 // O Prompt ajuda o modelo a entender o contexto técnico (códigos, números, linhas)
-                prompt: "Código de linha, orbe 151, um cinco um, cento e cinquenta e um, 187, um oito sete, 201-B, dois zero um b, estação, pial."
+                prompt: "Código de linha, orbe 151, um cinco um, cento e cinquenta e um, 187, um oito sete, cento e oitenta e sete, 167, um meia sete, cento e sessenta e sete, 201-B, dois zero um b, estação, pial."
             }
         });
 
