@@ -40,7 +40,8 @@ export function applyPhoneticCorrections(transcript: string): string {
         'tp zero um': 'tp01', 'tepe zero um': 'tp01', 'tepe 01': 'tp01',
         'dois zero um b': '201b', 'dois zero um bê': '201b',
         'um meia sete': '167', 'um meia set': '167', 'um me sete': '167',
-        'cento e sessenta e sete': '167', 'cento sessenta e sete': '167'
+        'cento e sessenta e sete': '167', 'cento sessenta e sete': '167',
+        'um oito sete': '187', '87': '187'
     };
 
     let corrected = transcript.toLowerCase()

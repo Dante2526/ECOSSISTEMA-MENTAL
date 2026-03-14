@@ -162,7 +162,7 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
             const SILENCE_THRESHOLD_STRICT = 0.045; 
             const AUTO_STOP_MS = 1500;
             const MAX_RECORDING_MS = 10000;
-            const CALIBRATION_FRAMES = 10;
+            const CALIBRATION_FRAMES = 4;
             const startTime = Date.now();
 
             processor.onaudioprocess = (e) => {
