@@ -85,7 +85,9 @@ self.onmessage = async (event) => {
                 max_new_tokens: 24, // Limite agressivo para resposta instantânea (< 5s)
                 repetition_penalty: 1.8, // Bloqueio total de loops
                 no_repeat_ngram_size: 3, // Mais rigoroso
-                do_sample: false
+                do_sample: false,
+                // O Prompt ajuda o modelo a entender o contexto técnico (códigos, números, linhas)
+                prompt: "Código de linha, orbe 151, 187, um oito sete, 201-B, dois zero um b, estação, pial."
             }
         });
 

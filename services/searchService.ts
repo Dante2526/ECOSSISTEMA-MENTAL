@@ -14,10 +14,9 @@ export function normalizeText(text: string | null | undefined): string {
 export function applyPhoneticCorrections(transcript: string): string {
     // Palavras de preenchimento (filler words) e comandos irrelevantes para ignorar
     const fillerWords = ['então', 'tipo', 'eh', 'ah', 'hmm', 'quero', 'procurar', 'ir', 'no', 'na', 'para', 'veja', 'mostre', 'me', 'por', 'favor', 'linhas', 'dos', 'das'];
-    
-    // Mapeamento exaustivo de números por extenso para dígitos
+        // Mapeamento exaustivo de números por extenso para dígitos
     const numberMap: { [key: string]: string } = {
-        'um': '1', 'uma': '1', 'dois': '2', 'duas': '2', 'tres': '3', 'três': '3',
+        'zero': '0', 'um': '1', 'uma': '1', 'dois': '2', 'duas': '2', 'tres': '3', 'três': '3',
         'quatro': '4', 'cinco': '5', 'seis': '6', 'meia': '6', 'sete': '7',
         'oito': '8', 'nove': '9', 'dez': '10', 'onze': '11', 'doze': '12',
         'treze': '13', 'quatorze': '14', 'quinze': '15', 'dezesseis': '16',
@@ -25,15 +24,18 @@ export function applyPhoneticCorrections(transcript: string): string {
         'trinta': '30', 'quarenta': '40', 'cinquenta': '50', 'sessenta': '60',
         'setenta': '70', 'oitenta': '80', 'noventa': '90', 'cem': '100',
         'cento': '100', 'duzentos': '200', 'trezentos': '300',
+        // Casos Compostos e Específicos do Usuário
         'cento e cinquenta e um': '151', 'cento e cinquenta': '150',
         'duzentos e um': '201', 'duzentos e dois': '202',
-        '150 y 50': '151', '150 e 50': '151', 'zero': '0', 'zero um': '01',
+        'cento e oitenta e sete': '187', 'oitenta e sete': '187', 'cento oitenta e sete': '187',
+        'cento e cinquenta e nove': '159', 'cento cinquenta e nove': '159',
+        '150 y 50': '151', '150 e 50': '151', 'zero um': '01',
+        // Códigos de Orbe (TP2B, etc)
         'tp dois b': 'tp2b', 'tp 2 b': 'tp2b', 'tp 02b': 'tp2b',
         'tp doisb': 'tp2b', 'tepe': 'tp', 'te pe': 'tp', 'tp2 b': 'tp2b',
         'tep dois b': 'tp2b', 'tepê': 'tp', 'tp dois bê': 'tp2b',
         'tp zero um': 'tp01', 'tepe zero um': 'tp01', 'tepe 01': 'tp01',
-        'cento e oitenta e sete': '187', 'oitenta e sete': '187', 'cento oitenta e sete': '187',
-        '8 7': '187', '87': '187' // Pontes para quando o Whisper "come" o início de 187
+        'dois zero um b': '201b', 'dois zero um bê': '201b'
     };
 
     let corrected = transcript.toLowerCase()
@@ -42,50 +44,56 @@ export function applyPhoneticCorrections(transcript: string): string {
         .replace(/\s+/g, ' ')
         .trim();
 
-    // Remover filler words no início da frase
-    fillerWords.forEach(word => {
-        const regex = new RegExp(`^${word}\\s+`, 'i');
-        corrected = corrected.replace(regex, '');
-    });
-
+    // 1. Aplicar mapeamento de números (incluindo dígitos individuais)
     Object.keys(numberMap).forEach(key => {
         const regex = new RegExp(`\\b${key}\\b`, 'g');
         corrected = corrected.replace(regex, numberMap[key]);
     });
 
+    // 2. Compactação de dígitos falados pausadamente
+    // Se tivermos "1 5 1", transformamos em "151"
+    // Regex procura por 2 a 5 dígitos separados por espaços
+    const digitCompactionPattern = /\b(\d)\s+(\d)\s+(\d)\b/g; // Para "1 5 1" -> "151"
+    corrected = corrected.replace(digitCompactionPattern, '$1$2$3');
+    
+    // Segunda passada para casos de 4 dígitos ou 2 dígitos (opcional, mas seguro)
+    corrected = corrected.replace(/\b(\d)\s+(\d)\b/g, '$1$2'); // Para "2 0" -> "20"
+    
+    // 3. Remover filler words redundantes AGORA que os números estão compactados
+    fillerWords.forEach(word => {
+        const regex = new RegExp(`^${word}\\s+`, 'i');
+        corrected = corrected.replace(regex, '');
+    });
+
     // Casos especiais para 151:
-    // 1) Whisper repetindo "um, um, um, um..."
+    // Whisper repetindo "um, um, um, um..."
     const repeatedUmPattern = /^(um[, ]+){2,4}um\.?$/;
     if (repeatedUmPattern.test(corrected)) {
         corrected = '151';
     }
-    // 2) Whisper devolvendo contagem "1, 2, 3, 4, 5, 1"
-    //    (padrão observado ao pedir "linha 151")
+    // Whisper devolvendo contagem "1, 2, 3, 4, 5, 1"
     const countThenOnePattern = /^1(?:[, ]+2[, ]+3[, ]+4[, ]+5[, ]+1\.?)$/;
     if (countThenOnePattern.test(corrected)) {
         corrected = '151';
     }
 
     // Casos especiais para 167:
-    // Whisper às vezes entende "linha 167" como "minha 1,5,7"
     const pattern157To167 = /^(minha\s+)?1[, ]+5[, ]+7\.?$/;
     if (pattern157To167.test(corrected)) {
         corrected = '167';
     }
 
-    // Casos especiais para 65B:
-    // Whisper já retornou "Meia 5p", "e meia cinco de" e "Néia 5b" ao pedir "65B"
-    const pattern65B_digits = /^meia\s*5p\.?$/;
-    const pattern65B_words = /^(e\s+)?meia\s+cinco( de)?\.?$/;
-    const pattern65B_neia = /^n[eé]ia\s*5b\.?$/;
-    if (pattern65B_digits.test(corrected) || pattern65B_words.test(corrected) || pattern65B_neia.test(corrected)) {
-        corrected = '65b';
-    }
-
-    // Correções fonéticas específicas
+    // Correções fonéticas de nomes
     corrected = corrected.replace(/\bpiau\b/g, 'pial');
     corrected = corrected.replace(/\bpiaui\b/g, 'pial');
     corrected = corrected.replace(/\btrangulo\b/g, 'triangulo');
+    corrected = corrected.replace(/\bmeia\b/g, '6'); // "Meia" freq. usado para 6 no Brasil
+
+    // Casos especiais para 65B:
+    // Whisper já retornou "Meia 5p", "e meia cinco de" e "Néia 5b" ao pedir "65B"
+    if (corrected === 'meia5p' || corrected === 'meia5' || corrected === 'neia5b') {
+        corrected = '65b';
+    }
 
     return corrected;
 }
