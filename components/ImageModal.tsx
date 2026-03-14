@@ -42,36 +42,47 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
         img.src = imageUrls[nextIndex];
     }, [currentIndex, isOpen, imageUrls]);
 
+    const checkCache = useCallback((index: number) => {
+        const imgElements = document.querySelectorAll('.image-slide img') as NodeListOf<HTMLImageElement>;
+        const targetImg = imgElements[index];
+        if (targetImg && targetImg.complete && targetImg.naturalHeight !== 0) {
+            return true;
+        }
+        return false;
+    }, []);
+
     const handleNext = useCallback(() => {
         if (imageUrls.length > 1) {
-            setIsLoading(true);
-            setCurrentIndex((prev) => (prev + 1) % imageUrls.length);
+            const nextIndex = (currentIndex + 1) % imageUrls.length;
+            if (!checkCache(nextIndex)) {
+                setIsLoading(true);
+            }
+            setCurrentIndex(nextIndex);
         }
-    }, [imageUrls.length]);
+    }, [imageUrls.length, currentIndex, checkCache]);
 
     const handlePrev = useCallback(() => {
         if (imageUrls.length > 1) {
-            setIsLoading(true);
-            setCurrentIndex((prev) => (prev - 1 + imageUrls.length) % imageUrls.length);
+            const prevIndex = (currentIndex - 1 + imageUrls.length) % imageUrls.length;
+            if (!checkCache(prevIndex)) {
+                setIsLoading(true);
+            }
+            setCurrentIndex(prevIndex);
         }
-    }, [imageUrls.length]);
+    }, [imageUrls.length, currentIndex, checkCache]);
 
     // Efeito para tratar imagens que já estão no cache (evita spinner travado)
     useEffect(() => {
         if (!isOpen) return;
         
-        // Pequeno delay para garantir que o DOM atualizou
         const checkImageRef = setTimeout(() => {
-            const imgElements = document.querySelectorAll('.react-transform-component img') as NodeListOf<HTMLImageElement>;
-            // Como temos várias no DOM devido ao cross-fade, procuramos a do currentIndex
-            const currentImg = imgElements[currentIndex];
-            if (currentImg && currentImg.complete && currentImg.naturalHeight !== 0) {
+            if (checkCache(currentIndex)) {
                 setIsLoading(false);
             }
-        }, 50);
+        }, 30);
 
         return () => clearTimeout(checkImageRef);
-    }, [currentIndex, isOpen, imageUrls]);
+    }, [currentIndex, isOpen, checkCache]);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -92,6 +103,20 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
 
     return (
         <>
+            <style>
+                {`
+                    @keyframes fadeIn {
+                        from { opacity: 0; }
+                        to { opacity: 1; }
+                    }
+                    .animate-fade-in {
+                        animation: fadeIn 0.3s ease-in-out forwards;
+                    }
+                    .animate-fade-in-delayed {
+                        animation: fadeIn 0.3s 0.3s ease-in-out both;
+                    }
+                `}
+            </style>
             <div
                 className={`fixed inset-0 bg-black/90 z-[9998] transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
                 onClick={onClose}
@@ -119,7 +144,7 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
                     {imageUrls.map((url, i) => (
                         <div
                             key={`slide-${i}`}
-                            className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 ${i === currentIndex ? 'opacity-100 z-50' : 'opacity-0 z-0 pointer-events-none'}`}
+                            className={`image-slide absolute inset-0 flex items-center justify-center transition-opacity duration-500 ${i === currentIndex ? 'opacity-100 z-50' : 'opacity-0 z-0 pointer-events-none'}`}
                         >
                             <TransformWrapper
                                 initialScale={1}
@@ -145,9 +170,9 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
                         </div>
                     ))}
 
-                    {/* Spinner com delay para não piscar em fotos rápidas/cache */}
+                    {/* Spinner com delay real para não piscar em fotos rápidas/cache */}
                     {isLoading && (
-                        <div className="absolute inset-0 flex items-center justify-center z-[60] bg-black/20 animate-[fadeIn_0.3s_0.3s_both]">
+                        <div className="absolute inset-0 flex items-center justify-center z-[60] bg-black/20 animate-fade-in-delayed">
                             <div className="w-10 h-10 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin shadow-[0_0_15px_rgba(16,185,129,0.5)]"></div>
                         </div>
                     )}
