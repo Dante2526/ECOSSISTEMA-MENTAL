@@ -57,10 +57,14 @@ export function applyPhoneticCorrections(transcript: string): string {
     let corrected = transcript.toLowerCase()
         .replace(/½/g, ' meia ')
         .replace(/\b1\/2\b/g, ' um meia ') 
+        // Política Anti-Matemática: 1,5 -> 165, 1,3 -> 163, etc.
+        // O Whisper entende "um meia X" como "1,X"
         .replace(/\b1[,.](\d)\b/g, '16$1')
-        // Remove "a", "e", "o" entre dígitos (ex: "1 6 a 3" -> "1 6 3")
+        // Remove qualquer ponto ou vírgula entre números (ex: 20.1 -> 201)
+        .replace(/(\d)[,.](\d)/g, '$1$2')
+        // Remove "a", "e", "o" entre dígitos
         .replace(/(\d)\s+[aeo]\s+(\d)/g, '$1 $2')
-        .replace(/[、,.]/g, ' ') 
+        .replace(/[、]/g, ' ') 
         .replace(/\by\b/g, ' e ') 
         .replace(/\s+/g, ' ')
         .trim();
