@@ -54,10 +54,20 @@ export function applyPhoneticCorrections(transcript: string): string {
     };
 
     let corrected = transcript.toLowerCase()
-        .replace(/[、,.]/g, ' ') // Remove vírgulas, pontos e separadores orientais
-        .replace(/\by\b/g, ' e ') // Corrige "y" para "e" (espanholismo do Whisper)
+        .replace(/\b1\/2\b/g, '16') // Whisper entende "um meia" como "1/2". Convertemos para 16.
+        .replace(/½/g, '16')        // Caractere unicode meio -> 16
+        .replace(/\b1,5\b/g, '16')  // "1,5" -> "um e meio" -> "um meia" -> 16
+        .replace(/[、,.]/g, ' ')    // Remove vírgulas e pontos
+        .replace(/\by\b/g, ' e ')    // Corrige "y" para "e"
         .replace(/\s+/g, ' ')
         .trim();
+
+    // Caso específico do log: "1 5 3" quando o usuário quis dizer "1 6 3" (meia confundido com 5)
+    // ou "1,5,3" vindo de um erro de transcrição de "um meia três"
+    if (corrected.includes('1 5 3') || corrected.includes('153')) {
+        // Se o orbe 153 não existir mas o 163 sim, podemos fazer o swap, 
+        // mas por enquanto vamos focar no mapeamento de strings.
+    }
 
     // 1. Aplicar mapeamento de números (incluindo dígitos individuais)
     Object.keys(numberMap).forEach(key => {

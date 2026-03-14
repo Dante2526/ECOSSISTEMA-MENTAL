@@ -87,7 +87,7 @@ self.onmessage = async (event) => {
                 no_repeat_ngram_size: 3, // Mais rigoroso
                 do_sample: false,
                 // O Prompt ajuda o modelo a entender o contexto técnico (códigos, números, linhas)
-                prompt: "meia é 6, meia sete é 67, 161, 162, 163, 164, 165, 166, 167, 187, Código de linha, orbe 151, um cinco um, cento e cinquenta e um, 187, um oito sete, cento e oitenta e sete, 161, um seis um, 162, um seis dois, 163, um seis três, 164, um seis quatro, 165, um seis cinco, 166, um seis seis, 167, um meia sete, cento e sessenta e sete, 01, zero um, zero hum, 2, dois, doix, 6, meia, mea, meio, 8, oito, ocho, oi, 7, sete, seche, 5, cinco, cincu, sim, 3, três, trex, 201-B, dois zero um b, estação, pial."
+                prompt: "não use frações, meia é 6, meia sete é 67, 161, 162, 163, 164, 165, 166, 167, 187, Código de linha, orbe 151, um cinco um, cento e cinquenta e um, 187, um oito sete, cento e oitenta e sete, 161, um seis um, 162, um seis dois, 163, um seis três, 164, um seis quatro, 165, um seis cinco, 166, um seis seis, 167, um meia sete, cento e sessenta e sete, 01, zero um, zero hum, 2, dois, doix, 6, meia, mea, meio, 8, oito, ocho, oi, 7, sete, seche, 5, cinco, cincu, sim, 3, três, trex, 201-B, dois zero um b, estação, pial."
             }
         });
 
