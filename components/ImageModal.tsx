@@ -105,34 +105,33 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
                         </div>
                     )}
 
-                    {imageUrls.map((url, i) => (
-                        <div
-                            key={`slide-${url}-${i}`}
-                            className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${i === currentIndex ? 'opacity-100 z-50' : 'opacity-0 z-0 pointer-events-none'}`}
+                    {/* Renderização dinâmica da imagem atual com 'key' para resetar o TransformWrapper e estados de loading */}
+                    <div
+                        key={`slide-${currentIndex}-${imageUrls[currentIndex]}`}
+                        className="absolute inset-0 flex items-center justify-center transition-opacity duration-300 opacity-100 z-50"
+                    >
+                        <TransformWrapper
+                            initialScale={1}
+                            minScale={0.5}
+                            maxScale={8}
+                            centerOnInit={true}
+                            wheel={{ smoothStep: 0.01 }}
                         >
-                            <TransformWrapper
-                                initialScale={1}
-                                minScale={0.5}
-                                maxScale={8}
-                                centerOnInit={true}
-                                wheel={{ smoothStep: 0.01 }}
-                            >
-                                <TransformComponent wrapperStyle={{ width: '100%', height: '100%' }} contentStyle={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <img
-                                        src={url}
-                                        onLoad={() => { if (i === currentIndex) setIsLoading(false); }}
-                                        onError={(e) => {
-                                            if (i === currentIndex) setIsLoading(false);
-                                            (e.target as HTMLImageElement).src = FALLBACK_IMAGE_URL;
-                                        }}
-                                        decoding="async"
-                                        className={`max-w-[95vw] max-h-[90vh] min-w-[300px] min-h-[200px] w-auto h-auto object-contain block transition-opacity duration-300 ${isLoading && i === currentIndex ? 'opacity-0' : 'opacity-100'}`}
-                                        alt={`Diagrama ${i + 1}`}
-                                    />
-                                </TransformComponent>
-                            </TransformWrapper>
-                        </div>
-                    ))}
+                            <TransformComponent wrapperStyle={{ width: '100%', height: '100%' }} contentStyle={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <img
+                                    src={imageUrls[currentIndex]}
+                                    onLoad={() => setIsLoading(false)}
+                                    onError={(e) => {
+                                        setIsLoading(false);
+                                        (e.target as HTMLImageElement).src = FALLBACK_IMAGE_URL;
+                                    }}
+                                    decoding="async"
+                                    className={`max-w-[95vw] max-h-[90vh] min-w-[300px] min-h-[200px] w-auto h-auto object-contain block transition-opacity duration-300 ${isLoading ? 'opacity-0' : 'opacity-100'}`}
+                                    alt={`Foto ${currentIndex + 1}`}
+                                />
+                            </TransformComponent>
+                        </TransformWrapper>
+                    </div>
 
                     <button title="Fechar" onClick={onClose} className="absolute top-4 right-4 w-10 h-10 bg-black/60 text-white border border-white/30 rounded-full grid place-items-center text-xl z-[102] hover:bg-white/20 transition-colors">
                         ✕
