@@ -30,7 +30,8 @@ export function applyPhoneticCorrections(transcript: string): string {
         'duzentos e um': '201', 'duzentos e dois': '202',
         'cento e oitenta e sete': '187', 'oitenta e sete': '187', 'cento oitenta e sete': '187',
         'cento e cinquenta e nove': '159', 'cento cinquenta e nove': '159',
-        '150 y 50': '151', '150 e 50': '151', 'zero um': '01',
+        '150 y 50': '151', '150 e 50': '151', 'zero um': '01', 'zero 1': '01',
+        'hum': 'um', 'hum um': '01', 'hum 1': '01', 'zero hum': '01',
         // Códigos de Orbe (TP2B, etc)
         'tp dois b': 'tp2b', 'tp 2 b': 'tp2b', 'tp 02b': 'tp2b',
         'tp doisb': 'tp2b', 'tepe': 'tp', 'te pe': 'tp', 'tp2 b': 'tp2b',
