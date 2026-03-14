@@ -137,11 +137,17 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
             audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({
                 sampleRate: 16000,
             });
-
             const source = audioContextRef.current.createMediaStreamSource(stream);
             
+            // 1. Filtro Passa-Alta (High-pass) para remover ruído de ventilador/motores (~200Hz)
+            const hpFilter = audioContextRef.current.createBiquadFilter();
+            hpFilter.type = 'highpass';
+            hpFilter.frequency.value = 200;
+            hpFilter.Q.value = 0.7; // Suave
+            
+            // 2. Ganho Aprimorado para Mobile/Longe do microfone
             const gainNode = audioContextRef.current.createGain();
-            gainNode.gain.value = 2.5; // Ajustado para evitar amplificar chiado de fundo
+            gainNode.gain.value = 4.0; 
             
             const processor = audioContextRef.current.createScriptProcessor(2048, 1, 1);
 
@@ -149,17 +155,21 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
             let silenceStartTime = 0;
             let hasSpeechStarted = false;
             let smoothedRms = 0;
-            const SILENCE_THRESHOLD = 0.025; // Mais firme contra ruído de fundo
-            const AUTO_STOP_MS = 1500;      // Mais tempo para pausas naturais
-            const MAX_RECORDING_MS = 12000; // Limite de 12 segundos
+            let noiseFloor = 0.01; // Valor base inicial
+            let framesAnalyzed = 0;
+            let energyVariance = 0; // Para diferenciar voz (dinâmica) de ruído (estacionário)
+            
+            const SILENCE_THRESHOLD_STRICT = 0.035; 
+            const AUTO_STOP_MS = 1500;
+            const MAX_RECORDING_MS = 10000; // Limite de 10 segundos
+            const CALIBRATION_FRAMES = 8;    // Primeiros ~1s para calibrar ruído base
             const startTime = Date.now();
 
             processor.onaudioprocess = (e) => {
                 if (isStoppingRef.current) return;
                 
-                // Fallback: Limite máximo de tempo
                 if (Date.now() - startTime > MAX_RECORDING_MS) {
-                    console.log("⚡ [Whisper Hook] Limite máximo de tempo atingido (12s). Parando...");
+                    console.log("⚡ [Whisper Hook] Limite máximo de tempo atingido (10s).");
                     stop();
                     return;
                 }
@@ -173,54 +183,63 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
                 }
                 const rms = Math.sqrt(sum / inputData.length);
                 
-                // Suavização moderada
-                smoothedRms = (smoothedRms * 0.65) + (rms * 0.35);
+                // Suavização do RMS
+                smoothedRms = (smoothedRms * 0.7) + (rms * 0.3);
+                framesAnalyzed++;
 
-                // --- Ganho Adaptativo (Especial para Mobile/Notebook) ---
-                // Se após 1.2s o sinal ainda estiver muito fraco (< 40% do limiar), aumentamos o ganho
-                if (Date.now() - startTime > 1200 && !hasSpeechStarted && smoothedRms < (SILENCE_THRESHOLD * 0.4)) {
-                    if (gainNode.gain.value < 5.0) {
-                        console.log(`🔊 [Whisper Hook] Sinal fraco detectado (${smoothedRms.toFixed(4)}). Aumentando ganho para 5.0x`);
-                        gainNode.gain.value = 5.0;
+                // 3. Calibração inicial do ruído de fundo
+                if (framesAnalyzed < CALIBRATION_FRAMES) {
+                    noiseFloor = Math.max(noiseFloor, smoothedRms);
+                    return;
+                }
+
+                // 4. Cálculo de Variância (Simplificado) para ignorar ruído contínuo
+                // Se a energia muda pouco, é ruído (ventilador). Se muda muito, é fala.
+                energyVariance = Math.abs(rms - smoothedRms);
+                
+                const dynamicThreshold = Math.max(SILENCE_THRESHOLD_STRICT, noiseFloor * 1.5);
+
+                // Detecção de início de fala: Precisa de energia ALTA e VARIAÇÃO de energia
+                if (!hasSpeechStarted) {
+                    if (smoothedRms > dynamicThreshold && energyVariance > (dynamicThreshold * 0.2)) {
+                        hasSpeechStarted = true;
+                        console.log(`🎤 [Whisper Hook] Fala detectada! (RMS: ${smoothedRms.toFixed(4)}, NoiseFloor: ${noiseFloor.toFixed(4)})`);
                     }
                 }
 
-                // Detecção de início de fala
-                if (!hasSpeechStarted && smoothedRms > SILENCE_THRESHOLD) {
-                    hasSpeechStarted = true;
-                    console.log(`🎤 [Whisper Hook] Fala detectada! (RMS: ${smoothedRms.toFixed(4)})`);
-                }
-
                 if (hasSpeechStarted) {
-                    // --- Noise Gate: Zerar amostras de chiado abaixo do limiar ---
+                    // Noise Gate agressivo contra frequências de ventilador residuais
                     const cleanedData = new Float32Array(inputData.length);
                     for (let i = 0; i < inputData.length; i++) {
-                        // Se a amplitude instantânea for muito baixa, vira silêncio absoluto
-                        cleanedData[i] = Math.abs(inputData[i]) < (SILENCE_THRESHOLD * 0.8) ? 0 : inputData[i];
+                        cleanedData[i] = Math.abs(inputData[i]) < (dynamicThreshold * 0.6) ? 0 : inputData[i];
                     }
                     
                     audioChunksRef.current.push(cleanedData);
                     
-                    // Lógica de Auto-Stop com RMS suavizado
-                    if (smoothedRms < SILENCE_THRESHOLD) {
+                    // Lógica de Auto-Stop aprimorada
+                    // Para se: (Energia baixa OU Variância muito baixa por muito tempo)
+                    const isSilent = smoothedRms < dynamicThreshold || energyVariance < (dynamicThreshold * 0.1);
+                    
+                    if (isSilent) {
                         if (silenceStartTime === 0) silenceStartTime = Date.now();
                         
                         const silenceDuration = Date.now() - silenceStartTime;
                         if (silenceDuration > AUTO_STOP_MS) {
-                            console.log(`⚡ [Whisper Hook] Silêncio de ${AUTO_STOP_MS}ms atingido (RMS: ${smoothedRms.toFixed(4)}). Parando...`);
+                            console.log(`⚡ [Whisper Hook] Fim de fala detectado. (RMS: ${smoothedRms.toFixed(4)}). Parando...`);
                             stop();
                         }
                     } else {
-                        silenceStartTime = 0; // Reset se ouvir algo real
+                        silenceStartTime = 0;
                     }
                 }
                 
-                if (audioChunksRef.current.length % 50 === 0 && audioChunksRef.current.length > 0) {
-                    console.log(`🎤 [Whisper Hook] Gravando... (${audioChunksRef.current.length} blocos) - RMS Atual: ${smoothedRms.toFixed(4)}`);
+                if (framesAnalyzed % 40 === 0 && hasSpeechStarted) {
+                    console.log(`🎤 [Whisper Hook] Gravando... RMS: ${smoothedRms.toFixed(4)} | Gate: ${(dynamicThreshold * 0.6).toFixed(4)}`);
                 }
             };
 
-            source.connect(gainNode);
+            source.connect(hpFilter);
+            hpFilter.connect(gainNode);
             gainNode.connect(processor);
             processor.connect(audioContextRef.current.destination);
 
