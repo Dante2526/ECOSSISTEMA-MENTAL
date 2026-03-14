@@ -25,7 +25,8 @@ export function applyPhoneticCorrections(transcript: string): string {
         'setenta': '70', 'oitenta': '80', 'noventa': '90', 'cem': '100',
         'cento': '100', 'duzentos': '200', 'trezentos': '300',
         // Casos Compostos e Específicos do Usuário
-        'cento e cinquenta e um': '151', 'cento e cinquenta': '150',
+        'cento e cinquenta e um': '151', 'cento e cinquenta': '150', 'cento cinquenta e um': '151',
+        'um cinco um': '151', 'um cinco 1': '151',
         'duzentos e um': '201', 'duzentos e dois': '202',
         'cento e oitenta e sete': '187', 'oitenta e sete': '187', 'cento oitenta e sete': '187',
         'cento e cinquenta e nove': '159', 'cento cinquenta e nove': '159',
@@ -74,6 +75,12 @@ export function applyPhoneticCorrections(transcript: string): string {
     // Whisper devolvendo contagem "1, 2, 3, 4, 5, 1"
     const countThenOnePattern = /^1(?:[, ]+2[, ]+3[, ]+4[, ]+5[, ]+1\.?)$/;
     if (countThenOnePattern.test(corrected)) {
+        corrected = '151';
+    }
+
+    // Casos especiais para 151: fala rápida ou erros fonéticos comuns
+    const patternFast151 = /^(um\s+sim\s+comum|um\s+cinco\s+um|um\s+cinco\s+hum)\.?$/i;
+    if (patternFast151.test(corrected)) {
         corrected = '151';
     }
 

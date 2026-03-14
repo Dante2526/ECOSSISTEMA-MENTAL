@@ -95,7 +95,7 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
                         src={imageUrls[currentIndex]}
                         aria-hidden="true"
                         decoding="async"
-                        className="max-w-[95vw] max-h-[90vh] w-auto h-auto object-contain block invisible"
+                        className="max-w-[95vw] max-h-[90vh] min-w-[300px] min-h-[200px] w-auto h-auto object-contain block invisible"
                         alt=""
                     />
 
@@ -126,7 +126,7 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
                                             (e.target as HTMLImageElement).src = FALLBACK_IMAGE_URL;
                                         }}
                                         decoding="async"
-                                        className={`max-w-[95vw] max-h-[90vh] w-auto h-auto object-contain block transition-opacity duration-300 ${isLoading && i === currentIndex ? 'opacity-0' : 'opacity-100'}`}
+                                        className={`max-w-[95vw] max-h-[90vh] min-w-[300px] min-h-[200px] w-auto h-auto object-contain block transition-opacity duration-300 ${isLoading && i === currentIndex ? 'opacity-0' : 'opacity-100'}`}
                                         alt={`Diagrama ${i + 1}`}
                                     />
                                 </TransformComponent>

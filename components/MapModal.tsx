@@ -276,7 +276,7 @@ export const MapModal: React.FC<MapModalProps> = React.memo(({
                         ref={imageRef}
                         src="https://i.ibb.co/fzpVkfb1/Layout-1-page-0001.jpg"
                         alt="Layout Map"
-                        className={`max-w-none pointer-events-none select-none transition-opacity duration-300 ${isMapLoading ? 'opacity-0' : 'opacity-100'}`}
+                        className={`max-w-none min-w-[1000px] min-h-[1000px] pointer-events-none select-none transition-opacity duration-300 ${isMapLoading ? 'opacity-0' : 'opacity-100'}`}
                         draggable={false}
                         decoding="async"
                         onLoad={() => {
@@ -284,6 +284,10 @@ export const MapModal: React.FC<MapModalProps> = React.memo(({
                             const clamped = getClampedPan(x.get(), y.get(), scale.get());
                             x.set(clamped.x);
                             y.set(clamped.y);
+                        }}
+                        onError={() => {
+                            setIsMapLoading(false);
+                            // Fallback para evitar container de tamanho zero
                         }}
                     />
 

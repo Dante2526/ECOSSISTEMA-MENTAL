@@ -31,8 +31,17 @@ const App: React.FC = () => {
     const [isQuickSearchOpen, setIsQuickSearchOpen] = useState(false);
     const [isTourSelectionOpen, setIsTourSelectionOpen] = useState(false);
     const [activeTour, setActiveTour] = useState<Tour | null>(null);
+    const [showIconLabels, setShowIconLabels] = useState(true);
 
     const orbitalSystemRef = useRef<OrbitalSystemRef>(null);
+
+    // Temporizador para sumir os nomes dos ícones após 10 segundos
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setShowIconLabels(false);
+        }, 10000);
+        return () => clearTimeout(timer);
+    }, []);
 
     // PWA Service Worker registration
     const {
@@ -419,7 +428,7 @@ const App: React.FC = () => {
             />
 
             <div className="relative z-10 flex items-center justify-center w-full h-full min-h-screen">
-                <OrbitalSystem
+                    <OrbitalSystem
                     ref={orbitalSystemRef}
                     systems={systems}
                     onOrbClick={handleOrbClick}
@@ -431,6 +440,7 @@ const App: React.FC = () => {
                     isEditing={!!editingSystem}
                     onOpenQuickSearch={handleOpenQuickSearch}
                     onOpenTours={handleOpenTours}
+                    showLabels={showIconLabels}
                 />
             </div>
 
@@ -497,21 +507,27 @@ const App: React.FC = () => {
                         <button
                             title="Ver Mapa do Ecossistema"
                             onClick={handleOpenMapModal}
-                            className="w-12 h-12 rounded-full bg-black/60 border border-emerald-500 flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:bg-emerald-500/20"
+                            className="group relative w-12 h-12 rounded-full bg-black/60 border border-emerald-500 flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:bg-emerald-500/20"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                             </svg>
+                            <span className={`absolute left-14 whitespace-nowrap bg-black/80 px-2 py-1 rounded text-xs font-bold border border-emerald-500/50 transition-all duration-1000 ${showIconLabels ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                                MAPA
+                            </span>
                         </button>
                         <button
                             title={isAdmin ? "Sair do Modo Admin" : "Acesso de Admin"}
                             onClick={handleAdminToggle}
-                            className="w-12 h-12 rounded-full bg-black/60 border border-purple-500 flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:bg-purple-500/20"
+                            className="group relative w-12 h-12 rounded-full bg-black/60 border border-purple-500 flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:bg-purple-500/20"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                             </svg>
+                            <span className={`absolute left-14 whitespace-nowrap bg-black/80 px-2 py-1 rounded text-xs font-bold border border-purple-500/50 transition-all duration-1000 ${showIconLabels ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                                {isAdmin ? 'SAIR' : 'CONFIG'}
+                            </span>
                         </button>
                     </>
                 )}
