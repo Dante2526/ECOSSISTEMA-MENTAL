@@ -49,7 +49,8 @@ export function applyPhoneticCorrections(transcript: string): string {
         'um seis cinco': '165', '15': '165',
         'um seis seis': '166', '16': '166',
         'um seis sete': '167', '17': '167',
-        'um seis oito': '168', '18': '168'
+        'um seis oito': '168', '18': '168',
+        'meio': '6', 'mei': '6'
     };
 
     let corrected = transcript.toLowerCase()
