@@ -123,6 +123,11 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
 
         try {
             console.log("⚡ [Whisper Hook] Iniciando captura de áudio...");
+            
+            // Detecção de mobile
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            console.log(`📱 [Whisper Hook] Modo: ${isMobile ? 'MOBILE' : 'DESKTOP'}`);
+
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: {
                     echoCancellation: true,
@@ -137,18 +142,35 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
             audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({
                 sampleRate: 16000,
             });
+            
             const source = audioContextRef.current.createMediaStreamSource(stream);
             
-            // 1. Filtro Passa-Alta mais agressivo (350Hz) para cortar vento de ventilador próximo
+            // 1. Cadeia de Filtros (Passa-Banda: 300Hz a 3500Hz)
+            // Filtro Passa-Alta (Corta graves/vento)
             const hpFilter = audioContextRef.current.createBiquadFilter();
             hpFilter.type = 'highpass';
-            hpFilter.frequency.value = 350;
-            hpFilter.Q.value = 1.0; // Pico leve para clareza da voz
+            hpFilter.frequency.value = 300;
+            hpFilter.Q.value = 0.7;
+
+            // Filtro Passa-Baixa (Corta ruídos agudos)
+            const lpFilter = audioContextRef.current.createBiquadFilter();
+            lpFilter.type = 'lowpass';
+            lpFilter.frequency.value = 3500;
+            lpFilter.Q.value = 0.7;
             
-            // 2. Ganho Aprimorado
+            // 2. Pré-amplificador (Ganho Adaptativo Inicial)
             const gainNode = audioContextRef.current.createGain();
-            gainNode.gain.value = 4.5; 
+            // Mobile (S23 Ultra e outros) precisam de mais ganho devido à distância
+            gainNode.gain.value = isMobile ? 6.5 : 4.5; 
             
+            // 3. Compressor (Normaliza o volume da voz)
+            const compressor = audioContextRef.current.createDynamicsCompressor();
+            compressor.threshold.setValueAtTime(-24, audioContextRef.current.currentTime);
+            compressor.knee.setValueAtTime(30, audioContextRef.current.currentTime);
+            compressor.ratio.setValueAtTime(12, audioContextRef.current.currentTime);
+            compressor.attack.setValueAtTime(0.003, audioContextRef.current.currentTime);
+            compressor.release.setValueAtTime(0.25, audioContextRef.current.currentTime);
+
             const processor = audioContextRef.current.createScriptProcessor(2048, 1, 1);
 
             audioChunksRef.current = [];
@@ -159,10 +181,11 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
             let framesAnalyzed = 0;
             let energyVariance = 0;
             
-            const SILENCE_THRESHOLD_STRICT = 0.045; 
-            const AUTO_STOP_MS = 1000; // Parada mais rápida (1s)
-            const MAX_RECORDING_MS = 7000; // Timeout de segurança menor (7s)
-            const CALIBRATION_FRAMES = 4;
+            // Thresholds adaptativos
+            const BASE_THRESHOLD = isMobile ? 0.055 : 0.045; 
+            const AUTO_STOP_MS = 1200; 
+            const MAX_RECORDING_MS = 8000; 
+            const CALIBRATION_FRAMES = 5;
             const startTime = Date.now();
 
             processor.onaudioprocess = (e) => {
@@ -182,33 +205,31 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
                 }
                 const rms = Math.sqrt(sum / inputData.length);
                 
-                // Suavização mais rápida para acompanhar a voz (0.6 em vez de 0.75)
-                smoothedRms = (smoothedRms * 0.6) + (rms * 0.4);
+                // Suavização adaptativa
+                smoothedRms = (smoothedRms * 0.7) + (rms * 0.3);
                 framesAnalyzed++;
 
                 if (framesAnalyzed < CALIBRATION_FRAMES) {
-                    // Calibração inicial do ruído ambiente
                     noiseFloor = Math.max(noiseFloor, smoothedRms);
                     return;
                 }
 
                 energyVariance = Math.abs(rms - smoothedRms);
-                // Threshold dinâmico mais agressivo contra ventilador (2.5x o ruído base)
-                const dynamicThreshold = Math.max(SILENCE_THRESHOLD_STRICT, noiseFloor * 2.5);
+                
+                // Threshold dinâmico: se o ruído ambiente aumentar, o gate sobe
+                const dynamicThreshold = Math.max(BASE_THRESHOLD, noiseFloor * 2.2);
 
                 if (!hasSpeechStarted) {
-                    // Exigência maior de variação para ignorar ventilador constante
-                    // Voz humana varia muito, ventilador é constante.
-                    if (smoothedRms > dynamicThreshold && energyVariance > (dynamicThreshold * 0.4)) {
+                    // Detecção de voz: RMS alto + Variância de energia (voz é dinâmica, ruído é fixo)
+                    if (smoothedRms > dynamicThreshold && energyVariance > (dynamicThreshold * 0.3)) {
                         hasSpeechStarted = true;
-                        console.log(`🎤 [Whisper Hook] Voz detectada! RMS: ${smoothedRms.toFixed(4)} | Variância: ${energyVariance.toFixed(4)}`);
+                        console.log(`🎤 [Whisper Hook] Voz detectada! RMS: ${smoothedRms.toFixed(4)} | Threshold: ${dynamicThreshold.toFixed(4)}`);
                     }
                 }
 
                 if (hasSpeechStarted) {
-                    // Sensor de silêncio: Se a energia cair abaixo do threshold OU 
-                    // se a variância for muito baixa (indicando ruído de ventilador constante)
-                    const isSilent = smoothedRms < dynamicThreshold || energyVariance < (dynamicThreshold * 0.15);
+                    // Critério de silêncio: RMS baixo OU variância muito baixa (ruído constante de ventilador)
+                    const isSilent = smoothedRms < (dynamicThreshold * 0.85) || energyVariance < (dynamicThreshold * 0.1);
                     
                     audioChunksRef.current.push(new Float32Array(inputData));
                     
@@ -216,22 +237,26 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
                         if (silenceStartTime === 0) silenceStartTime = Date.now();
                         const silenceDuration = Date.now() - silenceStartTime;
                         if (silenceDuration > AUTO_STOP_MS) {
-                            console.log(`⚡ [Whisper Hook] Parando por silêncio/ruído constante.`);
+                            console.log(`⚡ [Whisper Hook] Silêncio detectado atingiu timeout.`);
                             stop();
                         }
                     } else {
                         silenceStartTime = 0;
+                        // Atualiza dinamicamente o noiseFloor se houver silêncio prolongado mas abaixo do threshold
+                        if (rms < dynamicThreshold && rms > noiseFloor) {
+                            noiseFloor = (noiseFloor * 0.95) + (rms * 0.05);
+                        }
                     }
-                }
-                
-                if (framesAnalyzed % 40 === 0 && hasSpeechStarted) {
-                    console.log(`🎤 [Whisper Hook] Gravando... RMS: ${smoothedRms.toFixed(4)} | Gate: ${(dynamicThreshold * 0.6).toFixed(4)}`);
                 }
             };
 
+            // Conectando a cadeia de áudio:
+            // Source -> HP -> LP -> Gain -> Compressor -> Processor -> Destination
             source.connect(hpFilter);
-            hpFilter.connect(gainNode);
-            gainNode.connect(processor);
+            hpFilter.connect(lpFilter);
+            lpFilter.connect(gainNode);
+            gainNode.connect(compressor);
+            compressor.connect(processor);
             processor.connect(audioContextRef.current.destination);
 
             setIsListening(true);

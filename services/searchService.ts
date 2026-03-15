@@ -328,3 +328,40 @@ export function findMatchingItems(transcript: string, cache: SearchItem[]): Sear
 
     return getUniqueResults(compressedMatches);
 }
+
+export function parseFromToCommand(text: string): { from: string, to: string } | null {
+    if (!text) return null;
+    
+    // Normalizar conectores comuns
+    const normalized = text.toLowerCase()
+        .replace(/\bpara a\b/g, 'para')
+        .replace(/\bpro\b/g, 'para')
+        .replace(/\bpra\b/g, 'para')
+        .replace(/\bindon\b/g, 'indo')
+        .replace(/\bda\b/g, 'de')
+        .replace(/\bdo\b/g, 'de');
+
+    // Padrão: "de [ORIGEM] para [DESTINO]" ou "[ORIGEM] para [DESTINO]"
+    // O Whisper costuma colocar pontuação no final, então removemos no final se houver.
+    const cleanText = normalized.replace(/[.?!]$/, '').trim();
+    
+    // Regex para capturar os dois grupos
+    const fromToRegex = /(?:de\s+)?(.+?)\s+para\s+(.+)/i;
+    const match = cleanText.match(fromToRegex);
+
+    if (match) {
+        const fromRaw = match[1].trim();
+        const toRaw = match[2].trim();
+
+        // Aplicar correções fonéticas em cada parte
+        const from = applyPhoneticCorrections(fromRaw);
+        const to = applyPhoneticCorrections(toRaw);
+
+        if (from && to) {
+            console.log(`🧭 [SearchService] Comando De-Para detectado: "${from}" -> "${to}"`);
+            return { from, to };
+        }
+    }
+
+    return null;
+}

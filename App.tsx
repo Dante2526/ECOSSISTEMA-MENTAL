@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { OrbitalSystem as OrbitalSystemType, SearchItem, Tour, OrbitalSystemRef } from './types';
 import { orbitalSystemsData as initialSystems } from './data/initialData';
 import { useVoiceRecognition } from './hooks/useVoiceRecognition';
-import { buildSearchCache, findMatchingItems, applyPhoneticCorrections, normalizeText } from './services/searchService';
+import { buildSearchCache, findMatchingItems, applyPhoneticCorrections, normalizeText, parseFromToCommand } from './services/searchService';
 import { ParallaxBackground } from './components/ParallaxBackground';
 import { OrbitalSystem } from './components/OrbitalSystem';
 import { ImageModal } from './components/ImageModal';
@@ -18,6 +18,7 @@ import { UpdatePrompt } from './components/UpdatePrompt';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { usePreloadProgress } from './hooks/usePreloadProgress';
 import { OfflineSetupProgress } from './components/OfflineSetupProgress';
+import { FromToModal } from './components/FromToModal';
 
 const App: React.FC = () => {
     const [modalImages, setModalImages] = useState<string[]>([]);
@@ -30,6 +31,7 @@ const App: React.FC = () => {
     const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
     const [isQuickSearchOpen, setIsQuickSearchOpen] = useState(false);
     const [isTourSelectionOpen, setIsTourSelectionOpen] = useState(false);
+    const [isFromToModalOpen, setIsFromToModalOpen] = useState(false);
     const [activeTour, setActiveTour] = useState<Tour | null>(null);
     const [showIconLabels, setShowIconLabels] = useState(true);
 
@@ -208,6 +210,15 @@ const App: React.FC = () => {
         },
         onResult: (transcript) => {
             console.log("🎤 App: Recebido transcript:", transcript);
+            
+            // 0. Check if it's a "From-To" command
+            const fromTo = parseFromToCommand(transcript);
+            if (fromTo) {
+                showFeedback(`NAVEGANDO: ${fromTo.from.toUpperCase()} ➔ ${fromTo.to.toUpperCase()}`);
+                handleFromToNavigation(fromTo.from, fromTo.to);
+                return;
+            }
+
             const correctedTranscript = applyPhoneticCorrections(transcript);
             
             if (!correctedTranscript || correctedTranscript.trim().length === 0) {
@@ -408,6 +419,42 @@ const App: React.FC = () => {
     const handleCloseEditingSystem = useCallback(() => setEditingSystem(null), []);
     const handleOpenMapModal = useCallback(() => setIsMapModalOpen(true), []);
     const handleCloseMapModal = useCallback(() => setIsMapModalOpen(false), []);
+    const handleOpenFromToModal = useCallback(() => setIsFromToModalOpen(true), []);
+    const handleCloseFromToModal = useCallback(() => setIsFromToModalOpen(false), []);
+
+    const handleFromToNavigation = useCallback((from: string, to: string) => {
+        setIsFromToModalOpen(false);
+        
+        // Use our search service to find match for each
+        const fromItems = findMatchingItems(from, searchCache);
+        const toItems = findMatchingItems(to, searchCache);
+
+        if (fromItems.length === 0 || toItems.length === 0) {
+            const missing = fromItems.length === 0 ? from : to;
+            showFeedback(`NÃO ENCONTREI: "${missing.toUpperCase()}"`);
+            return;
+        }
+
+        // Create a temporary tour
+        const combinedSteps = [
+            ...fromItems.map(item => ({ systemId: item.systemId })),
+            ...toItems.map(item => ({ systemId: item.systemId }))
+        ];
+
+        // Remove duplicates while keeping order
+        const uniqueSteps = combinedSteps.filter((step, index, self) =>
+            index === self.findIndex((s) => s.systemId === step.systemId)
+        );
+
+        const tempTour: Tour = {
+            id: `temp-from-to-${Date.now()}`,
+            name: `DE: ${from.toUpperCase()} PARA: ${to.toUpperCase()}`,
+            steps: uniqueSteps
+        };
+
+        startTour(tempTour);
+    }, [searchCache, startTour, showFeedback]);
+
     const handleOpenSystemImages = useCallback((urls: string[]) => {
         setModalImages(urls);
         setIsModalOpen(true);
@@ -476,6 +523,12 @@ const App: React.FC = () => {
                 />
             )}
 
+            <FromToModal 
+                isOpen={isFromToModalOpen}
+                onClose={handleCloseFromToModal}
+                onNavigate={handleFromToNavigation}
+            />
+
             <FeedbackMessage message={feedbackMessage} />
 
             <ImageModal
@@ -504,6 +557,18 @@ const App: React.FC = () => {
             <div className="fixed bottom-6 left-6 z-50 flex flex-col gap-4">
                 {!editingSystem && !activeTour && (
                     <>
+                        <button
+                            title="Navegação De-Para"
+                            onClick={handleOpenFromToModal}
+                            className="group relative w-12 h-12 rounded-full bg-black/60 border border-blue-500 flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:bg-blue-500/20"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                            </svg>
+                            <span className={`absolute left-14 whitespace-nowrap bg-black/80 px-2 py-1 rounded text-xs font-bold border border-blue-500/50 transition-all duration-1000 ${showIconLabels ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                                DE-PARA
+                            </span>
+                        </button>
                         <button
                             title="Ver Mapa do Ecossistema"
                             onClick={handleOpenMapModal}
