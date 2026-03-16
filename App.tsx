@@ -220,17 +220,22 @@ const App: React.FC = () => {
             console.log("🎤 App: Recebido transcript:", transcript);
             
             const lowerTranscript = transcript.toLowerCase();
-            const isLocationQuery = 
-                lowerTranscript.includes("onde estou") || 
-                lowerTranscript.includes("qual linha") || 
-                lowerTranscript.includes("que linha") ||
-                lowerTranscript.includes("estou em qual") ||
-                lowerTranscript.includes("minha localização") ||
-                lowerTranscript.includes("em que local estou") ||
-                (lowerTranscript.includes("estou na") && lowerTranscript.length < 30); // Evita pegar frases longas que não sejam perguntas de localização
+            
+            // Verifica perguntas de localização
+            const locationTriggers = ["onde estou", "qual linha", "que linha", "minha localização", "qual o local"];
+            const specificLocationTrigger = "estou na ";
+            
+            let isLocationQuery = locationTriggers.some(t => lowerTranscript.includes(t));
+            let suggestedLine = undefined;
+
+            if (lowerTranscript.includes(specificLocationTrigger)) {
+                isLocationQuery = true;
+                // Extrai o que vem depois de "estou na " (ex: "estou na 168" -> suggestedLine = "168")
+                suggestedLine = lowerTranscript.split(specificLocationTrigger)[1]?.replace(/[?]/g, '').trim();
+            }
 
             if (isLocationQuery) {
-                handleWhereAmI();
+                handleWhereAmI(suggestedLine);
                 return;
             }
 
@@ -447,24 +452,71 @@ const App: React.FC = () => {
 
     const { getCurrentPosition, findNearestSystem, isLocating: isLocatingGPS } = useGeolocation();
 
-    const handleWhereAmI = useCallback(async () => {
+    const speak = useCallback((text: string) => {
+        if (!window.speechSynthesis) return;
+
+        // Cancela falas anteriores para não encavalar
+        window.speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'pt-BR';
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+
+        // Tenta encontrar uma voz masculina natural
+        const voices = window.speechSynthesis.getVoices();
+        const preferredVoice = voices.find(v => 
+            (v.name.includes('Google') || v.name.includes('Natural')) && 
+            v.lang.includes('pt-BR') && 
+            (v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('homem') || v.name.includes('Daniel') || v.name.includes('Antonio'))
+        ) || voices.find(v => v.lang.includes('pt-BR'));
+
+        if (preferredVoice) utterance.voice = preferredVoice;
+
+        window.speechSynthesis.speak(utterance);
+    }, []);
+
+    const handleWhereAmI = useCallback(async (suggestedLine?: string) => {
         showFeedback("BUSCANDO LOCALIZAÇÃO...");
         try {
             const currentPos = await getCurrentPosition();
             const nearest = findNearestSystem(currentPos, systems);
 
             if (nearest) {
-                showFeedback(`VOCÊ ESTÁ NA: ${nearest.system.name.toUpperCase()}`);
-                // Opcional: focar no sistema se necessário
-                // focusSystem(nearest.system.id);
+                const systemName = nearest.system.name;
+                const normalizedSystemName = normalizeText(systemName);
+                const normalizedSuggested = suggestedLine ? normalizeText(suggestedLine) : null;
+
+                let responseText = "";
+                
+                if (normalizedSuggested) {
+                    // O usuário perguntou: "Estou na [suggestedLine]?"
+                    const isCorrect = normalizedSystemName.includes(normalizedSuggested) || normalizedSuggested.includes(normalizedSystemName);
+                    
+                    if (isCorrect) {
+                        responseText = `Sim, você está na linha ${systemName}`;
+                    } else {
+                        responseText = `Não, você não está na linha ${suggestedLine}. Você está na linha ${systemName}`;
+                    }
+                } else {
+                    // Pergunta genérica: "Onde estou?"
+                    responseText = `Você está na linha ${systemName}`;
+                }
+
+                showFeedback(responseText.toUpperCase());
+                speak(responseText);
             } else {
-                showFeedback("LINHA NÃO ENCONTRADA NESSE LOCAL");
+                const errorMsg = "Não encontrei nenhuma linha mapeada neste local.";
+                showFeedback(errorMsg.toUpperCase());
+                speak(errorMsg);
             }
         } catch (err) {
+            const errorMsg = "Erro ao buscar geolocalização. Verifique se o GPS está ativo.";
             showFeedback("ERRO AO BUSCAR GPS");
+            speak(errorMsg);
             console.error(err);
         }
-    }, [getCurrentPosition, findNearestSystem, systems, showFeedback]);
+    }, [getCurrentPosition, findNearestSystem, systems, showFeedback, speak]);
 
     const handleFromToNavigation = useCallback((from: string, to: string) => {
         setIsFromToModalOpen(false);
