@@ -1,10 +1,12 @@
 
-import React, { useState, useEffect } from 'react';
-import { OrbitalSystem, Satellite, Tour } from '../types';
+import React, { useState, useEffect, useCallback } from 'react';
+import { OrbitalSystem, Satellite, Tour, LocationData } from '../types';
 import { TourAdmin } from './TourAdmin';
+import { useGeolocation } from '../hooks/useGeolocation';
 
 interface AdminPanelProps {
     systemToEdit: OrbitalSystem | '__NEW__';
+// ... rest of props same
     systems: OrbitalSystem[];
     tours: Tour[];
     setTours: React.Dispatch<React.SetStateAction<Tour[]>>;
@@ -23,6 +25,7 @@ const NEW_SYSTEM_TEMPLATE: Omit<OrbitalSystem, 'id'> = {
 export const AdminPanel: React.FC<AdminPanelProps> = React.memo(({ systemToEdit, systems, tours, setTours, onSave, onDelete, onClose }) => {
     const [formState, setFormState] = useState<OrbitalSystem | null>(null);
     const [activeTab, setActiveTab] = useState<'systems' | 'tours'>('systems');
+    const { isLocating, getCurrentPosition } = useGeolocation();
 
     useEffect(() => {
         if (systemToEdit) {
@@ -148,6 +151,61 @@ export const AdminPanel: React.FC<AdminPanelProps> = React.memo(({ systemToEdit,
                                         <div>
                                             <label htmlFor="sys-modals" className={labelClasses}>URLs do Modal (um por linha)</label>
                                             <textarea id="sys-modals" rows={3} value={formState.modalUrls.join('\n')} onChange={e => handleInputChange('modalUrls', e.target.value.split('\n').filter(url => url.trim() !== ''))} className={inputClasses}></textarea>
+                                        </div>
+
+                                        <div className="border-t border-purple-500/20 pt-4 mt-2">
+                                            <label className={labelClasses}>Localização GPS (Mapeamento)</label>
+                                            <div className="flex items-center gap-4 bg-slate-800/30 p-4 rounded-lg border border-slate-700/50">
+                                                <div className="flex-grow">
+                                                    {formState.locationData ? (
+                                                        <div className="grid grid-cols-2 gap-2 text-xs">
+                                                            <div className="text-slate-400">Lat: <span className="text-white font-mono">{formState.locationData.latitude.toFixed(6)}</span></div>
+                                                            <div className="text-slate-400">Lon: <span className="text-white font-mono">{formState.locationData.longitude.toFixed(6)}</span></div>
+                                                            {formState.locationData.altitude && (
+                                                                <div className="text-slate-400 col-span-2">Alt: <span className="text-white font-mono">{formState.locationData.altitude.toFixed(2)}m</span></div>
+                                                            )}
+                                                            <div className="text-purple-400 text-[10px] mt-1 col-span-2">Mapeado em: {new Date(formState.locationData.timestamp).toLocaleString()}</div>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-sm text-slate-500 italic">Ponto não mapeado</div>
+                                                    )}
+                                                </div>
+                                                <button 
+                                                    onClick={async (e) => {
+                                                        e.preventDefault();
+                                                        try {
+                                                            const loc = await getCurrentPosition();
+                                                            handleInputChange('locationData', loc);
+                                                        } catch (err) {
+                                                            alert(err);
+                                                        }
+                                                    }}
+                                                    disabled={isLocating}
+                                                    className={`px-4 py-2 rounded-md font-bold transition-all duration-300 text-xs border-2 flex items-center gap-2 ${
+                                                        isLocating 
+                                                        ? 'bg-slate-700 border-slate-600 animate-pulse' 
+                                                        : 'bg-indigo-600/50 border-indigo-500 hover:bg-indigo-600'
+                                                    }`}
+                                                >
+                                                    {isLocating ? (
+                                                        <>
+                                                            <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                            </svg>
+                                                            Buscando...
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                            </svg>
+                                                            Mapear Local Atual
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
 

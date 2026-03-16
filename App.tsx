@@ -16,9 +16,9 @@ import { FeedbackMessage } from './components/FeedbackMessage';
 import { MapModal } from './components/MapModal';
 import { UpdatePrompt } from './components/UpdatePrompt';
 import { useRegisterSW } from 'virtual:pwa-register/react';
-import { usePreloadProgress } from './hooks/usePreloadProgress';
-import { OfflineSetupProgress } from './components/OfflineSetupProgress';
 import { FromToModal } from './components/FromToModal';
+import { useGeolocation } from './hooks/useGeolocation';
+import { usePreloadProgress } from './hooks/usePreloadProgress';
 
 const App: React.FC = () => {
     const [modalImages, setModalImages] = useState<string[]>([]);
@@ -211,6 +211,12 @@ const App: React.FC = () => {
         onResult: (transcript) => {
             console.log("🎤 App: Recebido transcript:", transcript);
             
+            const lowerTranscript = transcript.toLowerCase();
+            if (lowerTranscript.includes("onde estou") || lowerTranscript.includes("qual linha") || lowerTranscript.includes("que linha")) {
+                handleWhereAmI();
+                return;
+            }
+
             // 0. Check if it's a "From-To" command
             const fromTo = parseFromToCommand(transcript);
             if (fromTo) {
@@ -421,6 +427,27 @@ const App: React.FC = () => {
     const handleCloseMapModal = useCallback(() => setIsMapModalOpen(false), []);
     const handleOpenFromToModal = useCallback(() => setIsFromToModalOpen(true), []);
     const handleCloseFromToModal = useCallback(() => setIsFromToModalOpen(false), []);
+
+    const { getCurrentPosition, findNearestSystem, isLocating: isLocatingGPS } = useGeolocation();
+
+    const handleWhereAmI = useCallback(async () => {
+        showFeedback("BUSCANDO LOCALIZAÇÃO...");
+        try {
+            const currentPos = await getCurrentPosition();
+            const nearest = findNearestSystem(currentPos, systems);
+
+            if (nearest) {
+                showFeedback(`VOCÊ ESTÁ NA: ${nearest.system.name.toUpperCase()}`);
+                // Opcional: focar no sistema se necessário
+                // focusSystem(nearest.system.id);
+            } else {
+                showFeedback("LINHA NÃO ENCONTRADA NESSE LOCAL");
+            }
+        } catch (err) {
+            showFeedback("ERRO AO BUSCAR GPS");
+            console.error(err);
+        }
+    }, [getCurrentPosition, findNearestSystem, systems, showFeedback]);
 
     const handleFromToNavigation = useCallback((from: string, to: string) => {
         setIsFromToModalOpen(false);
