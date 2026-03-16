@@ -6,7 +6,7 @@ import { useGeolocation } from '../hooks/useGeolocation';
 
 interface AdminPanelProps {
     systemToEdit: OrbitalSystem | '__NEW__';
-// ... rest of props same
+    // ... rest of props same
     systems: OrbitalSystem[];
     tours: Tour[];
     setTours: React.Dispatch<React.SetStateAction<Tour[]>>;
@@ -173,7 +173,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = React.memo(({ systemToEdit,
                                                         <div className="text-sm text-slate-500 italic">Ponto não mapeado</div>
                                                     )}
                                                 </div>
-                                                <button 
+                                                <button
                                                     onClick={async (e) => {
                                                         e.preventDefault();
                                                         try {
@@ -189,11 +189,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = React.memo(({ systemToEdit,
                                                         }
                                                     }}
                                                     disabled={isLocating}
-                                                    className={`px-4 py-2 rounded-md font-bold transition-all duration-300 text-xs border-2 flex items-center gap-2 ${
-                                                        isLocating 
-                                                        ? 'bg-slate-700 border-slate-600 animate-pulse' 
-                                                        : 'bg-indigo-600/50 border-indigo-500 hover:bg-indigo-600'
-                                                    }`}
+                                                    className={`px-4 py-2 rounded-md font-bold transition-all duration-300 text-xs border-2 flex items-center gap-2 ${isLocating
+                                                            ? 'bg-slate-700 border-slate-600 animate-pulse'
+                                                            : 'bg-indigo-600/50 border-indigo-500 hover:bg-indigo-600'
+                                                        }`}
                                                 >
                                                     {isLocating ? (
                                                         <>
