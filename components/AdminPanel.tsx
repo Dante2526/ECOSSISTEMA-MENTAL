@@ -25,7 +25,7 @@ const NEW_SYSTEM_TEMPLATE: Omit<OrbitalSystem, 'id'> = {
 export const AdminPanel: React.FC<AdminPanelProps> = React.memo(({ systemToEdit, systems, tours, setTours, onSave, onDelete, onClose }) => {
     const [formState, setFormState] = useState<OrbitalSystem | null>(null);
     const [activeTab, setActiveTab] = useState<'systems' | 'tours'>('systems');
-    const { isLocating, getStablePosition } = useGeolocation();
+    const { isLocating, getStablePosition, startWatching, stopWatching, lastLocation } = useGeolocation();
 
     useEffect(() => {
         if (systemToEdit) {

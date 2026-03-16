@@ -484,7 +484,7 @@ const App: React.FC = () => {
     const handleWhereAmI = useCallback(async (suggestedLine?: string) => {
         showFeedback("BUSCANDO LOCALIZAÇÃO...");
         try {
-            const currentPos = await getCurrentPosition();
+            const currentPos = await getStablePosition(1);
             
             // Log para debug no console do administrador
             console.log(`📍 GPS: Lat=${currentPos.latitude}, Lon=${currentPos.longitude}, Acurácia=${currentPos.accuracy}m`);
