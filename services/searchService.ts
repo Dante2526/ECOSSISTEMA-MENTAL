@@ -87,6 +87,10 @@ export function applyPhoneticCorrections(transcript: string): string {
         .replace(/(\d)\s+[aeo]\s+(\d)/g, '$1 $2')
         .replace(/[、]/g, ' ') 
         .replace(/\by\b/g, ' e ') 
+        // Normalização de sufixos alfanuméricos (ex: "201 a" -> "201a", "201 bê" -> "201b")
+        .replace(/\b(\d+)\s+([ab])\b/g, '$1$2')
+        .replace(/\b(\d+)\s+be\b/g, '$1b')
+        .replace(/\b(\d+)\s+be\b/g, '$1b')
         .replace(/\s+/g, ' ')
         .trim();
 
