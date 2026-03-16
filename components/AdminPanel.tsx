@@ -157,9 +157,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = React.memo(({ systemToEdit,
 
                                         <div className="border-t border-purple-500/20 pt-4 mt-2">
                                             <label className={labelClasses}>Localização GPS (Mapeamento)</label>
-    const { isLocating, getStablePosition } = useGeolocation();
-
-// ... dentro do return, seção de GPS ...
                                             <div className="flex items-center gap-4 bg-slate-800/30 p-4 rounded-lg border border-slate-700/50">
                                                 <div className="flex-grow">
                                                     {formState.locationData ? (
