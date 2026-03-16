@@ -18,6 +18,8 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
     const audioChunksRef = useRef<Float32Array[]>([]);
 
     const callbacksRef = useRef({ onStart, onEnd, onError, onResult });
+    const processingTimeoutRef = useRef<number | null>(null);
+
     useEffect(() => {
         callbacksRef.current = { onStart, onEnd, onError, onResult };
     }, [onStart, onEnd, onError, onResult]);
@@ -40,6 +42,10 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
                     setIsProcessing(true);
                 }
             } else if (type === 'RESULT') {
+                if (processingTimeoutRef.current) {
+                    clearTimeout(processingTimeoutRef.current);
+                    processingTimeoutRef.current = null;
+                }
                 setIsProcessing(false);
                 setIsLoadingModel(false);
                 console.log("------------------------------------------");
@@ -50,6 +56,10 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
                 }
                 callbacksRef.current.onEnd?.();
             } else if (type === 'ERROR') {
+                if (processingTimeoutRef.current) {
+                    clearTimeout(processingTimeoutRef.current);
+                    processingTimeoutRef.current = null;
+                }
                 setIsProcessing(false);
                 setIsLoadingModel(false);
                 console.error("⚡ [Whisper Hook] Erro no worker:", error);
@@ -105,6 +115,17 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
             }
 
             console.log(`⚡ [Whisper Hook] Enviando ${mergedArray.length} samples para o worker.`);
+            
+            // Timeout de segurança: 15 segundos para processar
+            if (processingTimeoutRef.current) clearTimeout(processingTimeoutRef.current);
+            processingTimeoutRef.current = window.setTimeout(() => {
+                console.error("⚡ [Whisper Hook] Timeout de processamento atingido.");
+                setIsProcessing(false);
+                setIsLoadingModel(false);
+                callbacksRef.current.onError?.("timeout");
+                callbacksRef.current.onEnd?.();
+            }, 15000);
+
             workerRef.current?.postMessage({
                 audio: mergedArray,
                 language: 'portuguese'

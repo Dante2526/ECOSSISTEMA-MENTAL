@@ -12,7 +12,7 @@ class WhisperWorker {
         if (this.instance === null) {
             console.log("⚡ [Whisper Worker] Carregando Pipeline ASR (OpenAI Whisper - modo alta precisão)...");
             try {
-                this.instance = await pipeline('automatic-speech-recognition', 'Xenova/whisper-base', {
+                this.instance = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
                     quantized: true,
                     progress_callback
                 });
@@ -82,7 +82,7 @@ self.onmessage = async (event) => {
             return_timestamps: false,
             // Parâmetros de geração passados via generate_kwargs
             generate_kwargs: {
-                max_new_tokens: 24, // Limite agressivo para resposta instantânea (< 5s)
+                max_new_tokens: 16, // Resposta quase instantânea
                 repetition_penalty: 1.8, // Bloqueio total de loops
                 no_repeat_ngram_size: 3, // Mais rigoroso
                 do_sample: false,

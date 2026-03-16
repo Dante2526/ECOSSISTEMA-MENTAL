@@ -114,6 +114,8 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
 
         // 4. Pré-carregar Model Whisper (Xenova) via Worker para garantir cache 100%
         const preloadWhisperModel = () => {
+            if (localStorage.getItem(CACHE_FLAG) === 'true') return;
+            
             console.log("⚡ [PWA] Iniciando Worker para download da IA...");
             
             // Criamos um worker temporário apenas para o preload
@@ -183,16 +185,18 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
         };
         setTimeout(loadNextBatch, 2000);
 
-        // Preload do Whisper via Worker (silencioso e sem barra de progresso)
-        const silentWorker = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), {
-            type: 'module'
-        });
-        silentWorker.onmessage = (e) => {
-            if (e.data.type === 'PRELOAD_DONE' || e.data.type === 'PRELOAD_ERROR') {
-                silentWorker.terminate();
-            }
-        };
-        silentWorker.postMessage({ type: 'PRELOAD' });
+        // Preload do Whisper via Worker (apenas se não houver flag de sucesso)
+        if (localStorage.getItem('ecossistema_offline_ready_v2') !== 'true') {
+            const silentWorker = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), {
+                type: 'module'
+            });
+            silentWorker.onmessage = (e) => {
+                if (e.data.type === 'PRELOAD_DONE' || e.data.type === 'PRELOAD_ERROR') {
+                    silentWorker.terminate();
+                }
+            };
+            silentWorker.postMessage({ type: 'PRELOAD' });
+        }
     };
 
 
