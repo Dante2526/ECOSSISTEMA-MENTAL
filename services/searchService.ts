@@ -52,7 +52,10 @@ export function applyPhoneticCorrections(transcript: string): string {
         'um seis seis': '166', '16': '166',
         'um seis sete': '167', '17': '167',
         'um seis oito': '168', '18': '168',
-        'meio': '6', 'mei': '6'
+        'meio': '6', 'mei': '6',
+        // Confusões Fonéticas T/D e P/B (Offline Whisper)
+        'dp': 'tp', 'depe': 'tp', 'de pe': 'tp', 'dp01': 'tp01', 'dp1': 'tp1',
+        'b13': 'p13', 'b 13': 'p13', 'be 13': 'p13', 'b13b': 'p13b', 'b13 b': 'p13b'
     };
 
     const fillerWords = ['então', 'tipo', 'eh', 'ah', 'hmm', 'quero', 'procurar', 'ir', 'no', 'na', 'para', 'veja', 'mostre', 'me', 'por', 'favor', 'linhas', 'dos', 'das', 'a', 'o', 'e'];
@@ -137,11 +140,18 @@ export function applyPhoneticCorrections(transcript: string): string {
     corrected = corrected.replace(/\btrangulo\b/g, 'triangulo');
     corrected = corrected.replace(/\bmeia\b/g, '6'); // "Meia" freq. usado para 6 no Brasil
 
-    // Casos especiais para 65B:
-    // Whisper já retornou "Meia 5p", "e meia cinco de" e "Néia 5b" ao pedir "65B"
     if (corrected === 'meia5p' || corrected === 'meia5' || corrected === 'neia5b') {
         corrected = '65b';
     }
+
+    // 5. Correções de T/D e P/B via Regex para prefixos de códigos
+    corrected = corrected
+        .replace(/^dp(\d+)/g, 'tp$1') // dp01 -> tp01
+        .replace(/^b(\d+)/g, 'p$1')  // b13 -> p13
+        .replace(/\bdepe\b/g, 'tp')
+        .replace(/\btepe\b/g, 'tp')
+        .replace(/\btp\s+(\d+)/g, 'tp$1') // tp 01 -> tp01
+        .replace(/\bp\s+(\d+)/g, 'p$1');  // p 13 -> p13
 
     return corrected;
 }
