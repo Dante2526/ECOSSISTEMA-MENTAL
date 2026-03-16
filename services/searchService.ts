@@ -60,7 +60,11 @@ export function applyPhoneticCorrections(transcript: string): string {
         // Casos de Falha do Número 1 (TP01) - Apenas transcrições específicas confirmadas
         'atepeu': 'tp01', 'tepeu': 'tp01', 'tep eu': 'tp01', 'depele': 'tp01', 'tem pesarum': 'tp01', 'tem pezaram': 'tp01', '3-01': 'tp01',
         // Casos de Falha da TP05
-        'tem 5': 'tp05', 'tem cinco': 'tp05', 'tem cinquo': 'tp05'
+        'tem 5': 'tp05', 'tem cinco': 'tp05', 'tem cinquo': 'tp05',
+        't p 5': 'tp05', 't p cinco': 'tp05', 'te pe cinco': 'tp05', 'te pe 5': 'tp05',
+        'tepe cinco': 'tp05', 'tepe 5': 'tp05', 'tepê cinco': 'tp05', 'tepê 5': 'tp05',
+        'tê pê cinco': 'tp05', 'tê pê 5': 'tp05', 'dp 5': 'tp05', 'dp cinco': 'tp05',
+        'dê pê 5': 'tp05', 'dê pê cinco': 'tp05', 'cp 5': 'tp05', 'cp cinco': 'tp05'
     };
 
     const fillerWords = ['então', 'tipo', 'eh', 'ah', 'hmm', 'quero', 'procurar', 'ir', 'no', 'na', 'para', 'veja', 'mostre', 'me', 'por', 'favor', 'linhas', 'dos', 'das', 'a', 'o', 'e'];
@@ -68,6 +72,12 @@ export function applyPhoneticCorrections(transcript: string): string {
     let corrected = transcript.toLowerCase()
         .replace(/½/g, ' meia ')
         .replace(/\b1\/2\b/g, ' um meia ') 
+        // Uni-letras: unir "t p" ou "t e p e" em "tp"
+        .replace(/\bt\s+p\b/g, 'tp')
+        .replace(/\bt\s+e\s+p\s+e\b/g, 'tp')
+        .replace(/\bt\u00EA\s+p\u00EA\b/g, 'tp') // tê pê
+        .replace(/\bd\s+p\b/g, 'tp')
+        .replace(/\bd\s+e\s+p\s+e\b/g, 'tp')
         // Política Anti-Matemática: 1,5 -> 165, 1,3 -> 163, etc.
         // O Whisper entende "um meia X" como "1,X"
         .replace(/\b1[,.](\d)\b/g, '16$1')
