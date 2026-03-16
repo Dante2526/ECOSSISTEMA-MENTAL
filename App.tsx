@@ -530,7 +530,7 @@ const App: React.FC = () => {
             speak(errorMsg);
             console.error(err);
         }
-    }, [getCurrentPosition, findNearestSystem, systems, showFeedback, speak]);
+    }, [getStablePosition, findNearestSystem, systems, showFeedback, speak]);
 
     const handleFromToNavigation = useCallback((from: string, to: string) => {
         setIsFromToModalOpen(false);
