@@ -50,6 +50,37 @@ export function useGeolocation() {
         });
     }, []);
 
+    const getStablePosition = useCallback(async (samples: number = 5): Promise<LocationData> => {
+        setIsLocating(true);
+        setError(null);
+
+        const posSamples: LocationData[] = [];
+        
+        for (let i = 0; i < samples; i++) {
+            try {
+                const pos = await getCurrentPosition();
+                posSamples.push(pos);
+                // Pequeno intervalo entre amostras para permitir que o hardware se estabilize
+                await new Promise(r => setTimeout(r, 500));
+            } catch (e) {
+                console.warn(`Amostra ${i+1} falhou, continuando...`);
+            }
+        }
+
+        setIsLocating(false);
+
+        if (posSamples.length === 0) {
+            throw new Error("Não foi possível obter nenhuma amostra de GPS estável.");
+        }
+
+        // Retorna a amostra com a menor acurácia (menor erro em metros)
+        return posSamples.reduce((best, current) => {
+            if (!best.accuracy) return current;
+            if (!current.accuracy) return best;
+            return current.accuracy < best.accuracy ? current : best;
+        });
+    }, [getCurrentPosition]);
+
     // Cálculo Haversine para distância em metros
     const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
         const R = 6371e3; // Raio da Terra em metros
@@ -93,6 +124,7 @@ export function useGeolocation() {
         isLocating,
         error,
         getCurrentPosition,
+        getStablePosition,
         findNearestSystem
     };
 }

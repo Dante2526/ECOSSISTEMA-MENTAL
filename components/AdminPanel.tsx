@@ -25,7 +25,7 @@ const NEW_SYSTEM_TEMPLATE: Omit<OrbitalSystem, 'id'> = {
 export const AdminPanel: React.FC<AdminPanelProps> = React.memo(({ systemToEdit, systems, tours, setTours, onSave, onDelete, onClose }) => {
     const [formState, setFormState] = useState<OrbitalSystem | null>(null);
     const [activeTab, setActiveTab] = useState<'systems' | 'tours'>('systems');
-    const { isLocating, getCurrentPosition } = useGeolocation();
+    const { isLocating, getStablePosition } = useGeolocation();
 
     useEffect(() => {
         if (systemToEdit) {
@@ -155,14 +155,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = React.memo(({ systemToEdit,
 
                                         <div className="border-t border-purple-500/20 pt-4 mt-2">
                                             <label className={labelClasses}>Localização GPS (Mapeamento)</label>
+    const { isLocating, getStablePosition } = useGeolocation();
+
+// ... dentro do return, seção de GPS ...
                                             <div className="flex items-center gap-4 bg-slate-800/30 p-4 rounded-lg border border-slate-700/50">
                                                 <div className="flex-grow">
                                                     {formState.locationData ? (
                                                         <div className="grid grid-cols-2 gap-2 text-xs">
                                                             <div className="text-slate-400">Lat: <span className="text-white font-mono">{formState.locationData.latitude.toFixed(6)}</span></div>
                                                             <div className="text-slate-400">Lon: <span className="text-white font-mono">{formState.locationData.longitude.toFixed(6)}</span></div>
+                                                            <div className="text-slate-400">Precisão: <span className={`font-mono ${(formState.locationData.accuracy || 0) <= 10 ? 'text-emerald-400' : 'text-amber-400'}`}>±{formState.locationData.accuracy?.toFixed(1)}m</span></div>
                                                             {formState.locationData.altitude && (
-                                                                <div className="text-slate-400 col-span-2">Alt: <span className="text-white font-mono">{formState.locationData.altitude.toFixed(2)}m</span></div>
+                                                                <div className="text-slate-400">Alt: <span className="text-white font-mono">{formState.locationData.altitude.toFixed(2)}m</span></div>
                                                             )}
                                                             <div className="text-purple-400 text-[10px] mt-1 col-span-2">Mapeado em: {new Date(formState.locationData.timestamp).toLocaleString()}</div>
                                                         </div>
@@ -174,7 +178,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = React.memo(({ systemToEdit,
                                                     onClick={async (e) => {
                                                         e.preventDefault();
                                                         try {
-                                                            const loc = await getCurrentPosition();
+                                                            const loc = await getStablePosition(5); // 5 amostras para mapeamento definitivo
+                                                            if (loc.accuracy && loc.accuracy > 15) {
+                                                                if (!window.confirm(`Atenção: A precisão do GPS está baixa (${Math.round(loc.accuracy)}m). Deseja mapear assim mesmo? Em campo, tente céu aberto.`)) {
+                                                                    return;
+                                                                }
+                                                            }
                                                             handleInputChange('locationData', loc);
                                                         } catch (err) {
                                                             alert(err);
