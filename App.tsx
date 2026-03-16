@@ -480,7 +480,16 @@ const App: React.FC = () => {
         showFeedback("BUSCANDO LOCALIZAÇÃO...");
         try {
             const currentPos = await getCurrentPosition();
+            
+            // Log para debug no console do administrador
+            console.log(`📍 GPS: Lat=${currentPos.latitude}, Lon=${currentPos.longitude}, Acurácia=${currentPos.accuracy}m`);
+
             const nearest = findNearestSystem(currentPos, systems);
+
+            // Se a acurácia for ruim (ex: > 15m), avisar o usuário
+            if (currentPos.accuracy && currentPos.accuracy > 15) {
+                showFeedback(`SINAL GPS FRACO: ${Math.round(currentPos.accuracy)} METROS.`);
+            }
 
             if (nearest) {
                 const systemName = nearest.system.name;

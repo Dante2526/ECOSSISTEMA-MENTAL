@@ -25,6 +25,7 @@ export function useGeolocation() {
                         latitude: position.coords.latitude,
                         longitude: position.coords.longitude,
                         altitude: position.coords.altitude,
+                        accuracy: position.coords.accuracy,
                         timestamp: position.timestamp
                     };
                     setIsLocating(false);
@@ -65,7 +66,7 @@ export function useGeolocation() {
         return R * c;
     };
 
-    const findNearestSystem = useCallback((currentLoc: LocationData, systems: OrbitalSystem[], maxDistance: number = 50) => {
+    const findNearestSystem = useCallback((currentLoc: LocationData, systems: OrbitalSystem[], maxDistance: number = 20) => {
         let nearest: { system: OrbitalSystem; distance: number } | null = null;
 
         systems.forEach(system => {
