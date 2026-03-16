@@ -220,7 +220,16 @@ const App: React.FC = () => {
             console.log("🎤 App: Recebido transcript:", transcript);
             
             const lowerTranscript = transcript.toLowerCase();
-            if (lowerTranscript.includes("onde estou") || lowerTranscript.includes("qual linha") || lowerTranscript.includes("que linha")) {
+            const isLocationQuery = 
+                lowerTranscript.includes("onde estou") || 
+                lowerTranscript.includes("qual linha") || 
+                lowerTranscript.includes("que linha") ||
+                lowerTranscript.includes("estou em qual") ||
+                lowerTranscript.includes("minha localização") ||
+                lowerTranscript.includes("em que local estou") ||
+                (lowerTranscript.includes("estou na") && lowerTranscript.length < 30); // Evita pegar frases longas que não sejam perguntas de localização
+
+            if (isLocationQuery) {
                 handleWhereAmI();
                 return;
             }
