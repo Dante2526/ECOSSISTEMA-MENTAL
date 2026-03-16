@@ -60,9 +60,20 @@ export const FromToModal: React.FC<FromToModalProps> = ({ isOpen, onClose, onNav
                                 ref={fromInputRef}
                                 type="text"
                                 value={fromValue}
-                                onChange={e => setFromValue(e.target.value)}
+                                onChange={e => {
+                                    const start = e.target.selectionStart;
+                                    const end = e.target.selectionEnd;
+                                    const val = e.target.value.toUpperCase();
+                                    setFromValue(val);
+                                    // Preserva posição do cursor após o render
+                                    requestAnimationFrame(() => {
+                                        if (e.target) {
+                                            e.target.setSelectionRange(start, end);
+                                        }
+                                    });
+                                }}
                                 placeholder="Ex: 152, Oficina..."
-                                className="w-full bg-slate-800/50 border border-slate-700 focus:border-purple-500 rounded-xl px-4 py-3 text-white placeholder-slate-500 transition-all outline-none"
+                                className="w-full bg-slate-800/50 border border-slate-700 focus:border-purple-500 rounded-xl px-4 py-3 text-white placeholder-slate-500 transition-all outline-none uppercase"
                             />
                             <div className="absolute right-3 top-3.5 text-xs text-purple-500/50 font-bold uppercase">De</div>
                         </div>
@@ -82,9 +93,19 @@ export const FromToModal: React.FC<FromToModalProps> = ({ isOpen, onClose, onNav
                             <input
                                 type="text"
                                 value={toValue}
-                                onChange={e => setToValue(e.target.value)}
+                                onChange={e => {
+                                    const start = e.target.selectionStart;
+                                    const end = e.target.selectionEnd;
+                                    const val = e.target.value.toUpperCase();
+                                    setToValue(val);
+                                    requestAnimationFrame(() => {
+                                        if (e.target) {
+                                            e.target.setSelectionRange(start, end);
+                                        }
+                                    });
+                                }}
                                 placeholder="Ex: 167, Pial..."
-                                className="w-full bg-slate-800/50 border border-slate-700 focus:border-emerald-500 rounded-xl px-4 py-3 text-white placeholder-slate-500 transition-all outline-none"
+                                className="w-full bg-slate-800/50 border border-slate-700 focus:border-emerald-500 rounded-xl px-4 py-3 text-white placeholder-slate-500 transition-all outline-none uppercase"
                             />
                             <div className="absolute right-3 top-3.5 text-xs text-emerald-500/50 font-bold uppercase">Para</div>
                         </div>

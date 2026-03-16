@@ -8,7 +8,9 @@ export function normalizeText(text: string | null | undefined): string {
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
         .replace(/<br>/g, '') // remove html tags from satellite names
-        .replace(/[^a-z0-9]/g, ''); // remove all non-alphanumeric chars
+        .replace(/[^a-z0-9]/g, '') // remove all non-alphanumeric chars
+        .replace(/([a-z]+)0+([1-9]\d*)/g, '$1$2') // tp04 -> tp4, tp010 -> tp10
+        .replace(/([a-z]+)0+$/g, '$10'); // tp000 -> tp0
 }
 
 export function applyPhoneticCorrections(transcript: string): string {
@@ -37,6 +39,7 @@ export function applyPhoneticCorrections(transcript: string): string {
         'tp doisb': 'tp2b', 'tepe': 'tp', 'te pe': 'tp', 'tp2 b': 'tp2b',
         'tep dois b': 'tp2b', 'tepê': 'tp', 'tp dois bê': 'tp2b',
         'tp zero um': 'tp01', 'tepe zero um': 'tp01', 'tepe 01': 'tp01',
+        'tp zero quatro': 'tp04', 'tepe zero quatro': 'tp04', 'tp 4': 'tp4', 'tepe 4': 'tp4',
         'dois zero um b': '201b', 'dois zero um bê': '201b',
         'um meia sete': '167', 'um meia set': '167', 'um me sete': '167',
         'cento e sessenta e sete': '167', 'cento sessenta e sete': '167',
