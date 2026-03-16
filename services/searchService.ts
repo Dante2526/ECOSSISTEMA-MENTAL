@@ -64,7 +64,9 @@ export function applyPhoneticCorrections(transcript: string): string {
         't p 5': 'tp05', 't p cinco': 'tp05', 'te pe cinco': 'tp05', 'te pe 5': 'tp05',
         'tepe cinco': 'tp05', 'tepe 5': 'tp05', 'tepê cinco': 'tp05', 'tepê 5': 'tp05',
         'tê pê cinco': 'tp05', 'tê pê 5': 'tp05', 'dp 5': 'tp05', 'dp cinco': 'tp05',
-        'dê pê 5': 'tp05', 'dê pê cinco': 'tp05', 'cp 5': 'tp05', 'cp cinco': 'tp05'
+        'dê pê 5': 'tp05', 'dê pê cinco': 'tp05', 'cp 5': 'tp05', 'cp cinco': 'tp05',
+        // P-lines phonetic
+        'pe treze': 'p13', 'pe quatorze': 'p14', 'pe quinze': 'p15', 'pe dezessete': 'p17', 'pe dezessis': 'p16', 'pe dezesseis': 'p16'
     };
 
     const fillerWords = ['então', 'tipo', 'eh', 'ah', 'hmm', 'quero', 'procurar', 'ir', 'no', 'na', 'para', 'veja', 'mostre', 'me', 'por', 'favor', 'linhas', 'dos', 'das', 'a', 'o', 'e', 'vamos', 'vamu', 'vamus', 'bora'];
@@ -87,10 +89,20 @@ export function applyPhoneticCorrections(transcript: string): string {
         .replace(/(\d)\s+[aeo]\s+(\d)/g, '$1 $2')
         .replace(/[、]/g, ' ') 
         .replace(/\by\b/g, ' e ') 
-        // Normalização de sufixos alfanuméricos (ex: "201 a" -> "201a", "201 bê" -> "201b")
-        .replace(/\b(\d+)\s+([ab])\b/g, '$1$2')
-        .replace(/\b(\d+)\s+be\b/g, '$1b')
-        .replace(/\b(\d+)\s+be\b/g, '$1b')
+        // Normalização de sufixos alfanuméricos (ex: "201 a" -> "201a", "P 13, B" -> "p13b")
+        // Agora aceita vírgula ou ponto opcional entre número e letra
+        .replace(/\b(\d+)\s*[,.]?\s*([ab])\b/g, '$1$2')
+        .replace(/\b(\d+)\s*[,.]?\s*be\b/g, '$1b')
+        
+        // Unir prefixos P/TP (ex: "p 13" -> "p13", "p 1, 3" -> "p13")
+        // Esta regra vem ANTES da regra do 160 para proteger os códigos P.
+        .replace(/\b(tp|p)\s*[,.]?\s*(\d)\s*[,.]?\s*(\d)\b/g, '$1$2$3')
+        .replace(/\b(tp|p)\s*[,.]?\s*(\d+)\b/g, '$1$2')
+
+        // Política Anti-Matemática: 1,5 -> 165, 1,3 -> 163, etc. (Usado no Whisper Mobile)
+        // PROTEÇÃO: Não aplica se o termo anterior for P ou TP (com ou sem espaço)
+        .replace(/(?<!tp|tp\s|p|p\s)\b1[,.](\d)\b/g, '16$1')
+        
         .replace(/\s+/g, ' ')
         .trim();
 
