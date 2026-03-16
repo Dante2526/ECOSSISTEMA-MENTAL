@@ -30,6 +30,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = React.memo(({ systemToEdit,
     useEffect(() => {
         if (systemToEdit) {
             setActiveTab('systems'); // Garante que a aba de sistemas esteja ativa ao editar/adicionar
+            startWatching(); // Liga o GPS "Quente"
             if (systemToEdit === '__NEW__') {
                 setFormState({ id: `sys_${Date.now()}`, ...NEW_SYSTEM_TEMPLATE });
             } else {
@@ -37,8 +38,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = React.memo(({ systemToEdit,
             }
         } else {
             setFormState(null);
+            stopWatching(); // Desliga o GPS
         }
-    }, [systemToEdit]);
+    }, [systemToEdit, startWatching, stopWatching]);
 
     const handleInputChange = (field: keyof OrbitalSystem, value: any) => {
         if (!formState) return;

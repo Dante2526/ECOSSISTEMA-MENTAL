@@ -450,7 +450,12 @@ const App: React.FC = () => {
     const handleOpenFromToModal = useCallback(() => setIsFromToModalOpen(true), []);
     const handleCloseFromToModal = useCallback(() => setIsFromToModalOpen(false), []);
 
-    const { getCurrentPosition, findNearestSystem, isLocating: isLocatingGPS } = useGeolocation();
+    const { getStablePosition, findNearestSystem, isLocating: isLocatingGPS, startWatching, lastLocation } = useGeolocation();
+
+    // Inicia o monitoramento contínuo logo no início para garantir que o GPS esteja "Quente"
+    useEffect(() => {
+        startWatching();
+    }, [startWatching]);
 
     const speak = useCallback((text: string) => {
         if (!window.speechSynthesis) return;

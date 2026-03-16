@@ -58,7 +58,9 @@ export function applyPhoneticCorrections(transcript: string): string {
         'b13': 'p13', 'b 13': 'p13', 'be 13': 'p13', 'b13b': 'p13b', 'b13 b': 'p13b',
         'beire': 'p', 'beireh': 'p', 'beire 3': 'p13', '3 e b': '13b', 'p 13 b': 'p13b',
         // Casos de Falha do Número 1 (TP01) - Apenas transcrições específicas confirmadas
-        'atepeu': 'tp01', 'tepeu': 'tp01', 'tep eu': 'tp01', 'depele': 'tp01', 'tem pesarum': 'tp01', 'tem pezaram': 'tp01'
+        'atepeu': 'tp01', 'tepeu': 'tp01', 'tep eu': 'tp01', 'depele': 'tp01', 'tem pesarum': 'tp01', 'tem pezaram': 'tp01', '3-01': 'tp01',
+        // Casos de Falha da TP05
+        'tem 5': 'tp05', 'tem cinco': 'tp05', 'tem cinquo': 'tp05'
     };
 
     const fillerWords = ['então', 'tipo', 'eh', 'ah', 'hmm', 'quero', 'procurar', 'ir', 'no', 'na', 'para', 'veja', 'mostre', 'me', 'por', 'favor', 'linhas', 'dos', 'das', 'a', 'o', 'e'];

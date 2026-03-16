@@ -1,10 +1,59 @@
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { LocationData, OrbitalSystem } from '../types';
 
 export function useGeolocation() {
     const [isLocating, setIsLocating] = useState(false);
+    const [isWatching, setIsWatching] = useState(false);
+    const [lastLocation, setLastLocation] = useState<LocationData | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const watchId = useRef<number | null>(null);
+
+    const stopWatching = useCallback(() => {
+        if (watchId.current !== null) {
+            navigator.geolocation.clearWatch(watchId.current);
+            watchId.current = null;
+            setIsWatching(false);
+            console.log("📡 GPS: Monitoramento parado.");
+        }
+    }, []);
+
+    const startWatching = useCallback((highAccuracy: boolean = true) => {
+        if (!navigator.geolocation) return;
+        
+        stopWatching();
+        setIsWatching(true);
+        console.log("📡 GPS: Iniciando monitoramento contínuo (Quente)...");
+
+        watchId.current = navigator.geolocation.watchPosition(
+            (position) => {
+                const data: LocationData = {
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude,
+                    altitude: position.coords.altitude,
+                    accuracy: position.coords.accuracy,
+                    timestamp: position.timestamp
+                };
+                setLastLocation(data);
+                setError(null);
+                // console.log(`📡 GPS Quente: Accuracy=${data.accuracy}m`);
+            },
+            (err) => {
+                console.error("📡 GPS Watch Error:", err);
+                setError("Erro no monitoramento contínuo.");
+            },
+            {
+                enableHighAccuracy: highAccuracy,
+                timeout: 15000,
+                maximumAge: 0
+            }
+        );
+    }, [stopWatching]);
+
+    // Limpeza automática ao desmontar
+    useEffect(() => {
+        return () => stopWatching();
+    }, [stopWatching]);
 
     const getCurrentPosition = useCallback((): Promise<LocationData> => {
         setIsLocating(true);
@@ -29,6 +78,7 @@ export function useGeolocation() {
                         timestamp: position.timestamp
                     };
                     setIsLocating(false);
+                    setLastLocation(data);
                     resolve(data);
                 },
                 (err) => {
@@ -56,11 +106,13 @@ export function useGeolocation() {
 
         const posSamples: LocationData[] = [];
         
+        // Se já estamos assistindo, usamos a última localização como primeira amostra
+        if (lastLocation) posSamples.push(lastLocation);
+        
         for (let i = 0; i < samples; i++) {
             try {
                 const pos = await getCurrentPosition();
                 posSamples.push(pos);
-                // Pequeno intervalo entre amostras para permitir que o hardware se estabilize
                 await new Promise(r => setTimeout(r, 500));
             } catch (e) {
                 console.warn(`Amostra ${i+1} falhou, continuando...`);
@@ -73,17 +125,15 @@ export function useGeolocation() {
             throw new Error("Não foi possível obter nenhuma amostra de GPS estável.");
         }
 
-        // Retorna a amostra com a menor acurácia (menor erro em metros)
         return posSamples.reduce((best, current) => {
             if (!best.accuracy) return current;
             if (!current.accuracy) return best;
             return current.accuracy < best.accuracy ? current : best;
         });
-    }, [getCurrentPosition]);
+    }, [getCurrentPosition, lastLocation]);
 
-    // Cálculo Haversine para distância em metros
     const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-        const R = 6371e3; // Raio da Terra em metros
+        const R = 6371e3; 
         const φ1 = lat1 * Math.PI / 180;
         const φ2 = lat2 * Math.PI / 180;
         const Δφ = (lat2 - lat1) * Math.PI / 180;
@@ -122,7 +172,11 @@ export function useGeolocation() {
 
     return {
         isLocating,
+        isWatching,
+        lastLocation,
         error,
+        startWatching,
+        stopWatching,
         getCurrentPosition,
         getStablePosition,
         findNearestSystem
