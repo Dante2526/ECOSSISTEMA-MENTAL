@@ -62,7 +62,7 @@ const App: React.FC = () => {
 
     const [systems, setSystems] = useState<OrbitalSystemType[]>(() => {
         try {
-            const DATA_VERSION = '1.4'; // Increment to force data reset
+            const DATA_VERSION = '1.5'; // Incrementado para garantir compatibilidade com GPS
             const storedVersion = localStorage.getItem('orbitalDataVersion');
 
             if (storedVersion !== DATA_VERSION) {
@@ -73,7 +73,11 @@ const App: React.FC = () => {
             }
 
             const storedSystems = localStorage.getItem('orbitalSystems');
-            return storedSystems ? JSON.parse(storedSystems) : initialSystems;
+            const parsed = storedSystems ? JSON.parse(storedSystems) : initialSystems;
+            
+            // Validação extra: se não for array, reseta
+            if (!Array.isArray(parsed)) throw new Error("Dados de sistemas corrompidos");
+            return parsed;
         } catch (error) {
             console.error("Falha ao carregar sistemas do localStorage", error);
             localStorage.removeItem('orbitalSystems');
@@ -139,7 +143,7 @@ const App: React.FC = () => {
 
     const [tours, setTours] = useState<Tour[]>(() => {
         try {
-            const TOURS_VERSION = '1.0';
+            const TOURS_VERSION = '1.1'; // Bumping tours version too
             const storedToursVersion = localStorage.getItem('orbitalToursVersion');
             if (storedToursVersion !== TOURS_VERSION) {
                 localStorage.setItem('orbitalToursVersion', TOURS_VERSION);
@@ -147,7 +151,10 @@ const App: React.FC = () => {
                 return DEFAULT_TOURS;
             }
             const storedTours = localStorage.getItem('orbitalTours');
-            return storedTours ? JSON.parse(storedTours) : DEFAULT_TOURS;
+            const parsed = storedTours ? JSON.parse(storedTours) : DEFAULT_TOURS;
+
+            if (!Array.isArray(parsed)) throw new Error("Dados de tours corrompidos");
+            return parsed;
         } catch (error) {
             console.error("Falha ao carregar tours do localStorage", error);
             localStorage.removeItem('orbitalTours');
