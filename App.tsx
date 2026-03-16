@@ -16,6 +16,7 @@ import { FeedbackMessage } from './components/FeedbackMessage';
 import { MapModal } from './components/MapModal';
 import { UpdatePrompt } from './components/UpdatePrompt';
 import { useRegisterSW } from 'virtual:pwa-register/react';
+import { OfflineSetupProgress } from './components/OfflineSetupProgress';
 import { FromToModal } from './components/FromToModal';
 import { useGeolocation } from './hooks/useGeolocation';
 import { usePreloadProgress } from './hooks/usePreloadProgress';
