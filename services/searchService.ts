@@ -67,7 +67,7 @@ export function applyPhoneticCorrections(transcript: string): string {
         'dê pê 5': 'tp05', 'dê pê cinco': 'tp05', 'cp 5': 'tp05', 'cp cinco': 'tp05'
     };
 
-    const fillerWords = ['então', 'tipo', 'eh', 'ah', 'hmm', 'quero', 'procurar', 'ir', 'no', 'na', 'para', 'veja', 'mostre', 'me', 'por', 'favor', 'linhas', 'dos', 'das', 'a', 'o', 'e'];
+    const fillerWords = ['então', 'tipo', 'eh', 'ah', 'hmm', 'quero', 'procurar', 'ir', 'no', 'na', 'para', 'veja', 'mostre', 'me', 'por', 'favor', 'linhas', 'dos', 'das', 'a', 'o', 'e', 'vamos', 'vamu', 'vamus', 'bora'];
 
     let corrected = transcript.toLowerCase()
         .replace(/½/g, ' meia ')
@@ -117,13 +117,13 @@ export function applyPhoneticCorrections(transcript: string): string {
 
     // 4. Remover filler words (especialmente no início e conectores soltos)
     fillerWords.forEach(word => {
-        // Remove no início
-        const startRegex = new RegExp(`^${word}\\s+`, 'i');
-        corrected = corrected.replace(startRegex, '');
-        // Remove conectores soltos que sobraram entre espaços (mas não partes de palavras)
-        const midRegex = new RegExp(`\\s+${word}\\s+`, 'g');
-        corrected = corrected.replace(midRegex, ' ');
+        // Remove com limites de palavra para evitar remover partes de outras palavras
+        const regex = new RegExp(`\\b${word}\\b`, 'gi');
+        corrected = corrected.replace(regex, ' ');
     });
+
+    // Limpeza final de espaços extras gerados pelas substituições
+    corrected = corrected.replace(/\s+/g, ' ').trim();
 
     // Casos especiais para 151:
     // Whisper repetindo "um, um, um, um..."
@@ -279,7 +279,7 @@ export function findMatchingItems(transcript: string, cache: SearchItem[]): Sear
 
     // Tentativa 2: Extração de Números (Prioridade Segura para códigos)
     // Refinamento: Ignorar prefixos comuns que confundem a extração
-    const prefixesToIgnore = ['linha', 'orbe', 'sistema', 'ir para', 'ir', 'para', 'estação', 'camera', 'câmera'];
+    const prefixesToIgnore = ['linha', 'orbe', 'sistema', 'ir para', 'ir', 'para', 'estação', 'camera', 'câmera', 'vamos para', 'vamos', 'vamu', 'vamus'];
     let textForNumericSearch = correctedTranscript.toLowerCase();
     
     // Remover prefixos se eles existirem no início da frase
