@@ -72,6 +72,7 @@ export function applyPhoneticCorrections(transcript: string): string {
     const fillerWords = ['então', 'tipo', 'eh', 'ah', 'hmm', 'quero', 'procurar', 'ir', 'no', 'na', 'para', 'veja', 'mostre', 'me', 'por', 'favor', 'linhas', 'dos', 'das', 'a', 'o', 'e', 'vamos', 'vamu', 'vamus', 'bora'];
 
     let corrected = transcript.toLowerCase()
+        .replace(/-/g, ' ')
         .replace(/½/g, ' meia ')
         .replace(/\b1\/2\b/g, ' um meia ') 
         // Uni-letras: unir "t p" ou "t e p e" em "tp"
@@ -94,10 +95,10 @@ export function applyPhoneticCorrections(transcript: string): string {
         .replace(/\b(\d+)\s*[,.]?\s*([ab])\b/g, '$1$2')
         .replace(/\b(\d+)\s*[,.]?\s*be\b/g, '$1b')
         
-        // Unir prefixos P/TP (ex: "p 13" -> "p13", "p 1, 3" -> "p13")
+        // Unir prefixos P/TP (ex: "p 13" -> "p13", "p 1, 3" -> "p13", "be 17" -> "p17")
         // Esta regra vem ANTES da regra do 160 para proteger os códigos P.
-        .replace(/\b(tp|p)\s*[,.]?\s*(\d)\s*[,.]?\s*(\d)\b/g, '$1$2$3')
-        .replace(/\b(tp|p)\s*[,.]?\s*(\d+)\b/g, '$1$2')
+        .replace(/\b(tp|p|be)\s*[,.]?\s*(\d)\s*[,.]?\s*(\d)\b/g, (m, p1, p2, p3) => (p1 === 'be' ? 'p' : p1) + p2 + p3)
+        .replace(/\b(tp|p|be)\s*[,.]?\s*(\d+)\b/g, (m, p1, p2) => (p1 === 'be' ? 'p' : p1) + p2)
 
         // Política Anti-Matemática: 1,5 -> 165, 1,3 -> 163, etc. (Usado no Whisper Mobile)
         // PROTEÇÃO: Não aplica se o termo anterior for P ou TP (com ou sem espaço)
@@ -295,7 +296,7 @@ export function findMatchingItems(transcript: string, cache: SearchItem[]): Sear
 
     // Tentativa 2: Extração de Números (Prioridade Segura para códigos)
     // Refinamento: Ignorar prefixos comuns que confundem a extração
-    const prefixesToIgnore = ['linha', 'orbe', 'sistema', 'ir para', 'ir', 'para', 'estação', 'camera', 'câmera', 'vamos para', 'vamos', 'vamu', 'vamus'];
+    const prefixesToIgnore = ['linha', 'orbe', 'sistema', 'ir para', 'ir', 'para', 'estação', 'camera', 'câmera', 'vamos para', 'vamos', 'vamu', 'vamus', 'be'];
     let textForNumericSearch = correctedTranscript.toLowerCase();
     
     // Remover prefixos se eles existirem no início da frase
