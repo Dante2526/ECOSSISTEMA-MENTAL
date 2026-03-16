@@ -182,9 +182,9 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
             let energyVariance = 0;
             
             // Thresholds adaptativos
-            const BASE_THRESHOLD = isMobile ? 0.055 : 0.045; 
-            const AUTO_STOP_MS = 1200; 
-            const MAX_RECORDING_MS = 8000; 
+            const BASE_THRESHOLD = isMobile ? 0.040 : 0.035; 
+            const AUTO_STOP_MS = 2500; 
+            const MAX_RECORDING_MS = 12000; 
             const CALIBRATION_FRAMES = 5;
             const startTime = Date.now();
 
@@ -217,7 +217,7 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
                 energyVariance = Math.abs(rms - smoothedRms);
                 
                 // Threshold dinâmico: se o ruído ambiente aumentar, o gate sobe
-                const dynamicThreshold = Math.max(BASE_THRESHOLD, noiseFloor * 2.2);
+                const dynamicThreshold = Math.max(BASE_THRESHOLD, noiseFloor * 1.8);
 
                 if (!hasSpeechStarted) {
                     // Detecção de voz: RMS alto + Variância de energia (voz é dinâmica, ruído é fixo)
