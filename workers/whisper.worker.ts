@@ -82,7 +82,7 @@ self.onmessage = async (event) => {
             return_timestamps: false,
             // Parâmetros de geração passados via generate_kwargs
             generate_kwargs: {
-                max_new_tokens: 16, // Resposta quase instantânea
+                max_new_tokens: 32, // Permite frases mais longas em mobile
                 repetition_penalty: 1.8, // Bloqueio total de loops
                 no_repeat_ngram_size: 3, // Mais rigoroso
                 do_sample: false,

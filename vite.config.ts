@@ -22,12 +22,27 @@ export default defineConfig(({ mode }) => {
           maximumFileSizeToCacheInBytes: 100000000, // 100MB para garantir cache do modelo Whisper
           runtimeCaching: [
             {
-              // Cache de modelos da IA (Whisper) do HuggingFace
+              // Cache de modelos da IA (Whisper) do HuggingFace - Metadados/Config
               // Importante: Manter status [0, 200] para lidar com requisições opaque da Google/HF
               urlPattern: /^https:\/\/huggingface\.co\/Xenova\/.*/i,
               handler: 'CacheFirst',
               options: {
                 cacheName: 'whisper-model-cache',
+                expiration: {
+                  maxEntries: 20,
+                  maxAgeSeconds: 30 * 24 * 60 * 60, // 30 dias
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
+            {
+              // Cache de modelos ONNX do Whisper - CDN LFS (onde os binários realmente são baixados)
+              urlPattern: /^https:\/\/cdn-lfs\.huggingface\.co\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'whisper-model-onnx-cache',
                 expiration: {
                   maxEntries: 20,
                   maxAgeSeconds: 30 * 24 * 60 * 60, // 30 dias

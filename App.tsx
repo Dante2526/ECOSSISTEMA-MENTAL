@@ -198,7 +198,7 @@ const App: React.FC = () => {
         feedbackTimeoutRef.current = window.setTimeout(() => setFeedbackMessage(''), duration);
     }, []);
 
-    const { isListening, isProcessing, isLoadingModel, start, stop, permissionGranted, setPermissionGranted } = useVoiceRecognition({
+    const { isListening, isProcessing, isLoadingModel, modelLoadProgress, start, stop, permissionGranted, setPermissionGranted } = useVoiceRecognition({
         onStart: () => {
             showFeedback("OUVINDO...");
             if (!permissionGranted) setPermissionGranted(true);
@@ -212,6 +212,10 @@ const App: React.FC = () => {
                 showFeedback("NÃO OUVI NADA. TENTE DE NOVO.");
             } else if (error === 'not-supported') {
                 showFeedback("RECONHECIMENTO DE VOZ NÃO SUPORTADO.");
+            } else if (error === 'network') {
+                showFeedback("ERRO DE REDE. VERIFIQUE A CONEXÃO.");
+            } else if (error === 'timeout') {
+                showFeedback("TEMPO ESGOTADO. TENTE DE NOVO.");
             } else {
                 showFeedback(`ERRO: ${error.toUpperCase()}`);
             }
@@ -230,7 +234,6 @@ const App: React.FC = () => {
 
             if (lowerTranscript.includes(specificLocationTrigger)) {
                 isLocationQuery = true;
-                // Extrai o que vem depois de "estou na " (ex: "estou na 168" -> suggestedLine = "168")
                 suggestedLine = lowerTranscript.split(specificLocationTrigger)[1]?.replace(/[?]/g, '').trim();
             }
 
@@ -268,7 +271,7 @@ const App: React.FC = () => {
                 setTimeout(() => {
                     startTour(matchingTour);
                 }, 1000);
-                return; // Stop further search if a tour matched
+                return;
             }
 
             // 2. Fallback to normal System/Satellite search
@@ -295,11 +298,14 @@ const App: React.FC = () => {
     // Feedback visual para o processamento do Whisper
     useEffect(() => {
         if (isLoadingModel) {
-            showFeedback("INICIANDO...", 5000);
+            const progressText = modelLoadProgress > 0 && modelLoadProgress < 100 
+                ? `BAIXANDO MODELO: ${modelLoadProgress}%` 
+                : "INICIANDO...";
+            showFeedback(progressText, 10000);
         } else if (isProcessing) {
-            showFeedback("PROCESSANDO...", 15000);
+            showFeedback("PROCESSANDO...", 30000);
         }
-    }, [isLoadingModel, isProcessing, showFeedback]);
+    }, [isLoadingModel, isProcessing, modelLoadProgress, showFeedback]);
 
     const handleOrbClick = useCallback((systemId: string) => {
         if (activeTour) return;
@@ -449,6 +455,8 @@ const App: React.FC = () => {
     const handleCloseMapModal = useCallback(() => setIsMapModalOpen(false), []);
     const handleOpenFromToModal = useCallback(() => setIsFromToModalOpen(true), []);
     const handleCloseFromToModal = useCallback(() => setIsFromToModalOpen(false), []);
+    const handleUpdateSW = useCallback(() => updateServiceWorker(true), [updateServiceWorker]);
+    const handleDismissRefresh = useCallback(() => setNeedRefresh(false), [setNeedRefresh]);
 
     const { getStablePosition, findNearestSystem, isLocating: isLocatingGPS, startWatching, lastLocation } = useGeolocation();
 
@@ -650,8 +658,8 @@ const App: React.FC = () => {
             <UpdatePrompt
                 offlineReady={offlineReady}
                 needRefresh={needRefresh}
-                onUpdate={useCallback(() => updateServiceWorker(true), [updateServiceWorker])}
-                onClose={useCallback(() => setNeedRefresh(false), [setNeedRefresh])}
+                onUpdate={handleUpdateSW}
+                onClose={handleDismissRefresh}
             />
 
             <MapModal

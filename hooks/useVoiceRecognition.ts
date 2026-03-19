@@ -75,22 +75,18 @@ export const useVoiceRecognition = ({ onStart, onEnd, onError, onResult }: Voice
     const [isListeningOnline, setIsListeningOnline] = useState(false);
     const recognitionRef = useRef<SpeechRecognition | null>(null);
     const callbacksRef = useRef({ onStart, onEnd, onError, onResult });
+    const gotResultRef = useRef(false); // Rastreio se recebemos resultado antes do onend
+    const onlineTimeoutRef = useRef<number | null>(null);
 
     useEffect(() => {
         callbacksRef.current = { onStart, onEnd, onError, onResult };
     }, [onStart, onEnd, onError, onResult]);
 
+    // Criar instância de SpeechRecognition (uma única vez, reutilizável)
     useEffect(() => {
-        if (!isOnline) {
-            if (isListeningOnline && recognitionRef.current) {
-                recognitionRef.current.stop();
-            }
-            return;
-        }
-
         const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognitionAPI) {
-            console.warn("Web Speech API não suportada.");
+            console.warn("⚠️ [Voz Online] Web Speech API não suportada neste navegador.");
             return;
         }
 
@@ -101,43 +97,103 @@ export const useVoiceRecognition = ({ onStart, onEnd, onError, onResult }: Voice
         recognition.interimResults = false;
 
         recognition.onstart = () => {
+            gotResultRef.current = false;
             setIsListeningOnline(true);
             callbacksRef.current.onStart?.();
+            console.log("🎤 [Voz Online] Escutando...");
+
+            // Timeout de segurança: se a API travar, cancelar após 10s
+            if (onlineTimeoutRef.current) clearTimeout(onlineTimeoutRef.current);
+            onlineTimeoutRef.current = window.setTimeout(() => {
+                console.warn("⚠️ [Voz Online] Timeout de 10s atingido, parando...");
+                try { recognition.stop(); } catch (_) {}
+            }, 10000);
         };
 
         recognition.onend = () => {
+            if (onlineTimeoutRef.current) {
+                clearTimeout(onlineTimeoutRef.current);
+                onlineTimeoutRef.current = null;
+            }
             setIsListeningOnline(false);
+
+            // Se não recebemos resultado antes do onend, pode ser um encerramento inesperado
+            if (!gotResultRef.current) {
+                console.warn("⚠️ [Voz Online] Encerrado sem resultado (no-speech ou rede caiu).");
+                callbacksRef.current.onError?.('no-speech');
+            }
             callbacksRef.current.onEnd?.();
         };
 
         recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+            if (onlineTimeoutRef.current) {
+                clearTimeout(onlineTimeoutRef.current);
+                onlineTimeoutRef.current = null;
+            }
             setIsListeningOnline(false);
-            callbacksRef.current.onError?.(event.error);
+            console.error("❌ [Voz Online] Erro:", event.error);
+
+            // 'no-speech' e 'aborted' são erros "normais", não precisam de alarme
+            if (event.error === 'no-speech' || event.error === 'aborted') {
+                callbacksRef.current.onError?.('no-speech');
+            } else if (event.error === 'not-allowed') {
+                callbacksRef.current.onError?.('not-allowed');
+            } else if (event.error === 'network') {
+                console.warn("⚠️ [Voz Online] Erro de rede — a conexão pode ter caído.");
+                callbacksRef.current.onError?.('network');
+            } else {
+                callbacksRef.current.onError?.(event.error);
+            }
         };
 
         recognition.onresult = (event: SpeechRecognitionEvent) => {
+            gotResultRef.current = true;
             if (event.results && event.results[0] && event.results[0][0]) {
                 const transcript = event.results[0][0].transcript;
+                const confidence = event.results[0][0].confidence;
+                console.log(`✅ [Voz Online] Resultado: "${transcript}" (confiança: ${(confidence * 100).toFixed(0)}%)`);
                 callbacksRef.current.onResult?.(transcript);
             }
         };
 
         return () => {
-            if (recognitionRef.current && isListeningOnline) {
-                recognitionRef.current.stop();
+            if (onlineTimeoutRef.current) {
+                clearTimeout(onlineTimeoutRef.current);
             }
+            try { recognition.stop(); } catch (_) {}
+            recognitionRef.current = null;
         };
-    }, [isOnline]);
+    }, []); // Criar uma única vez, não recriar ao mudar online/offline
+
+    // Se ficar offline enquanto está escutando, parar
+    useEffect(() => {
+        if (!isOnline && isListeningOnline && recognitionRef.current) {
+            console.log("⚡ [Voz Online] Ficou offline, parando reconhecimento...");
+            try { recognitionRef.current.stop(); } catch (_) {}
+        }
+    }, [isOnline, isListeningOnline]);
 
     const startOnline = useCallback(() => {
         if (recognitionRef.current && !isListeningOnline) {
-            try { recognitionRef.current.start(); } catch (e) { }
+            try { 
+                recognitionRef.current.start(); 
+            } catch (e: any) {
+                console.error("❌ [Voz Online] Erro ao iniciar:", e.message);
+                // Se der erro ao iniciar, pode ser que já está rodando
+                // Tentar parar e reiniciar
+                try {
+                    recognitionRef.current.stop();
+                    setTimeout(() => {
+                        try { recognitionRef.current?.start(); } catch (_) {}
+                    }, 200);
+                } catch (_) {}
+            }
         }
     }, [isListeningOnline]);
 
     const stopOnline = useCallback(() => {
         if (recognitionRef.current && isListeningOnline) {
-            recognitionRef.current.stop();
+            try { recognitionRef.current.stop(); } catch (_) {}
         }
     }, [isListeningOnline]);
 
@@ -149,34 +205,49 @@ export const useVoiceRecognition = ({ onStart, onEnd, onError, onResult }: Voice
         onResult: (t) => callbacksRef.current.onResult?.(t)
     });
 
+    // Refs para funções de start/stop do Whisper (evita recriar callbacks)
+    const whisperStartRef = useRef(whisper.start);
+    const whisperStopRef = useRef(whisper.stop);
+    useEffect(() => {
+        whisperStartRef.current = whisper.start;
+        whisperStopRef.current = whisper.stop;
+    }, [whisper.start, whisper.stop]);
+
+    // Verificar se Web Speech API está disponível
+    const hasWebSpeechAPI = typeof window !== 'undefined' && 
+        !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+
     // --- Proxy / Router ---
-    // Agora o sistema alterna apenas entre Google/WebSpeech (Online) e Whisper (Offline)
-    const isListening = isOnline ? isListeningOnline : whisper.isListening;
-    const isProcessing = !isOnline && whisper.isProcessing;
-    const isLoadingModel = !isOnline && whisper.isLoadingModel;
+    // Se online E tem Web Speech API: usar Google, senão: usar Whisper
+    const useOnlineMode = isOnline && hasWebSpeechAPI;
+    const isListening = useOnlineMode ? isListeningOnline : whisper.isListening;
+    const isProcessing = !useOnlineMode && whisper.isProcessing;
+    const isLoadingModel = !useOnlineMode && whisper.isLoadingModel;
+    const modelLoadProgress = whisper.modelLoadProgress;
 
     const start = useCallback(() => {
-        if (isOnline) {
+        if (useOnlineMode) {
             console.log("🎤 Voz: Modo ONLINE (Web Speech)");
             startOnline();
         } else {
             console.log("🎤 Voz: Modo OFFLINE (Whisper AI)");
-            whisper.start();
+            whisperStartRef.current();
         }
-    }, [isOnline, startOnline, whisper]);
+    }, [useOnlineMode, startOnline]);
 
     const stop = useCallback(() => {
-        if (isOnline) {
+        if (useOnlineMode) {
             stopOnline();
         } else {
-            whisper.stop();
+            whisperStopRef.current();
         }
-    }, [isOnline, stopOnline, whisper]);
+    }, [useOnlineMode, stopOnline]);
 
     return { 
         isListening, 
         isProcessing,
         isLoadingModel,
+        modelLoadProgress,
         start, 
         stop, 
         permissionGranted, 
