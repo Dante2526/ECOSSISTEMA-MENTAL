@@ -56,6 +56,13 @@ self.onmessage = async (event) => {
     const energy = Math.sqrt(sum / audio.length);
     console.log(`⚡ [Whisper Worker] Recebidos ${audio.length} samples. Energia RMS: ${energy.toFixed(6)}`);
 
+    // Filtro de energia mínima: se o áudio é puro silêncio/ruído, não processar
+    if (energy < 0.005) {
+        console.warn(`⚡ [Whisper Worker] Energia muito baixa (${energy.toFixed(6)}), descartando áudio silencioso.`);
+        self.postMessage({ type: 'RESULT', text: '' });
+        return;
+    }
+
     try {
         // Monitoramento de memória (Chromium)
         if ((performance as any).memory) {
@@ -94,7 +101,38 @@ self.onmessage = async (event) => {
         const transcript = output.text.trim();
         const duration = ((performance.now() - startTime) / 1000).toFixed(2);
         
-        console.log(`✅ [Whisper Worker] Resultado (${duration}s): "${transcript}"`);
+        console.log(`✅ [Whisper Worker] Resultado bruto (${duration}s): "${transcript}"`);
+
+        // Filtro anti-alucinação: Whisper-tiny gera essas frases quando não detecta fala real
+        const HALLUCINATION_PATTERNS = [
+            /^m[uú]sica\.?$/i,
+            /^obrigad[oa]\.?$/i,  
+            /^tchau\.?$/i,
+            /^legenda/i,
+            /^subscri/i,
+            /^subtitle/i,
+            /^thank/i,
+            /^you$/i,
+            /^bye\.?$/i,
+            /^the end\.?$/i,
+            /^\.*$/,  // Apenas pontos
+            /^(?:a|e|o|i|u)\.?$/i, // Uma única vogal
+            /^\s*$/,  // Vazio ou só espaços
+            /^\.\.\./,  // Reticências
+            /^music\.?$/i,
+            /^\[.*\]$/,  // [Música], [Silencio], etc
+            /^\(.*\)$/,  // (Música), (Silencio), etc
+        ];
+
+        const isHallucination = HALLUCINATION_PATTERNS.some(pattern => pattern.test(transcript));
+        
+        if (isHallucination || transcript.length < 2) {
+            console.warn(`⚠️ [Whisper Worker] Alucinação detectada e filtrada: "${transcript}"`);
+            self.postMessage({ type: 'RESULT', text: '' });
+            return;
+        }
+
+        console.log(`✅ [Whisper Worker] Transcrição válida: "${transcript}"`);
         self.postMessage({ type: 'RESULT', text: transcript });
 
     } catch (error) {

@@ -142,7 +142,7 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
             audioContextRef.current = null;
         }
 
-        if (audioChunksRef.current.length > 0) {
+        if (audioChunksRef.current.length > 0 && hasSpeechStartedRef.current) {
             const totalLength = audioChunksRef.current.reduce((acc, chunk) => acc + chunk.length, 0);
             const mergedArray = new Float32Array(totalLength);
             let offset = 0;
@@ -151,24 +151,42 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
                 offset += chunk.length;
             }
 
-            console.log(`⚡ [Whisper Hook] Enviando ${mergedArray.length} samples para o worker.`);
-            
-            // Timeout de segurança: 30 segundos para processar (aumentado para mobile)
-            if (processingTimeoutRef.current) clearTimeout(processingTimeoutRef.current);
-            processingTimeoutRef.current = window.setTimeout(() => {
-                console.error("⚡ [Whisper Hook] Timeout de processamento atingido.");
-                setIsProcessing(false);
-                setIsLoadingModel(false);
-                callbacksRef.current.onError?.("timeout");
-                callbacksRef.current.onEnd?.();
-            }, 30000);
+            // Verificar energia mínima antes de enviar ao worker
+            let energySum = 0;
+            for (let i = 0; i < mergedArray.length; i++) {
+                energySum += mergedArray[i] * mergedArray[i];
+            }
+            const audioEnergy = Math.sqrt(energySum / mergedArray.length);
 
-            workerRef.current?.postMessage({
-                audio: mergedArray,
-                language: 'portuguese'
-            });
+            if (audioEnergy < 0.01) {
+                console.warn(`⚡ [Whisper Hook] Energia muito baixa (${audioEnergy.toFixed(6)}), descartando áudio silencioso.`);
+                callbacksRef.current.onError?.('no-speech');
+                callbacksRef.current.onEnd?.();
+            } else {
+                console.log(`⚡ [Whisper Hook] Enviando ${mergedArray.length} samples (energia: ${audioEnergy.toFixed(4)}) para o worker.`);
+                
+                // Timeout de segurança: 30 segundos para processar (aumentado para mobile)
+                if (processingTimeoutRef.current) clearTimeout(processingTimeoutRef.current);
+                processingTimeoutRef.current = window.setTimeout(() => {
+                    console.error("⚡ [Whisper Hook] Timeout de processamento atingido.");
+                    setIsProcessing(false);
+                    setIsLoadingModel(false);
+                    callbacksRef.current.onError?.("timeout");
+                    callbacksRef.current.onEnd?.();
+                }, 30000);
+
+                workerRef.current?.postMessage({
+                    audio: mergedArray,
+                    language: 'portuguese'
+                });
+            }
         } else {
-            console.warn("⚡ [Whisper Hook] Nenhum áudio capturado para processar.");
+            if (!hasSpeechStartedRef.current) {
+                console.warn("⚡ [Whisper Hook] Nenhuma fala detectada durante a gravação.");
+                callbacksRef.current.onError?.('no-speech');
+            } else {
+                console.warn("⚡ [Whisper Hook] Nenhum áudio capturado para processar.");
+            }
             callbacksRef.current.onEnd?.();
         }
 
