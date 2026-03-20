@@ -20,6 +20,7 @@ export interface OrbitalSystem {
     satellites: Satellite[];
     mapCoordinates?: { x: number, y: number };
     locationData?: LocationData;
+    path?: LocationData[];
 }
 
 export interface SearchItem {

@@ -422,14 +422,17 @@ const App: React.FC = () => {
 
     const endTour = useCallback(() => {
         setActiveTour(null);
+        setCurrentTargetId(null);
+        setDistanceToTarget(null);
         // Reset orbital system
         setTimeout(() => {
             orbitalSystemRef.current?.highlightSystemsByIds([]);
             orbitalSystemRef.current?.focusSystem(null);
-        }, 100);
+        }, 1000);
     }, []);
 
     const handleTourSystemFocus = useCallback((systemId: string) => {
+        setCurrentTargetId(systemId);
         orbitalSystemRef.current?.highlightSystemsByIds([systemId]);
         orbitalSystemRef.current?.focusSystem(systemId);
     }, []);
@@ -458,12 +461,7 @@ const App: React.FC = () => {
     const handleUpdateSW = useCallback(() => updateServiceWorker(true), [updateServiceWorker]);
     const handleDismissRefresh = useCallback(() => setNeedRefresh(false), [setNeedRefresh]);
 
-    const { getStablePosition, findNearestSystem, isLocating: isLocatingGPS, startWatching, lastLocation } = useGeolocation();
 
-    // Inicia o monitoramento contínuo logo no início para garantir que o GPS esteja "Quente"
-    useEffect(() => {
-        startWatching();
-    }, [startWatching]);
 
     const speak = useCallback((text: string) => {
         if (!window.speechSynthesis) return;
@@ -489,6 +487,59 @@ const App: React.FC = () => {
         window.speechSynthesis.speak(utterance);
     }, []);
 
+    const { getStablePosition, findNearestSystem, isLocating: isLocatingGPS, startWatching, lastLocation } = useGeolocation();
+
+    // Inicia o monitoramento contínuo logo no início para garantir que o GPS esteja "Quente"
+    useEffect(() => {
+        startWatching();
+    }, [startWatching]);
+
+    const [currentTargetId, setCurrentTargetId] = useState<string | null>(null);
+    const [distanceToTarget, setDistanceToTarget] = useState<number | null>(null);
+    const lastSpokenDistanceRef = useRef<number | null>(null);
+
+    // Navegação Reativa: Calcula distância ao alvo atual do Tour (Apenas ADMIN)
+    useEffect(() => {
+        if (isAdmin && activeTour && currentTargetId && lastLocation) {
+            const system = systems.find(s => s.id === currentTargetId);
+            if (!system) return;
+
+            let dist = Infinity;
+            if (system.path && system.path.length > 0) {
+                dist = findNearestSystem(lastLocation, [system])?.distance ?? Infinity;
+            } else if (system.locationData) {
+                const R = 6371e3;
+                const toRad = Math.PI / 180;
+                const Δφ = (lastLocation.latitude - system.locationData.latitude) * toRad;
+                const Δλ = (lastLocation.longitude - system.locationData.longitude) * toRad;
+                const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                    Math.cos(system.locationData.latitude * toRad) * Math.cos(lastLocation.latitude * toRad) *
+                    Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+                dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            }
+
+            setDistanceToTarget(dist);
+
+            // Interface de Voz para Navegação (Alertas de proximidade)
+            if (dist <= 100 && dist > 80 && lastSpokenDistanceRef.current !== 100) {
+                speak(`Faltam 100 metros para ${system.name}`);
+                lastSpokenDistanceRef.current = 100;
+            } else if (dist <= 55 && dist > 45 && lastSpokenDistanceRef.current !== 50) {
+                speak(`Faltam 50 metros para ${system.name}`);
+                lastSpokenDistanceRef.current = 50;
+            } else if (dist <= 25 && dist > 15 && lastSpokenDistanceRef.current !== 20) {
+                speak(`Você está chegando na ${system.name}. Faltam 20 metros.`);
+                lastSpokenDistanceRef.current = 20;
+            } else if (dist <= 10 && lastSpokenDistanceRef.current !== 0) {
+                speak(`Você chegou na ${system.name}!`);
+                lastSpokenDistanceRef.current = 0;
+            }
+        } else {
+            setDistanceToTarget(null);
+            lastSpokenDistanceRef.current = null;
+        }
+    }, [isAdmin, activeTour, currentTargetId, lastLocation, systems, findNearestSystem, speak]);
+
     const handleWhereAmI = useCallback(async (suggestedLine?: string) => {
         showFeedback("BUSCANDO LOCALIZAÇÃO...");
         try {
@@ -497,14 +548,16 @@ const App: React.FC = () => {
             // Log para debug no console do administrador
             console.log(`📍 GPS: Lat=${currentPos.latitude}, Lon=${currentPos.longitude}, Acurácia=${currentPos.accuracy}m`);
 
-            const nearest = findNearestSystem(currentPos, systems);
+            const result = findNearestSystem(currentPos, systems);
 
             // Se a acurácia for ruim (ex: > 15m), avisar o usuário
-            if (currentPos.accuracy && currentPos.accuracy > 15) {
+            const isLowAccuracy = currentPos.accuracy && currentPos.accuracy > 15;
+            if (isLowAccuracy) {
                 showFeedback(`SINAL GPS FRACO: ${Math.round(currentPos.accuracy)} METROS.`);
             }
 
-            if (nearest) {
+            if (result) {
+                const { nearest, others, lowConfidence } = result;
                 const systemName = nearest.system.name;
                 const normalizedSystemName = normalizeText(systemName);
                 const normalizedSuggested = suggestedLine ? normalizeText(suggestedLine) : null;
@@ -523,6 +576,12 @@ const App: React.FC = () => {
                 } else {
                     // Pergunta genérica: "Onde estou?"
                     responseText = `Você está na linha ${systemName}`;
+                }
+
+                // Adiciona aviso se houver outra linha muito próxima (ambiguidade)
+                if (lowConfidence && others.length > 0) {
+                    const otherName = others[0].system.name;
+                    responseText += `. Atenção: a linha ${otherName} também está muito próxima.`;
                 }
 
                 showFeedback(responseText.toUpperCase());
@@ -588,6 +647,8 @@ const App: React.FC = () => {
                 isOpen={!!activeTour}
                 tour={activeTour}
                 systems={systems}
+                isAdmin={isAdmin}
+                distanceToTarget={distanceToTarget}
                 onClose={endTour}
                 onSystemFocus={handleTourSystemFocus}
             />

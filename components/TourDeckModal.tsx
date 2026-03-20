@@ -6,11 +6,13 @@ interface TourDeckModalProps {
     isOpen: boolean;
     tour: Tour | null;
     systems: OrbitalSystem[];
+    isAdmin: boolean;
+    distanceToTarget: number | null;
     onClose: () => void;
     onSystemFocus: (systemId: string) => void;
 }
 
-export const TourDeckModal: React.FC<TourDeckModalProps> = React.memo(({ isOpen, tour, systems, onClose, onSystemFocus }) => {
+export const TourDeckModal: React.FC<TourDeckModalProps> = React.memo(({ isOpen, tour, systems, isAdmin, distanceToTarget, onClose, onSystemFocus }) => {
     // Generate a flat list of all slides for the tour
     const slides = useMemo(() => {
         if (!tour) return [];
@@ -131,6 +133,16 @@ export const TourDeckModal: React.FC<TourDeckModalProps> = React.memo(({ isOpen,
                 >
                     Sair do Tour
                 </button>
+
+                {/* Real-time Distance Indicator - Apenas ADMIN */}
+                {isAdmin && distanceToTarget !== null && (
+                    <div className="absolute top-20 left-4 pointer-events-auto flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-2 rounded-lg border border-blue-500/50 shadow-lg animate-fade-in">
+                        <div className={`h-3 w-3 rounded-full ${distanceToTarget < 20 ? 'bg-emerald-500 animate-pulse' : 'bg-blue-500'}`}></div>
+                        <span className="text-xs font-bold tracking-widest text-white uppercase">
+                            Distância: <span className="text-blue-400 font-mono text-sm">{Math.round(distanceToTarget)}m</span>
+                        </span>
+                    </div>
+                )}
             </div>
 
             {/* Deck Gallery Container - Ocupa o espaço restante do meio */}

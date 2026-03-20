@@ -27,6 +27,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = React.memo(({ systemToEdit,
     const [activeTab, setActiveTab] = useState<'systems' | 'tours'>('systems');
     const { isLocating, getStablePosition, startWatching, stopWatching, lastLocation } = useGeolocation();
 
+    const [isRecordingPath, setIsRecordingPath] = useState(false);
+
+    useEffect(() => {
+        if (isRecordingPath && lastLocation && formState) {
+            const currentPath = formState.path || [];
+            const lastPoint = currentPath[currentPath.length - 1];
+
+            if (!lastPoint) {
+                // Primeiro ponto do caminho
+                setFormState({ ...formState, path: [lastLocation] });
+            } else {
+                // Calcula distância básica para evitar pontos duplicados/muito próximos (limite de 5 metros)
+                const R = 6371e3;
+                const toRad = Math.PI / 180;
+                const Δφ = (lastLocation.latitude - lastPoint.latitude) * toRad;
+                const Δλ = (lastLocation.longitude - lastPoint.longitude) * toRad;
+                const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                    Math.cos(lastPoint.latitude * toRad) * Math.cos(lastLocation.latitude * toRad) *
+                    Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+                const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+                if (dist >= 5) {
+                    setFormState({ ...formState, path: [...currentPath, lastLocation] });
+                }
+            }
+        }
+    }, [lastLocation, isRecordingPath, formState]);
+
     useEffect(() => {
         if (systemToEdit) {
             setActiveTab('systems'); // Garante que a aba de sistemas esteja ativa ao editar/adicionar
@@ -38,6 +66,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = React.memo(({ systemToEdit,
             }
         } else {
             setFormState(null);
+            setIsRecordingPath(false);
             stopWatching(); // Desliga o GPS
         }
     }, [systemToEdit, startWatching, stopWatching]);
@@ -156,7 +185,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = React.memo(({ systemToEdit,
                                         </div>
 
                                         <div className="border-t border-purple-500/20 pt-4 mt-2">
-                                            <label className={labelClasses}>Localização GPS (Mapeamento)</label>
+                                            <div className="flex justify-between items-end mb-2">
+                                                <label className={labelClasses}>Localização GPS (Ponto Único)</label>
+                                                {formState.locationData && !formState.path && (
+                                                    <button 
+                                                        onClick={() => handleInputChange('locationData', undefined)}
+                                                        className="text-[10px] text-red-400 hover:text-red-300 uppercase font-bold"
+                                                    >
+                                                        Remover Ponto
+                                                    </button>
+                                                )}
+                                            </div>
                                             <div className="flex items-center gap-4 bg-slate-800/30 p-4 rounded-lg border border-slate-700/50">
                                                 <div className="flex-grow">
                                                     {formState.locationData ? (
@@ -170,7 +209,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = React.memo(({ systemToEdit,
                                                             <div className="text-purple-400 text-[10px] mt-1 col-span-2">Mapeado em: {new Date(formState.locationData.timestamp).toLocaleString()}</div>
                                                         </div>
                                                     ) : (
-                                                        <div className="text-sm text-slate-500 italic">Ponto não mapeado</div>
+                                                        <div className="text-sm text-slate-500 italic">Ponto radial não mapeado</div>
                                                     )}
                                                 </div>
                                                 <button
@@ -184,14 +223,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = React.memo(({ systemToEdit,
                                                                 }
                                                             }
                                                             handleInputChange('locationData', loc);
+                                                            // Se mapear ponto, limpa o caminho para não confundir
+                                                            handleInputChange('path', undefined);
                                                         } catch (err) {
                                                             alert(err);
                                                         }
                                                     }}
-                                                    disabled={isLocating}
+                                                    disabled={isLocating || isRecordingPath}
                                                     className={`px-4 py-2 rounded-md font-bold transition-all duration-300 text-xs border-2 flex items-center gap-2 ${isLocating
                                                             ? 'bg-slate-700 border-slate-600 animate-pulse'
-                                                            : 'bg-indigo-600/50 border-indigo-500 hover:bg-indigo-600'
+                                                            : 'bg-indigo-600/50 border-indigo-500 hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed'
                                                         }`}
                                                 >
                                                     {isLocating ? (
@@ -208,10 +249,95 @@ export const AdminPanel: React.FC<AdminPanelProps> = React.memo(({ systemToEdit,
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                                                             </svg>
-                                                            Mapear Local Atual
+                                                            Mapear Ponto
                                                         </>
                                                     )}
                                                 </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="border-t border-purple-500/20 pt-4 mt-2">
+                                            <div className="flex justify-between items-end mb-2">
+                                                <label className={labelClasses}>Mapeamento de Caminho (Linha/Extensão)</label>
+                                                {formState.path && formState.path.length > 0 && !isRecordingPath && (
+                                                    <button 
+                                                        onClick={() => handleInputChange('path', undefined)}
+                                                        className="text-[10px] text-red-400 hover:text-red-300 uppercase font-bold"
+                                                    >
+                                                        Limpar Caminho
+                                                    </button>
+                                                )}
+                                            </div>
+                                            
+                                            <div className="bg-slate-800/30 p-4 rounded-lg border border-slate-700/50 space-y-4">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex-grow">
+                                                        {formState.path && formState.path.length > 0 ? (
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="bg-purple-600/30 px-3 py-1 rounded-full border border-purple-500/50 text-xs font-bold text-purple-200">
+                                                                    {formState.path.length} PONTOS CAPTURADOS
+                                                                </div>
+                                                                {isRecordingPath && (
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="relative flex h-3 w-3">
+                                                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                                                            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                                                                        </span>
+                                                                        <span className="text-[10px] text-red-400 font-bold animate-pulse">GRAVANDO...</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="text-sm text-slate-500 italic">Nenhum caminho gravado</div>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            if (!isRecordingPath) {
+                                                                // Iniciar
+                                                                if (formState.locationData) {
+                                                                    if (!window.confirm("Isso irá substituir o Ponto Único pelo Caminho. Continuar?")) return;
+                                                                    handleInputChange('locationData', undefined);
+                                                                }
+                                                                setIsRecordingPath(true);
+                                                                startWatching();
+                                                            } else {
+                                                                // Parar
+                                                                setIsRecordingPath(false);
+                                                            }
+                                                        }}
+                                                        className={`px-4 py-2 rounded-md font-bold transition-all duration-300 text-xs border-2 flex items-center gap-2 ${isRecordingPath
+                                                            ? 'bg-red-600 border-red-500 hover:bg-red-700 shadow-[0_0_10px_rgba(239,68,68,0.4)]'
+                                                            : 'bg-emerald-600/50 border-emerald-500 hover:bg-emerald-600'
+                                                        }`}
+                                                    >
+                                                        {isRecordingPath ? (
+                                                            <>
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                                                                    <rect x="6" y="6" width="12" height="12" />
+                                                                </svg>
+                                                                Parar Gravação
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                                                                    <circle cx="12" cy="12" r="8" />
+                                                                </svg>
+                                                                {formState.path && formState.path.length > 0 ? 'Retomar Gravação' : 'Gravar Caminho'}
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                </div>
+
+                                                {formState.path && formState.path.length > 0 && (
+                                                    <div className="text-[10px] text-slate-400 bg-black/40 p-2 rounded max-h-20 overflow-y-auto font-mono">
+                                                        {formState.path.map((p, i) => (
+                                                            <div key={i}>P{i+1}: {p.latitude.toFixed(6)}, {p.longitude.toFixed(6)}</div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>

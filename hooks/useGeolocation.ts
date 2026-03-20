@@ -147,28 +147,86 @@ export function useGeolocation() {
         return R * c;
     };
 
+    /**
+     * Calcula a distância mínima de um ponto a um segmento de reta (A-B)
+     * usando uma aproximação planar para pequenas distâncias.
+     */
+    const distanceToSegment = (p: LocationData, a: LocationData, b: LocationData): number => {
+        const R = 6371e3;
+        const toRad = Math.PI / 180;
+        
+        // Converte para coordenadas planas locais (metros) centradas em A
+        const latRef = a.latitude * toRad;
+        const xA = 0;
+        const yA = 0;
+        const xB = (b.longitude - a.longitude) * toRad * Math.cos(latRef) * R;
+        const yB = (b.latitude - a.latitude) * toRad * R;
+        const xP = (p.longitude - a.longitude) * toRad * Math.cos(latRef) * R;
+        const yP = (p.latitude - a.latitude) * toRad * R;
+
+        const l2 = xB * xB + yB * yB;
+        if (l2 === 0) return Math.sqrt(xP * xP + yP * yP);
+        
+        // Projeção do ponto P na reta AB
+        let t = ((xP - xA) * (xB - xA) + (yP - yA) * (yB - yA)) / l2;
+        t = Math.max(0, Math.min(1, t));
+        
+        const projX = xA + t * (xB - xA);
+        const projY = yA + t * (yB - yA);
+        
+        return Math.sqrt((xP - projX) ** 2 + (yP - projY) ** 2);
+    };
+
+    const calculateDistanceToPath = useCallback((currentLoc: LocationData, path: LocationData[]): number => {
+        if (path.length === 0) return Infinity;
+        if (path.length === 1) return calculateDistance(currentLoc.latitude, currentLoc.longitude, path[0].latitude, path[0].longitude);
+
+        let minDistance = Infinity;
+        for (let i = 0; i < path.length - 1; i++) {
+            const dist = distanceToSegment(currentLoc, path[i], path[i + 1]);
+            if (dist < minDistance) minDistance = dist;
+        }
+        return minDistance;
+    }, []);
+
     const findNearestSystem = useCallback((currentLoc: LocationData, systems: OrbitalSystem[], maxDistance: number = 20) => {
-        let nearest: { system: OrbitalSystem; distance: number } | null = null;
+        const matches: { system: OrbitalSystem; distance: number }[] = [];
 
         systems.forEach(system => {
-            if (system.locationData) {
-                const dist = calculateDistance(
+            let dist = Infinity;
+
+            // 1. Tenta por caminho (path) primeiro
+            if (system.path && system.path.length > 0) {
+                dist = calculateDistanceToPath(currentLoc, system.path);
+            } 
+            // 2. Se não tem caminho, tenta por ponto único (locationData)
+            else if (system.locationData) {
+                dist = calculateDistance(
                     currentLoc.latitude,
                     currentLoc.longitude,
                     system.locationData.latitude,
                     system.locationData.longitude
                 );
+            }
 
-                if (dist <= maxDistance) {
-                    if (!nearest || dist < nearest.distance) {
-                        nearest = { system, distance: dist };
-                    }
-                }
+            if (dist <= maxDistance) {
+                matches.push({ system, distance: dist });
             }
         });
 
-        return nearest;
-    }, []);
+        if (matches.length === 0) return null;
+
+        // Ordena por proximidade absoluta
+        matches.sort((a, b) => a.distance - b.distance);
+
+        return {
+            nearest: matches[0],
+            others: matches.slice(1),
+            // Se a segunda linha mais próxima estiver a menos de 4 metros de diferença da primeira,
+            // marcamos como "baixa confiança" (ambiguidade lateral)
+            lowConfidence: matches.length > 1 && (matches[1].distance - matches[0].distance) < 4
+        };
+    }, [calculateDistanceToPath]);
 
     return {
         isLocating,
