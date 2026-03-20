@@ -20,6 +20,7 @@ import { OfflineSetupProgress } from './components/OfflineSetupProgress';
 import { FromToModal } from './components/FromToModal';
 import { useGeolocation } from './hooks/useGeolocation';
 import { usePreloadProgress } from './hooks/usePreloadProgress';
+import { RailwayMapModal } from './components/RailwayMapModal';
 
 const App: React.FC = () => {
     const [modalImages, setModalImages] = useState<string[]>([]);
@@ -35,6 +36,7 @@ const App: React.FC = () => {
     const [isFromToModalOpen, setIsFromToModalOpen] = useState(false);
     const [activeTour, setActiveTour] = useState<Tour | null>(null);
     const [showIconLabels, setShowIconLabels] = useState(true);
+    const [isRailwayMapOpen, setIsRailwayMapOpen] = useState(false);
 
     const orbitalSystemRef = useRef<OrbitalSystemRef>(null);
 
@@ -653,6 +655,14 @@ const App: React.FC = () => {
                 onSystemFocus={handleTourSystemFocus}
             />
 
+            <RailwayMapModal
+                isOpen={isRailwayMapOpen}
+                systems={systems}
+                userLocation={lastLocation}
+                activeTourSystemId={currentTargetId}
+                onClose={() => setIsRailwayMapOpen(false)}
+            />
+
             <div className="relative z-10 flex items-center justify-center w-full h-full min-h-screen">
                     <OrbitalSystem
                     ref={orbitalSystemRef}
@@ -699,6 +709,7 @@ const App: React.FC = () => {
                     onSave={handleSaveSystem}
                     onDelete={handleDeleteSystem}
                     onClose={handleCloseEditingSystem}
+                    onOpenMap={() => setIsRailwayMapOpen(true)}
                 />
             )}
 
