@@ -1,56 +1,63 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <defs>
-    <linearGradient id="bulbGlow" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ede7f6" stop-opacity="0.4"/>
-      <stop offset="100%" stop-color="#6a1b9a" stop-opacity="0.1"/>
-    </linearGradient>
-    <linearGradient id="brainLeft" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#00acc1"/>
-      <stop offset="100%" stop-color="#00838f"/>
-    </linearGradient>
-    <linearGradient id="brainRight" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#f9a825"/>
-      <stop offset="100%" stop-color="#ef6c00"/>
-    </linearGradient>
+    <!-- Brilho do Núcleo -->
+    <filter id="coreGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3.5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Filtro de brilho sutil roxo para os anéis -->
+    <filter id="purpleGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="1" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Gradiente do Núcleo (Ciano a Escuro) -->
+    <radialGradient id="coreGradient" cx="30%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="25%" stop-color="#67e8f9"/>
+      <stop offset="60%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#083344"/>
+    </radialGradient>
   </defs>
 
-  <!-- Rays around the bulb -->
-  <g stroke="#6a1b9a" stroke-width="2.2" stroke-linecap="round" opacity="0.75">
-    <line x1="32" y1="2" x2="32" y2="8"/>
-    <line x1="10" y1="10" x2="14.5" y2="14.5"/>
-    <line x1="54" y1="10" x2="49.5" y2="14.5"/>
-    <line x1="4" y1="28" x2="10" y2="28"/>
-    <line x1="60" y1="28" x2="54" y2="28"/>
-    <line x1="8" y1="44" x2="13" y2="40"/>
-    <line x1="56" y1="44" x2="51" y2="40"/>
-  </g>
+  <!-- Fundo invisível para manter dimensões corretas -->
+  <rect width="64" height="64" fill="transparent" />
 
-  <!-- Lightbulb glass outline -->
-  <path d="M32 10 C22 10 14 18 14 27 C14 33 18 37 21 41 C22.5 43 24 45 24 47 L24 49 L40 49 L40 47 C40 45 41.5 43 43 41 C46 37 50 33 50 27 C50 18 42 10 32 10 Z"
-        fill="url(#bulbGlow)" stroke="#6a1b9a" stroke-width="2.5" stroke-linejoin="round"/>
+  <!-- ANÉIS DE DADOS ROXOS -->
+  <!-- Anel 1: Externo, traço esparso para simular transmissão de bits lógicos -->
+  <circle cx="32" cy="32" r="28" stroke="#7e22ce" stroke-width="2" fill="none" stroke-dasharray="3 7" filter="url(#purpleGlow)" opacity="0.8"/>
+  
+  <!-- Anel 2: Intermediário, dados assimétricos e contínuos -->
+  <circle cx="32" cy="32" r="21" stroke="#a855f7" stroke-width="2.5" fill="none" stroke-dasharray="10 4 2 4" filter="url(#purpleGlow)"/>
+  
+  <!-- "Nós" do Anel Intermediário (Dados pulsando) -->
+  <circle cx="32" cy="11" r="2.5" fill="#d8b4fe" filter="url(#purpleGlow)"/>
+  <circle cx="13.5" cy="42" r="2.5" fill="#d8b4fe" filter="url(#purpleGlow)"/>
+  <circle cx="50.5" cy="42" r="2.5" fill="#d8b4fe" filter="url(#purpleGlow)"/>
 
-  <!-- Bulb base / screw -->
-  <rect x="24" y="49" width="16" height="3" rx="1" fill="#6a1b9a"/>
-  <rect x="25" y="52.5" width="14" height="2.5" rx="1" fill="#7b1fa2"/>
-  <rect x="26.5" y="55.5" width="11" height="2.5" rx="1.2" fill="#8e24aa"/>
-  <path d="M28.5 58 Q32 61 35.5 58" fill="#6a1b9a"/>
+  <!-- Anel 3: Interno, denso, alta velocidade próximo ao núcleo -->
+  <circle cx="32" cy="32" r="14" stroke="#c084fc" stroke-width="1.5" fill="none" stroke-dasharray="4 2" opacity="0.9"/>
+  
+  <!-- "Nós" Internos de estabilização do núcleo -->
+  <circle cx="18" cy="32" r="1.5" fill="#f3e8ff" />
+  <circle cx="46" cy="32" r="1.5" fill="#f3e8ff" />
+  <circle cx="32" cy="18" r="1.5" fill="#f3e8ff" />
+  <circle cx="32" cy="46" r="1.5" fill="#f3e8ff" />
 
-  <!-- Brain - Left hemisphere (teal) -->
-  <path d="M31.5 22 C31.5 22 27 22 25 24.5 C23 27 23.5 29 24.5 30.5 C23 31.5 22 33 22.5 35 C23 37 25 38 26 38.5 C25.5 40 26.5 42 28.5 43 C30 43.8 31.5 43 31.5 43 L31.5 22Z"
-        fill="url(#brainLeft)" opacity="0.9"/>
-  <!-- Brain folds left -->
-  <path d="M26 28 C27.5 28.5 29 27.5 31 28" stroke="#006064" stroke-width="0.8" fill="none" stroke-linecap="round"/>
-  <path d="M24.5 33 C26 33.5 28 32 31 33" stroke="#006064" stroke-width="0.8" fill="none" stroke-linecap="round"/>
-  <path d="M27 38 C28.5 37.5 30 38.5 31.5 38" stroke="#006064" stroke-width="0.8" fill="none" stroke-linecap="round"/>
-
-  <!-- Brain - Right hemisphere (orange/amber) -->
-  <path d="M32.5 22 C32.5 22 37 22 39 24.5 C41 27 40.5 29 39.5 30.5 C41 31.5 42 33 41.5 35 C41 37 39 38 38 38.5 C38.5 40 37.5 42 35.5 43 C34 43.8 32.5 43 32.5 43 L32.5 22Z"
-        fill="url(#brainRight)" opacity="0.9"/>
-  <!-- Brain folds right -->
-  <path d="M38 28 C36.5 28.5 35 27.5 33 28" stroke="#bf360c" stroke-width="0.8" fill="none" stroke-linecap="round"/>
-  <path d="M39.5 33 C38 33.5 36 32 33 33" stroke="#bf360c" stroke-width="0.8" fill="none" stroke-linecap="round"/>
-  <path d="M37 38 C35.5 37.5 34 38.5 32.5 38" stroke="#bf360c" stroke-width="0.8" fill="none" stroke-linecap="round"/>
-
-  <!-- Brain center line -->
-  <line x1="32" y1="21" x2="32" y2="44" stroke="#6a1b9a" stroke-width="0.7" opacity="0.5"/>
+  <!-- NÚCLEO CIANO -->
+  <!-- Halo envolvente -> O ecossistema mental base -->
+  <circle cx="32" cy="32" r="9" fill="#22d3ee" opacity="0.4" filter="url(#coreGlow)" />
+  
+  <!-- A central do Orbe -->
+  <circle cx="32" cy="32" r="7" fill="url(#coreGradient)" filter="url(#coreGlow)" />
+  
+  <!-- Ponto de energia pura ao centro -->
+  <circle cx="32" cy="32" r="2" fill="#ffffff" filter="url(#coreGlow)" />
 </svg>
