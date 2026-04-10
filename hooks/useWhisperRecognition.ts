@@ -5,30 +5,66 @@ interface WhisperRecognitionOptions {
     onEnd?: () => void;
     onError?: (error: string) => void;
     onResult?: (transcript: string) => void;
+    shouldPreload?: boolean; // Lazy: só pré-carrega quando necessário
 }
 
-export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: WhisperRecognitionOptions) => {
+// --- Constantes de Performance ---
+const IS_MOBILE = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+const MAX_RECORDING_MS = IS_MOBILE ? 15000 : 12000;
+const BASE_THRESHOLD = 0.035;
+const AUTO_STOP_MS = IS_MOBILE ? 3500 : 2500;
+const CALIBRATION_FRAMES = IS_MOBILE ? 10 : 5;
+const MOBILE_GAIN = 4.0;   // Reduzido de 6.5: evita clipping antes do compressor
+const DESKTOP_GAIN = 4.5;
+const BUFFER_SIZE = 2048;
+// Pré-aloca buffer máximo: 15s * 16kHz = 240.000 samples (960KB estático)
+const MAX_SAMPLES = 15 * 16000;
+const COMPRESSOR_THRESHOLD = -18; // dB — menos agressivo que -24
+const COMPRESSOR_RATIO = 6;       // Reduzido de 12:1 para 6:1 — áudio mais natural
+const PROCESSING_TIMEOUT_MS = 30000;
+const MIN_AUDIO_ENERGY = 0.01;
+
+const DEBUG = typeof process !== 'undefined' && process.env?.NODE_ENV === 'development';
+
+function debugLog(...args: any[]) {
+    if (DEBUG) console.log(...args);
+}
+
+export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult, shouldPreload = true }: WhisperRecognitionOptions) => {
     const [isListening, setIsListening] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isLoadingModel, setIsLoadingModel] = useState(false);
     const [modelLoadProgress, setModelLoadProgress] = useState(0);
     
     const workerRef = useRef<Worker | null>(null);
+    // AudioContext persistente — reutilizado entre gravações
     const audioContextRef = useRef<AudioContext | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
-    const audioChunksRef = useRef<Float32Array[]>([]);
     const workletNodeRef = useRef<AudioWorkletNode | null>(null);
+    // Nodes de pipeline (reutilizáveis)
+    const pipelineNodesRef = useRef<{
+        source: MediaStreamAudioSourceNode;
+        hpFilter: BiquadFilterNode;
+        lpFilter: BiquadFilterNode;
+        gainNode: GainNode;
+        compressor: DynamicsCompressorNode;
+    } | null>(null);
+
+    // Buffer pré-alocado para evitar GC thrashing
+    const audioBufferRef = useRef<Float32Array>(new Float32Array(MAX_SAMPLES));
+    const audioBufferOffsetRef = useRef(0);
 
     const callbacksRef = useRef({ onStart, onEnd, onError, onResult });
     const processingTimeoutRef = useRef<number | null>(null);
+    const modelPreloadedRef = useRef(false);
 
     useEffect(() => {
         callbacksRef.current = { onStart, onEnd, onError, onResult };
     }, [onStart, onEnd, onError, onResult]);
 
-    // Inicializar Worker
+    // Inicializar Worker (sempre — é leve, ~1KB)
     useEffect(() => {
-        console.log("⚡ [Whisper Hook] Inicializando worker de voz...");
+        debugLog("⚡ [Whisper Hook] Inicializando worker de voz...");
         workerRef.current = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), {
             type: 'module'
         });
@@ -54,6 +90,7 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
             } else if (type === 'PRELOAD_DONE') {
                 setIsLoadingModel(false);
                 setModelLoadProgress(100);
+                modelPreloadedRef.current = true;
                 console.log("✅ [Whisper Hook] Modelo pré-carregado com sucesso!");
             } else if (type === 'PRELOAD_ERROR') {
                 setIsLoadingModel(false);
@@ -65,9 +102,9 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
                 }
                 setIsProcessing(false);
                 setIsLoadingModel(false);
-                console.log("------------------------------------------");
-                console.log("🎤 WHISPER TRANSCRIPTION:", text);
-                console.log("------------------------------------------");
+                debugLog("------------------------------------------");
+                debugLog("🎤 WHISPER TRANSCRIPTION:", text);
+                debugLog("------------------------------------------");
                 if (text && text.trim().length > 0) {
                     callbacksRef.current.onResult?.(text);
                 }
@@ -85,15 +122,19 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
             }
         };
 
-        // Pré-carregar modelo Whisper na inicialização
-        console.log("⚡ [Whisper Hook] Solicitando pré-carregamento do modelo Whisper...");
-        workerRef.current.postMessage({ type: 'PRELOAD' });
-
         return () => {
-            console.log("⚡ [Whisper Hook] Terminando worker.");
+            debugLog("⚡ [Whisper Hook] Terminando worker.");
             workerRef.current?.terminate();
         };
     }, []);
+
+    // Pré-carregar modelo Whisper — APENAS se shouldPreload = true (offline)
+    useEffect(() => {
+        if (shouldPreload && !modelPreloadedRef.current && workerRef.current) {
+            debugLog("⚡ [Whisper Hook] Solicitando pré-carregamento do modelo Whisper...");
+            workerRef.current.postMessage({ type: 'PRELOAD' });
+        }
+    }, [shouldPreload]);
 
     const isListeningRef = useRef(false);
     const isStoppingRef = useRef(false);
@@ -106,7 +147,27 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
     const framesAnalyzedRef = useRef(0);
     const energyVarianceRef = useRef(0);
     const startTimeRef = useRef(0);
-    const isMobileRef = useRef(false);
+
+    /**
+     * Desconecta os nós de pipeline do AudioContext sem destruí-lo.
+     * Permite reutilização rápida na próxima gravação.
+     */
+    const disconnectPipeline = useCallback(() => {
+        if (workletNodeRef.current) {
+            workletNodeRef.current.port.onmessage = null;
+            try { workletNodeRef.current.disconnect(); } catch (_) {}
+            workletNodeRef.current = null;
+        }
+        if (pipelineNodesRef.current) {
+            const { source, hpFilter, lpFilter, gainNode, compressor } = pipelineNodesRef.current;
+            try { source.disconnect(); } catch (_) {}
+            try { hpFilter.disconnect(); } catch (_) {}
+            try { lpFilter.disconnect(); } catch (_) {}
+            try { gainNode.disconnect(); } catch (_) {}
+            try { compressor.disconnect(); } catch (_) {}
+            pipelineNodesRef.current = null;
+        }
+    }, []);
 
     const stop = useCallback(async () => {
         if (!isListeningRef.current || isStoppingRef.current) {
@@ -117,97 +178,72 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
         isListeningRef.current = false;
         setIsListening(false);
 
-        console.log("⚡ [Whisper Hook] Parando gravação e enviando para processamento...");
+        debugLog("⚡ [Whisper Hook] Parando gravação e enviando para processamento...");
 
-        // Desconectar o worklet node
-        if (workletNodeRef.current) {
-            workletNodeRef.current.port.onmessage = null;
-            workletNodeRef.current.disconnect();
-            workletNodeRef.current = null;
-        }
+        // Desconectar pipeline (mas manter AudioContext vivo)
+        disconnectPipeline();
         
+        // Parar tracks do microfone (libera hardware)
         if (streamRef.current) {
             streamRef.current.getTracks().forEach(track => track.stop());
             streamRef.current = null;
         }
 
-        if (audioContextRef.current) {
+        // NÃO fechar o AudioContext — será reutilizado
+        // Apenas suspender se quisermos economizar CPU
+        if (audioContextRef.current && audioContextRef.current.state === 'running') {
             try {
-                if (audioContextRef.current.state !== 'closed') {
-                    await audioContextRef.current.close();
-                }
-            } catch (e) {
-                console.error("⚡ [Whisper Hook] Erro ao fechar AudioContext:", e);
-            }
-            audioContextRef.current = null;
+                await audioContextRef.current.suspend();
+            } catch (_) {}
         }
 
-        if (audioChunksRef.current.length > 0 && hasSpeechStartedRef.current) {
-            const totalLength = audioChunksRef.current.reduce((acc, chunk) => acc + chunk.length, 0);
-            const mergedArray = new Float32Array(totalLength);
-            let offset = 0;
-            for (const chunk of audioChunksRef.current) {
-                mergedArray.set(chunk, offset);
-                offset += chunk.length;
-            }
+        const samplesRecorded = audioBufferOffsetRef.current;
 
-            // Verificar energia mínima antes de enviar ao worker
-            let energySum = 0;
-            for (let i = 0; i < mergedArray.length; i++) {
-                energySum += mergedArray[i] * mergedArray[i];
-            }
-            const audioEnergy = Math.sqrt(energySum / mergedArray.length);
+        if (samplesRecorded > 0 && hasSpeechStartedRef.current) {
+            // Copiar apenas a porção preenchida do buffer (não o buffer inteiro)
+            const mergedArray = audioBufferRef.current.slice(0, samplesRecorded);
 
-            if (audioEnergy < 0.01) {
-                console.warn(`⚡ [Whisper Hook] Energia muito baixa (${audioEnergy.toFixed(6)}), descartando áudio silencioso.`);
-                callbacksRef.current.onError?.('no-speech');
+            // Enviar direto ao worker — ele calcula a energia
+            debugLog(`⚡ [Whisper Hook] Enviando ${mergedArray.length} samples para o worker.`);
+            
+            // Timeout de segurança
+            if (processingTimeoutRef.current) clearTimeout(processingTimeoutRef.current);
+            processingTimeoutRef.current = window.setTimeout(() => {
+                console.error("⚡ [Whisper Hook] Timeout de processamento atingido.");
+                setIsProcessing(false);
+                setIsLoadingModel(false);
+                callbacksRef.current.onError?.("timeout");
                 callbacksRef.current.onEnd?.();
-            } else {
-                console.log(`⚡ [Whisper Hook] Enviando ${mergedArray.length} samples (energia: ${audioEnergy.toFixed(4)}) para o worker.`);
-                
-                // Timeout de segurança: 30 segundos para processar (aumentado para mobile)
-                if (processingTimeoutRef.current) clearTimeout(processingTimeoutRef.current);
-                processingTimeoutRef.current = window.setTimeout(() => {
-                    console.error("⚡ [Whisper Hook] Timeout de processamento atingido.");
-                    setIsProcessing(false);
-                    setIsLoadingModel(false);
-                    callbacksRef.current.onError?.("timeout");
-                    callbacksRef.current.onEnd?.();
-                }, 30000);
+            }, PROCESSING_TIMEOUT_MS);
 
-                workerRef.current?.postMessage({
-                    audio: mergedArray,
-                    language: 'portuguese'
-                });
-            }
+            workerRef.current?.postMessage({
+                audio: mergedArray,
+                language: 'portuguese'
+            });
         } else {
             if (!hasSpeechStartedRef.current) {
-                console.warn("⚡ [Whisper Hook] Nenhuma fala detectada durante a gravação.");
+                debugLog("⚡ [Whisper Hook] Nenhuma fala detectada durante a gravação.");
                 callbacksRef.current.onError?.('no-speech');
             } else {
-                console.warn("⚡ [Whisper Hook] Nenhum áudio capturado para processar.");
+                debugLog("⚡ [Whisper Hook] Nenhum áudio capturado para processar.");
             }
             callbacksRef.current.onEnd?.();
         }
 
-        audioChunksRef.current = [];
-    }, []);
+        // Reset offset do buffer (o buffer em si é reutilizado)
+        audioBufferOffsetRef.current = 0;
+    }, [disconnectPipeline]);
 
     /**
      * Processa dados de áudio recebidos do AudioWorklet ou ScriptProcessor.
      * Lógica unificada de detecção de voz e silêncio.
+     * Usa buffer pré-alocado em vez de push em array (evita GC).
      */
     const processAudioFrame = useCallback((audioData: Float32Array, rms: number) => {
         if (isStoppingRef.current) return;
-
-        const isMobile = isMobileRef.current;
-        const MAX_RECORDING_MS = isMobile ? 15000 : 12000;
-        const BASE_THRESHOLD = isMobile ? 0.035 : 0.035;
-        const AUTO_STOP_MS = isMobile ? 3500 : 2500;
-        const CALIBRATION_FRAMES = isMobile ? 10 : 5;
         
         if (Date.now() - startTimeRef.current > MAX_RECORDING_MS) {
-            console.log("⚡ [Whisper Hook] Timeout máximo atingido.");
+            debugLog("⚡ [Whisper Hook] Timeout máximo atingido.");
             stop();
             return;
         }
@@ -229,20 +265,34 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
         if (!hasSpeechStartedRef.current) {
             if (smoothedRmsRef.current > dynamicThreshold && energyVarianceRef.current > (dynamicThreshold * 0.3)) {
                 hasSpeechStartedRef.current = true;
-                console.log(`🎤 [Whisper Hook] Voz detectada! RMS: ${smoothedRmsRef.current.toFixed(4)} | Threshold: ${dynamicThreshold.toFixed(4)}`);
+                debugLog(`🎤 [Whisper Hook] Voz detectada! RMS: ${smoothedRmsRef.current.toFixed(4)} | Threshold: ${dynamicThreshold.toFixed(4)}`);
             }
         }
 
         if (hasSpeechStartedRef.current) {
             const isSilent = smoothedRmsRef.current < (dynamicThreshold * 0.85) || energyVarianceRef.current < (dynamicThreshold * 0.1);
             
-            audioChunksRef.current.push(new Float32Array(audioData));
+            // Copiar para buffer pré-alocado (sem criar novo Float32Array)
+            const offset = audioBufferOffsetRef.current;
+            const spaceLeft = MAX_SAMPLES - offset;
+            const copyLen = Math.min(audioData.length, spaceLeft);
+            
+            if (copyLen > 0) {
+                audioBufferRef.current.set(audioData.subarray(0, copyLen), offset);
+                audioBufferOffsetRef.current = offset + copyLen;
+            }
+
+            if (spaceLeft <= 0) {
+                debugLog("⚡ [Whisper Hook] Buffer cheio, parando gravação.");
+                stop();
+                return;
+            }
             
             if (isSilent) {
                 if (silenceStartTimeRef.current === 0) silenceStartTimeRef.current = Date.now();
                 const silenceDuration = Date.now() - silenceStartTimeRef.current;
                 if (silenceDuration > AUTO_STOP_MS) {
-                    console.log(`⚡ [Whisper Hook] Silêncio detectado atingiu timeout.`);
+                    debugLog(`⚡ [Whisper Hook] Silêncio detectado atingiu timeout.`);
                     stop();
                 }
             } else {
@@ -273,7 +323,7 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult }: Whi
 class AudioCaptureProcessor extends AudioWorkletProcessor {
     constructor() {
         super();
-        this.buffer = new Float32Array(2048);
+        this.buffer = new Float32Array(${BUFFER_SIZE});
         this.bufferIndex = 0;
     }
 
@@ -286,12 +336,12 @@ class AudioCaptureProcessor extends AudioWorkletProcessor {
         for (let i = 0; i < channelData.length; i++) {
             this.buffer[this.bufferIndex++] = channelData[i];
 
-            if (this.bufferIndex >= 2048) {
+            if (this.bufferIndex >= ${BUFFER_SIZE}) {
                 let sum = 0;
-                for (let j = 0; j < 2048; j++) {
+                for (let j = 0; j < ${BUFFER_SIZE}; j++) {
                     sum += this.buffer[j] * this.buffer[j];
                 }
-                const rms = Math.sqrt(sum / 2048);
+                const rms = Math.sqrt(sum / ${BUFFER_SIZE});
 
                 this.port.postMessage({
                     type: 'AUDIO_DATA',
@@ -333,7 +383,7 @@ registerProcessor('audio-capture-processor', AudioCaptureProcessor);
             compressor.connect(workletNode);
             // AudioWorklet não precisa conectar ao destination (silêncio ao speaker)
 
-            console.log("✅ [Whisper Hook] AudioWorklet inicializado com sucesso!");
+            debugLog("✅ [Whisper Hook] AudioWorklet inicializado com sucesso!");
             return true;
         } catch (err) {
             console.warn("⚠️ [Whisper Hook] AudioWorklet não disponível, usando fallback:", err);
@@ -343,6 +393,7 @@ registerProcessor('audio-capture-processor', AudioCaptureProcessor);
 
     /**
      * Fallback: usa ScriptProcessor quando AudioWorklet não está disponível.
+     * CORRIGIDO: Não conecta ao destination real para evitar eco/feedback.
      */
     const useScriptProcessorFallback = (
         audioContext: AudioContext,
@@ -352,7 +403,7 @@ registerProcessor('audio-capture-processor', AudioCaptureProcessor);
         hpFilter: BiquadFilterNode,
         lpFilter: BiquadFilterNode
     ): void => {
-        const processor = audioContext.createScriptProcessor(2048, 1, 1);
+        const processor = audioContext.createScriptProcessor(BUFFER_SIZE, 1, 1);
 
         processor.onaudioprocess = (e) => {
             if (isStoppingRef.current) return;
@@ -368,15 +419,19 @@ registerProcessor('audio-capture-processor', AudioCaptureProcessor);
             processAudioFrame(new Float32Array(inputData), rms);
         };
 
-        // Conectando: Source -> HP -> LP -> Gain -> Compressor -> Processor -> Destination
+        // Conectando: Source -> HP -> LP -> Gain -> Compressor -> Processor
         source.connect(hpFilter);
         hpFilter.connect(lpFilter);
         lpFilter.connect(gainNode);
         gainNode.connect(compressor);
         compressor.connect(processor);
-        processor.connect(audioContext.destination);
+        
+        // CORRIGIDO: usar MediaStreamDestination em vez de destination real
+        // Evita eco no speaker enquanto mantém o ScriptProcessor ativo
+        const silentDest = audioContext.createMediaStreamDestination();
+        processor.connect(silentDest);
 
-        console.log("⚠️ [Whisper Hook] Usando ScriptProcessor (fallback).");
+        console.warn("⚠️ [Whisper Hook] Usando ScriptProcessor (fallback) — sem eco.");
     };
 
     const start = useCallback(async () => {
@@ -391,14 +446,11 @@ registerProcessor('audio-capture-processor', AudioCaptureProcessor);
         framesAnalyzedRef.current = 0;
         energyVarianceRef.current = 0;
         startTimeRef.current = Date.now();
+        audioBufferOffsetRef.current = 0;
 
         try {
-            console.log("⚡ [Whisper Hook] Iniciando captura de áudio...");
-            
-            // Detecção de mobile
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            isMobileRef.current = isMobile;
-            console.log(`📱 [Whisper Hook] Modo: ${isMobile ? 'MOBILE' : 'DESKTOP'}`);
+            debugLog("⚡ [Whisper Hook] Iniciando captura de áudio...");
+            debugLog(`📱 [Whisper Hook] Modo: ${IS_MOBILE ? 'MOBILE' : 'DESKTOP'}`);
 
             // Configurações de áudio otimizadas
             const audioConstraints: MediaTrackConstraints = {
@@ -409,7 +461,7 @@ registerProcessor('audio-capture-processor', AudioCaptureProcessor);
             };
 
             // Nem todos os dispositivos mobile suportam sampleRate constraint
-            if (!isMobile) {
+            if (!IS_MOBILE) {
                 (audioConstraints as any).sampleRate = 16000;
             }
 
@@ -418,60 +470,65 @@ registerProcessor('audio-capture-processor', AudioCaptureProcessor);
             });
             streamRef.current = stream;
 
-            // Criar AudioContext — usar sampleRate nativa em mobile para evitar resampling
-            const contextOptions: AudioContextOptions = {};
-            if (!isMobile) {
-                contextOptions.sampleRate = 16000;
+            // Reutilizar AudioContext se possível
+            let audioContext = audioContextRef.current;
+            
+            if (!audioContext || audioContext.state === 'closed') {
+                // Criar novo AudioContext apenas se não existe ou foi fechado
+                const contextOptions: AudioContextOptions = {};
+                if (!IS_MOBILE) {
+                    contextOptions.sampleRate = 16000;
+                }
+                audioContext = new (window.AudioContext || (window as any).webkitAudioContext)(contextOptions);
+                audioContextRef.current = audioContext;
+                debugLog("🔊 [Whisper Hook] Novo AudioContext criado.");
+            }
+            
+            // Resume se suspenso (necessário tanto para reutilização quanto para iOS/Android)
+            if (audioContext.state === 'suspended') {
+                debugLog("⚡ [Whisper Hook] AudioContext suspenso, fazendo resume...");
+                await audioContext.resume();
+                debugLog("✅ [Whisper Hook] AudioContext resumido:", audioContext.state);
             }
 
-            audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)(contextOptions);
+            debugLog(`🔊 [Whisper Hook] SampleRate efetivo: ${audioContext.sampleRate}Hz`);
             
-            // ⚠️ CRÍTICO PARA MOBILE: Resume o AudioContext se estiver suspenso
-            // iOS e Android exigem interação do usuário para desbloquear
-            if (audioContextRef.current.state === 'suspended') {
-                console.log("⚡ [Whisper Hook] AudioContext suspenso, fazendo resume...");
-                await audioContextRef.current.resume();
-                console.log("✅ [Whisper Hook] AudioContext resumido:", audioContextRef.current.state);
-            }
-
-            const actualSampleRate = audioContextRef.current.sampleRate;
-            console.log(`🔊 [Whisper Hook] SampleRate efetivo: ${actualSampleRate}Hz`);
-            
-            const source = audioContextRef.current.createMediaStreamSource(stream);
+            const source = audioContext.createMediaStreamSource(stream);
             
             // Cadeia de Filtros (Passa-Banda: 300Hz a 3500Hz)
-            const hpFilter = audioContextRef.current.createBiquadFilter();
+            const hpFilter = audioContext.createBiquadFilter();
             hpFilter.type = 'highpass';
             hpFilter.frequency.value = 300;
             hpFilter.Q.value = 0.7;
 
-            const lpFilter = audioContextRef.current.createBiquadFilter();
+            const lpFilter = audioContext.createBiquadFilter();
             lpFilter.type = 'lowpass';
             lpFilter.frequency.value = 3500;
             lpFilter.Q.value = 0.7;
             
-            // Pré-amplificador (Ganho Adaptativo)
-            const gainNode = audioContextRef.current.createGain();
-            gainNode.gain.value = isMobile ? 6.5 : 4.5;
+            // Pré-amplificador (Ganho Adaptativo — REDUZIDO para mobile)
+            const gainNode = audioContext.createGain();
+            gainNode.gain.value = IS_MOBILE ? MOBILE_GAIN : DESKTOP_GAIN;
             
-            // Compressor (Normaliza o volume da voz)
-            const compressor = audioContextRef.current.createDynamicsCompressor();
-            compressor.threshold.setValueAtTime(-24, audioContextRef.current.currentTime);
-            compressor.knee.setValueAtTime(30, audioContextRef.current.currentTime);
-            compressor.ratio.setValueAtTime(12, audioContextRef.current.currentTime);
-            compressor.attack.setValueAtTime(0.003, audioContextRef.current.currentTime);
-            compressor.release.setValueAtTime(0.25, audioContextRef.current.currentTime);
+            // Compressor (Normaliza o volume da voz — MENOS AGRESSIVO)
+            const compressor = audioContext.createDynamicsCompressor();
+            compressor.threshold.setValueAtTime(COMPRESSOR_THRESHOLD, audioContext.currentTime);
+            compressor.knee.setValueAtTime(30, audioContext.currentTime);
+            compressor.ratio.setValueAtTime(COMPRESSOR_RATIO, audioContext.currentTime);
+            compressor.attack.setValueAtTime(0.003, audioContext.currentTime);
+            compressor.release.setValueAtTime(0.25, audioContext.currentTime);
 
-            audioChunksRef.current = [];
+            // Guardar referências dos nós para desconexão limpa
+            pipelineNodesRef.current = { source, hpFilter, lpFilter, gainNode, compressor };
 
             // Tentar AudioWorklet primeiro (melhor para mobile), fallback para ScriptProcessor
             const workletSuccess = await tryAudioWorklet(
-                audioContextRef.current, source, gainNode, compressor, hpFilter, lpFilter
+                audioContext, source, gainNode, compressor, hpFilter, lpFilter
             );
 
             if (!workletSuccess) {
                 useScriptProcessorFallback(
-                    audioContextRef.current, source, gainNode, compressor, hpFilter, lpFilter
+                    audioContext, source, gainNode, compressor, hpFilter, lpFilter
                 );
             }
 
@@ -483,7 +540,16 @@ registerProcessor('audio-capture-processor', AudioCaptureProcessor);
             console.error('❌ [Whisper Hook] Erro ao acessar microfone:', err);
             callbacksRef.current.onError?.(err.name === 'NotAllowedError' ? 'not-allowed' : 'mic-error');
         }
-    }, [isListening, isProcessing, isLoadingModel, stop, processAudioFrame]);
+    }, [isListening, isProcessing, isLoadingModel, stop, processAudioFrame, disconnectPipeline]);
+
+    // Cleanup: fechar AudioContext ao desmontar
+    useEffect(() => {
+        return () => {
+            if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+                audioContextRef.current.close().catch(() => {});
+            }
+        };
+    }, []);
 
     return { isListening, isProcessing, isLoadingModel, modelLoadProgress, start, stop };
 };

@@ -200,7 +200,7 @@ const App: React.FC = () => {
         feedbackTimeoutRef.current = window.setTimeout(() => setFeedbackMessage(''), duration);
     }, []);
 
-    const { isListening, isProcessing, isLoadingModel, modelLoadProgress, start, stop, permissionGranted, setPermissionGranted } = useVoiceRecognition({
+    const { isListening, isProcessing, isLoadingModel, modelLoadProgress, start, stop, permissionGranted, setPermissionGranted, handleNetworkFallback } = useVoiceRecognition({
         onStart: () => {
             showFeedback("OUVINDO...");
             if (!permissionGranted) setPermissionGranted(true);
@@ -214,6 +214,10 @@ const App: React.FC = () => {
                 showFeedback("NÃO OUVI NADA. TENTE DE NOVO.");
             } else if (error === 'not-supported') {
                 showFeedback("RECONHECIMENTO DE VOZ NÃO SUPORTADO.");
+            } else if (error === 'network-fallback') {
+                // Fallback automático: rede caiu, tentando Whisper
+                showFeedback("REDE INSTÁVEL — TENTANDO MODO OFFLINE...");
+                handleNetworkFallback();
             } else if (error === 'network') {
                 showFeedback("ERRO DE REDE. VERIFIQUE A CONEXÃO.");
             } else if (error === 'timeout') {

@@ -5,12 +5,19 @@ env.allowLocalModels = false;
 env.allowRemoteModels = true;
 env.useBrowserCache = true;
 
+// Flag de debug — reduz console.logs em produção para menos jank mobile
+const DEBUG = false;
+
+function debugLog(...args: any[]) {
+    if (DEBUG) console.log(...args);
+}
+
 class WhisperWorker {
     static instance = null;
 
     static async getInstance(progress_callback = null) {
         if (this.instance === null) {
-            console.log("⚡ [Whisper Worker] Carregando Pipeline ASR (OpenAI Whisper - modo alta precisão)...");
+            console.log("⚡ [Whisper Worker] Carregando Pipeline ASR (OpenAI Whisper)...");
             try {
                 this.instance = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
                     quantized: true,
@@ -25,6 +32,27 @@ class WhisperWorker {
         return this.instance;
     }
 }
+
+// Filtro anti-alucinação estático (criado uma vez, reutilizado)
+const HALLUCINATION_PATTERNS = [
+    /^m[uú]sica\.?$/i,
+    /^obrigad[oa]\.?$/i,  
+    /^tchau\.?$/i,
+    /^legenda/i,
+    /^subscri/i,
+    /^subtitle/i,
+    /^thank/i,
+    /^you$/i,
+    /^bye\.?$/i,
+    /^the end\.?$/i,
+    /^\.*$/,  // Apenas pontos
+    /^(?:a|e|o|i|u)\.?$/i, // Uma única vogal
+    /^\s*$/,  // Vazio ou só espaços
+    /^\.\.\./, // Reticências
+    /^music\.?$/i,
+    /^\[.*\]$/,  // [Música], [Silencio], etc
+    /^\(.*\)$/,  // (Música), (Silencio), etc
+];
 
 self.onmessage = async (event) => {
     const { type, audio, language } = event.data;
@@ -48,26 +76,26 @@ self.onmessage = async (event) => {
 
     if (!audio) return;
 
-    // Cálculo básico de energia para debug de sinal
+    // Cálculo de energia para filtrar silêncio (única verificação — removida duplicata do hook)
     let sum = 0;
     for (let i = 0; i < audio.length; i++) {
         sum += audio[i] * audio[i];
     }
     const energy = Math.sqrt(sum / audio.length);
-    console.log(`⚡ [Whisper Worker] Recebidos ${audio.length} samples. Energia RMS: ${energy.toFixed(6)}`);
+    debugLog(`⚡ [Whisper Worker] Recebidos ${audio.length} samples. Energia RMS: ${energy.toFixed(6)}`);
 
     // Filtro de energia mínima: se o áudio é puro silêncio/ruído, não processar
     if (energy < 0.005) {
-        console.warn(`⚡ [Whisper Worker] Energia muito baixa (${energy.toFixed(6)}), descartando áudio silencioso.`);
+        debugLog(`⚡ [Whisper Worker] Energia muito baixa (${energy.toFixed(6)}), descartando.`);
         self.postMessage({ type: 'RESULT', text: '' });
         return;
     }
 
     try {
-        // Monitoramento de memória (Chromium)
-        if ((performance as any).memory) {
+        // Monitoramento de memória (Chromium) — apenas debug
+        if (DEBUG && (performance as any).memory) {
             const memory = (performance as any).memory;
-            console.log(`📊 [Whisper Worker] Memória: ${(memory.usedJSHeapSize / 1024 / 1024).toFixed(1)}MB / ${(memory.jsHeapSizeLimit / 1024 / 1024).toFixed(1)}MB`);
+            debugLog(`📊 [Whisper Worker] Memória: ${(memory.usedJSHeapSize / 1024 / 1024).toFixed(1)}MB / ${(memory.jsHeapSizeLimit / 1024 / 1024).toFixed(1)}MB`);
         }
 
         const transcriber = await WhisperWorker.getInstance((progress) => {
@@ -101,39 +129,21 @@ self.onmessage = async (event) => {
         const transcript = output.text.trim();
         const duration = ((performance.now() - startTime) / 1000).toFixed(2);
         
-        console.log(`✅ [Whisper Worker] Resultado bruto (${duration}s): "${transcript}"`);
-
-        // Filtro anti-alucinação: Whisper-tiny gera essas frases quando não detecta fala real
-        const HALLUCINATION_PATTERNS = [
-            /^m[uú]sica\.?$/i,
-            /^obrigad[oa]\.?$/i,  
-            /^tchau\.?$/i,
-            /^legenda/i,
-            /^subscri/i,
-            /^subtitle/i,
-            /^thank/i,
-            /^you$/i,
-            /^bye\.?$/i,
-            /^the end\.?$/i,
-            /^\.*$/,  // Apenas pontos
-            /^(?:a|e|o|i|u)\.?$/i, // Uma única vogal
-            /^\s*$/,  // Vazio ou só espaços
-            /^\.\.\./,  // Reticências
-            /^music\.?$/i,
-            /^\[.*\]$/,  // [Música], [Silencio], etc
-            /^\(.*\)$/,  // (Música), (Silencio), etc
-        ];
+        debugLog(`✅ [Whisper Worker] Resultado bruto (${duration}s): "${transcript}"`);
 
         const isHallucination = HALLUCINATION_PATTERNS.some(pattern => pattern.test(transcript));
         
         if (isHallucination || transcript.length < 2) {
-            console.warn(`⚠️ [Whisper Worker] Alucinação detectada e filtrada: "${transcript}"`);
+            console.warn(`⚠️ [Whisper Worker] Alucinação filtrada: "${transcript}"`);
             self.postMessage({ type: 'RESULT', text: '' });
-            return;
+        } else {
+            console.log(`✅ [Whisper Worker] Transcrição: "${transcript}" (${duration}s)`);
+            self.postMessage({ type: 'RESULT', text: transcript });
         }
 
-        console.log(`✅ [Whisper Worker] Transcrição válida: "${transcript}"`);
-        self.postMessage({ type: 'RESULT', text: transcript });
+        // Liberar referência do output para permitir GC mais cedo
+        // @ts-ignore
+        output.text = null;
 
     } catch (error) {
         console.error("❌ [Whisper Worker] Erro:", error);
