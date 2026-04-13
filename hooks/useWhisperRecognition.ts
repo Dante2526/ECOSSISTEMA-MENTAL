@@ -57,6 +57,7 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult, shoul
     const callbacksRef = useRef({ onStart, onEnd, onError, onResult });
     const processingTimeoutRef = useRef<number | null>(null);
     const modelPreloadedRef = useRef(false);
+    const workletLoadedRef = useRef(false);
 
     useEffect(() => {
         callbacksRef.current = { onStart, onEnd, onError, onResult };
@@ -317,9 +318,10 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult, shoul
         lpFilter: BiquadFilterNode
     ): Promise<boolean> => {
         try {
-            // Criar um blob URL com o código do worklet inline
-            // (para evitar problemas de CORS e caminhos em PWA)
-            const workletCode = `
+            if (!workletLoadedRef.current) {
+                // Criar um blob URL com o código do worklet inline
+                // (para evitar problemas de CORS e caminhos em PWA)
+                const workletCode = `
 class AudioCaptureProcessor extends AudioWorkletProcessor {
     constructor() {
         super();
@@ -359,11 +361,14 @@ class AudioCaptureProcessor extends AudioWorkletProcessor {
 
 registerProcessor('audio-capture-processor', AudioCaptureProcessor);
 `;
-            const blob = new Blob([workletCode], { type: 'application/javascript' });
-            const workletUrl = URL.createObjectURL(blob);
+                const blob = new Blob([workletCode], { type: 'application/javascript' });
+                const workletUrl = URL.createObjectURL(blob);
 
-            await audioContext.audioWorklet.addModule(workletUrl);
-            URL.revokeObjectURL(workletUrl);
+                await audioContext.audioWorklet.addModule(workletUrl);
+                URL.revokeObjectURL(workletUrl);
+                workletLoadedRef.current = true;
+                debugLog("📦 [Whisper Hook] Módulo AudioWorklet carregado.");
+            }
 
             const workletNode = new AudioWorkletNode(audioContext, 'audio-capture-processor');
             workletNodeRef.current = workletNode;
@@ -475,6 +480,7 @@ registerProcessor('audio-capture-processor', AudioCaptureProcessor);
                     sampleRate: 16000
                 });
                 audioContextRef.current = audioContext;
+                workletLoadedRef.current = false; // Resetar flag pois o novo contexto não tem o worklet
                 debugLog("🔊 [Whisper Hook] Novo AudioContext criado a 16kHz.");
             }
             
