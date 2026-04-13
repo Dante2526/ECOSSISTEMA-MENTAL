@@ -14,7 +14,7 @@ const MAX_RECORDING_MS = IS_MOBILE ? 15000 : 12000;
 const BASE_THRESHOLD = 0.035;
 const AUTO_STOP_MS = IS_MOBILE ? 3500 : 2500;
 const CALIBRATION_FRAMES = IS_MOBILE ? 10 : 5;
-const MOBILE_GAIN = 4.0;   // Reduzido de 6.5: evita clipping antes do compressor
+const MOBILE_GAIN = 3.5;   // Ajustado para 3.5 para equilíbrio ideal em mobile
 const DESKTOP_GAIN = 4.5;
 const BUFFER_SIZE = 2048;
 // Pré-aloca buffer máximo: 15s * 16kHz = 240.000 samples (960KB estático)
@@ -461,10 +461,6 @@ registerProcessor('audio-capture-processor', AudioCaptureProcessor);
             };
 
             // Nem todos os dispositivos mobile suportam sampleRate constraint
-            if (!IS_MOBILE) {
-                (audioConstraints as any).sampleRate = 16000;
-            }
-
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: audioConstraints
             });
@@ -474,14 +470,12 @@ registerProcessor('audio-capture-processor', AudioCaptureProcessor);
             let audioContext = audioContextRef.current;
             
             if (!audioContext || audioContext.state === 'closed') {
-                // Criar novo AudioContext apenas se não existe ou foi fechado
-                const contextOptions: AudioContextOptions = {};
-                if (!IS_MOBILE) {
-                    contextOptions.sampleRate = 16000;
-                }
-                audioContext = new (window.AudioContext || (window as any).webkitAudioContext)(contextOptions);
+                // Corrigido: Forçar 16000Hz sempre. O Whisper exige 16kHz.
+                audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+                    sampleRate: 16000
+                });
                 audioContextRef.current = audioContext;
-                debugLog("🔊 [Whisper Hook] Novo AudioContext criado.");
+                debugLog("🔊 [Whisper Hook] Novo AudioContext criado a 16kHz.");
             }
             
             // Resume se suspenso (necessário tanto para reutilização quanto para iOS/Android)
