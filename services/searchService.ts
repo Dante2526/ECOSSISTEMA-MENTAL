@@ -8,16 +8,16 @@ export function normalizeText(text: string | null | undefined): string {
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
         .replace(/<br>/g, '') // remove html tags from satellite names
-        .replace(/[^a-z0-9]/g, ''); // remove all non-alphanumeric chars
+        .replace(/[^a-z0-9]/g, '') // remove all non-alphanumeric chars
+        .replace(/([a-z]+)0+([1-9]\d*)/g, '$1$2') // tp04 -> tp4, tp010 -> tp10
+        .replace(/([a-z]+)0+$/g, '$10'); // tp000 -> tp0
 }
 
 export function applyPhoneticCorrections(transcript: string): string {
-    // Palavras de preenchimento (filler words) e comandos irrelevantes para ignorar
-    const fillerWords = ['então', 'tipo', 'eh', 'ah', 'hmm', 'quero', 'procurar', 'ir', 'no', 'na', 'para', 'veja', 'mostre', 'me', 'por', 'favor', 'linhas', 'dos', 'das'];
-    
     // Mapeamento exaustivo de números por extenso para dígitos
+        // Mapeamento exaustivo de números por extenso para dígitos
     const numberMap: { [key: string]: string } = {
-        'um': '1', 'uma': '1', 'dois': '2', 'duas': '2', 'tres': '3', 'três': '3',
+        'zero': '0', 'um': '1', 'uma': '1', 'dois': '2', 'duas': '2', 'tres': '3', 'três': '3',
         'quatro': '4', 'cinco': '5', 'seis': '6', 'meia': '6', 'sete': '7',
         'oito': '8', 'nove': '9', 'dez': '10', 'onze': '11', 'doze': '12',
         'treze': '13', 'quatorze': '14', 'quinze': '15', 'dezesseis': '16',
@@ -25,67 +25,165 @@ export function applyPhoneticCorrections(transcript: string): string {
         'trinta': '30', 'quarenta': '40', 'cinquenta': '50', 'sessenta': '60',
         'setenta': '70', 'oitenta': '80', 'noventa': '90', 'cem': '100',
         'cento': '100', 'duzentos': '200', 'trezentos': '300',
-        'cento e cinquenta e um': '151', 'cento e cinquenta': '150',
+        // Casos Compostos e Específicos do Usuário
+        'cento e cinquenta e um': '151', 'cento e cinquenta': '150', 'cento cinquenta e um': '151',
+        'um cinco um': '151', 'um cinco 1': '151',
         'duzentos e um': '201', 'duzentos e dois': '202',
-        '150 y 50': '151', '150 e 50': '151', 'zero': '0', 'zero um': '01',
+        'cento e oitenta e sete': '187', 'oitenta e sete': '187', 'cento oitenta e sete': '187',
+        'cento e cinquenta e nove': '159', 'cento cinquenta e nove': '159',
+        '150 y 50': '151', '150 e 50': '151', 'zero um': '01', 'zero 1': '01',
+        'hum': 'um', 'em': '1', 'hum um': '01', 'hum 1': '01', 'zero hum': '01',
+        'dos': '2', 'doix': '2', 'mea': '6', 'ocho': '8', 'oi': '8', 'seche': '7', 'sechi': '7', 'cincu': '5', 'sim': '5', 'trex': '3',
+        // Códigos de Orbe (TP2B, etc)
         'tp dois b': 'tp2b', 'tp 2 b': 'tp2b', 'tp 02b': 'tp2b',
         'tp doisb': 'tp2b', 'tepe': 'tp', 'te pe': 'tp', 'tp2 b': 'tp2b',
         'tep dois b': 'tp2b', 'tepê': 'tp', 'tp dois bê': 'tp2b',
         'tp zero um': 'tp01', 'tepe zero um': 'tp01', 'tepe 01': 'tp01',
-        'cento e oitenta e sete': '187', 'oitenta e sete': '187', 'cento oitenta e sete': '187',
-        '8 7': '187', '87': '187' // Pontes para quando o Whisper "come" o início de 187
+        'tp zero quatro': 'tp04', 'tepe zero quatro': 'tp04', 'tp 4': 'tp4', 'tepe 4': 'tp4',
+        'dois zero um b': '201b', 'dois zero um bê': '201b',
+        'um meia sete': '167', 'um meia set': '167', 'um me sete': '167',
+        'cento e sessenta e sete': '167', 'cento sessenta e sete': '167',
+        'um oito sete': '187', '87': '187',
+        'um seis um': '161', '11': '161',
+        'um seis dois': '162', '12': '162',
+        'um seis tres': '163', '13': '163',
+        'um seis quatro': '164', '14': '164',
+        'um seis cinco': '165', '15': '165',
+        'um seis seis': '166', '16': '166',
+        'um seis sete': '167', '17': '167',
+        'um seis oito': '168', '18': '168',
+        'meio': '6', 'mei': '6',
+        // Confusões Fonéticas T/D e P/B (Offline Whisper)
+        'dp': 'tp', 'depe': 'tp', 'de pe': 'tp', 'dp01': 'tp01', 'dp1': 'tp1',
+        'b13': 'p13', 'b 13': 'p13', 'be 13': 'p13', 'b13b': 'p13b', 'b13 b': 'p13b',
+        'beire': 'p', 'beireh': 'p', 'beire 3': 'p13', '3 e b': '13b', 'p 13 b': 'p13b',
+        // Casos de Falha do Número 1 (TP01) - Apenas transcrições específicas confirmadas
+        'atepeu': 'tp01', 'tepeu': 'tp01', 'tep eu': 'tp01', 'depele': 'tp01', 'tem pesarum': 'tp01', 'tem pezaram': 'tp01', '3-01': 'tp01',
+        // Casos de Falha da TP05
+        'tem 5': 'tp05', 'tem cinco': 'tp05', 'tem cinquo': 'tp05',
+        't p 5': 'tp05', 't p cinco': 'tp05', 'te pe cinco': 'tp05', 'te pe 5': 'tp05',
+        'tepe cinco': 'tp05', 'tepe 5': 'tp05', 'tepê cinco': 'tp05', 'tepê 5': 'tp05',
+        'tê pê cinco': 'tp05', 'tê pê 5': 'tp05', 'dp 5': 'tp05', 'dp cinco': 'tp05',
+        'dê pê 5': 'tp05', 'dê pê cinco': 'tp05', 'cp 5': 'tp05', 'cp cinco': 'tp05',
+        // P-lines phonetic
+        'pe treze': 'p13', 'pe quatorze': 'p14', 'pe quinze': 'p15', 'pe dezessete': 'p17', 'pe dezessis': 'p16', 'pe dezesseis': 'p16'
     };
 
+    const fillerWords = ['então', 'tipo', 'eh', 'ah', 'hmm', 'quero', 'procurar', 'ir', 'no', 'na', 'para', 'veja', 'mostre', 'me', 'por', 'favor', 'linhas', 'dos', 'das', 'a', 'o', 'e', 'vamos', 'vamu', 'vamus', 'bora'];
+
     let corrected = transcript.toLowerCase()
-        .replace(/[、,.]/g, ' ') // Remove vírgulas, pontos e separadores orientais
-        .replace(/\by\b/g, ' e ') // Corrige "y" para "e" (espanholismo do Whisper)
+        .replace(/-/g, ' ')
+        .replace(/½/g, ' meia ')
+        .replace(/\b1\/2\b/g, ' um meia ') 
+        // Uni-letras: unir "t p" ou "t e p e" em "tp"
+        .replace(/\bt\s+p\b/g, 'tp')
+        .replace(/\bt\s+e\s+p\s+e\b/g, 'tp')
+        .replace(/\bt\u00EA\s+p\u00EA\b/g, 'tp') // tê pê
+        .replace(/\bd\s+p\b/g, 'tp')
+        .replace(/\bd\s+e\s+p\s+e\b/g, 'tp')
+        // Política Anti-Matemática: 1,5 -> 165, 1,3 -> 163, etc.
+        // O Whisper entende "um meia X" como "1,X"
+        .replace(/\b1[,.](\d)\b/g, '16$1')
+        // Remove qualquer ponto ou vírgula entre números (ex: 20.1 -> 201)
+        .replace(/(\d)[,.](\d)/g, '$1$2')
+        // Remove "a", "e", "o" entre dígitos
+        .replace(/(\d)\s+[aeo]\s+(\d)/g, '$1 $2')
+        .replace(/[、]/g, ' ') 
+        .replace(/\by\b/g, ' e ') 
+        // Normalização de sufixos alfanuméricos (ex: "201 a" -> "201a", "P 13, B" -> "p13b")
+        // Agora aceita vírgula ou ponto opcional entre número e letra
+        .replace(/\b(\d+)\s*[,.]?\s*([ab])\b/g, '$1$2')
+        .replace(/\b(\d+)\s*[,.]?\s*be\b/g, '$1b')
+        
+        // Unir prefixos P/TP (ex: "p 13" -> "p13", "p 1, 3" -> "p13", "be 17" -> "p17")
+        // Esta regra vem ANTES da regra do 160 para proteger os códigos P.
+        .replace(/\b(tp|p|be)\s*[,.]?\s*(\d)\s*[,.]?\s*(\d)\b/g, (m, p1, p2, p3) => (p1 === 'be' ? 'p' : p1) + p2 + p3)
+        .replace(/\b(tp|p|be)\s*[,.]?\s*(\d+)\b/g, (m, p1, p2) => (p1 === 'be' ? 'p' : p1) + p2)
+
+        // Política Anti-Matemática: 1,5 -> 165, 1,3 -> 163, etc. (Usado no Whisper Mobile)
+        // PROTEÇÃO: Não aplica se o termo anterior for P ou TP (com ou sem espaço)
+        .replace(/(?<!tp|tp\s|p|p\s)\b1[,.](\d)\b/g, '16$1')
+        
         .replace(/\s+/g, ' ')
         .trim();
 
-    // Remover filler words no início da frase
-    fillerWords.forEach(word => {
-        const regex = new RegExp(`^${word}\\s+`, 'i');
-        corrected = corrected.replace(regex, '');
-    });
-
+    // 1. Aplicar mapeamento de números
     Object.keys(numberMap).forEach(key => {
         const regex = new RegExp(`\\b${key}\\b`, 'g');
         corrected = corrected.replace(regex, numberMap[key]);
     });
 
+    // 2. Compactação de dígitos final (ex: "1 6 3" -> "163")
+    const digitCompaction3 = /\b(\d)[, ]+(\d)[, ]+(\d)\b/g; 
+    corrected = corrected.replace(digitCompaction3, '$1$2$3');
+    
+    const digitCompaction2 = /\b(\d)[, ]+(\d)\b/g;
+    corrected = corrected.replace(digitCompaction2, '$1$2');
+    
+    const digitCompaction4 = /\b(\d)[, ]+(\d)[, ]+(\d)[, ]+(\d)\b/g;
+    corrected = corrected.replace(digitCompaction4, '$1$2$3$4');
+
+    // 3. Inteligência de Troca (Swap) para a faixa 160/150
+    const invalid150s = ['150', '153', '154', '155', '156', '157', '158']; 
+    invalid150s.forEach(num => {
+        if (corrected.includes(num)) {
+            const mappedNum = num.replace('15', '16');
+            corrected = corrected.replace(num, mappedNum);
+        }
+    });
+
+    // 4. Remover filler words (especialmente no início e conectores soltos)
+    fillerWords.forEach(word => {
+        // Remove com limites de palavra para evitar remover partes de outras palavras
+        const regex = new RegExp(`\\b${word}\\b`, 'gi');
+        corrected = corrected.replace(regex, ' ');
+    });
+
+    // Limpeza final de espaços extras gerados pelas substituições
+    corrected = corrected.replace(/\s+/g, ' ').trim();
+
     // Casos especiais para 151:
-    // 1) Whisper repetindo "um, um, um, um..."
+    // Whisper repetindo "um, um, um, um..."
     const repeatedUmPattern = /^(um[, ]+){2,4}um\.?$/;
     if (repeatedUmPattern.test(corrected)) {
         corrected = '151';
     }
-    // 2) Whisper devolvendo contagem "1, 2, 3, 4, 5, 1"
-    //    (padrão observado ao pedir "linha 151")
+    // Whisper devolvendo contagem "1, 2, 3, 4, 5, 1"
     const countThenOnePattern = /^1(?:[, ]+2[, ]+3[, ]+4[, ]+5[, ]+1\.?)$/;
     if (countThenOnePattern.test(corrected)) {
         corrected = '151';
     }
 
-    // Casos especiais para 167:
-    // Whisper às vezes entende "linha 167" como "minha 1,5,7"
-    const pattern157To167 = /^(minha\s+)?1[, ]+5[, ]+7\.?$/;
-    if (pattern157To167.test(corrected)) {
+    // Casos especiais para 151: fala rápida ou erros fonéticos comuns
+    const patternFast151 = /^(um\s+sim\s+comum|um\s+cinco\s+um|um\s+cinco\s+hum)\.?$/i;
+    if (patternFast151.test(corrected)) {
+        corrected = '151';
+    }
+
+    // Casos especiais para 167: fala rápida ou erros fonéticos comuns
+    const patternFast167 = /^(um\s+meia\s+sete|um\s+me\s+sete|um\s+meio\s+sete|cento\s+sessenta\s+sete|um\s+6\s+7|um\s+seis\s+sete|minha\s+1\s+5\s+7)\.?$/i;
+    if (patternFast167.test(corrected)) {
         corrected = '167';
     }
 
-    // Casos especiais para 65B:
-    // Whisper já retornou "Meia 5p", "e meia cinco de" e "Néia 5b" ao pedir "65B"
-    const pattern65B_digits = /^meia\s*5p\.?$/;
-    const pattern65B_words = /^(e\s+)?meia\s+cinco( de)?\.?$/;
-    const pattern65B_neia = /^n[eé]ia\s*5b\.?$/;
-    if (pattern65B_digits.test(corrected) || pattern65B_words.test(corrected) || pattern65B_neia.test(corrected)) {
-        corrected = '65b';
-    }
-
-    // Correções fonéticas específicas
+    // Correções fonéticas de nomes
     corrected = corrected.replace(/\bpiau\b/g, 'pial');
     corrected = corrected.replace(/\bpiaui\b/g, 'pial');
     corrected = corrected.replace(/\btrangulo\b/g, 'triangulo');
+    corrected = corrected.replace(/\bmeia\b/g, '6'); // "Meia" freq. usado para 6 no Brasil
+
+    if (corrected === 'meia5p' || corrected === 'meia5' || corrected === 'neia5b') {
+        corrected = '65b';
+    }
+
+    // 5. Correções de T/D e P/B via Regex para prefixos de códigos
+    corrected = corrected
+        .replace(/^dp(\d+)/g, 'tp$1') // dp01 -> tp01
+        .replace(/^b(\d+)/g, 'p$1')  // b13 -> p13
+        .replace(/\bdepe\b/g, 'tp')
+        .replace(/\btepe\b/g, 'tp')
+        .replace(/\btp\s+(\d+)/g, 'tp$1') // tp 01 -> tp01
+        .replace(/\bp\s+(\d+)/g, 'p$1');  // p 13 -> p13
 
     return corrected;
 }
@@ -198,7 +296,7 @@ export function findMatchingItems(transcript: string, cache: SearchItem[]): Sear
 
     // Tentativa 2: Extração de Números (Prioridade Segura para códigos)
     // Refinamento: Ignorar prefixos comuns que confundem a extração
-    const prefixesToIgnore = ['linha', 'orbe', 'sistema', 'ir para', 'ir', 'para', 'estação', 'camera', 'câmera'];
+    const prefixesToIgnore = ['linha', 'orbe', 'sistema', 'ir para', 'ir', 'para', 'estação', 'camera', 'câmera', 'vamos para', 'vamos', 'vamu', 'vamus', 'be'];
     let textForNumericSearch = correctedTranscript.toLowerCase();
     
     // Remover prefixos se eles existirem no início da frase
@@ -274,4 +372,41 @@ export function findMatchingItems(transcript: string, cache: SearchItem[]): Sear
     });
 
     return getUniqueResults(compressedMatches);
+}
+
+export function parseFromToCommand(text: string): { from: string, to: string } | null {
+    if (!text) return null;
+    
+    // Normalizar conectores comuns
+    const normalized = text.toLowerCase()
+        .replace(/\bpara a\b/g, 'para')
+        .replace(/\bpro\b/g, 'para')
+        .replace(/\bpra\b/g, 'para')
+        .replace(/\bindon\b/g, 'indo')
+        .replace(/\bda\b/g, 'de')
+        .replace(/\bdo\b/g, 'de');
+
+    // Padrão: "de [ORIGEM] para [DESTINO]" ou "[ORIGEM] para [DESTINO]"
+    // O Whisper costuma colocar pontuação no final, então removemos no final se houver.
+    const cleanText = normalized.replace(/[.?!]$/, '').trim();
+    
+    // Regex para capturar os dois grupos
+    const fromToRegex = /(?:de\s+)?(.+?)\s+para\s+(.+)/i;
+    const match = cleanText.match(fromToRegex);
+
+    if (match) {
+        const fromRaw = match[1].trim();
+        const toRaw = match[2].trim();
+
+        // Aplicar correções fonéticas em cada parte
+        const from = applyPhoneticCorrections(fromRaw);
+        const to = applyPhoneticCorrections(toRaw);
+
+        if (from && to) {
+            console.log(`🧭 [SearchService] Comando De-Para detectado: "${from}" -> "${to}"`);
+            return { from, to };
+        }
+    }
+
+    return null;
 }

@@ -4,6 +4,14 @@ export interface Satellite {
     style?: string;
 }
 
+export interface LocationData {
+    latitude: number;
+    longitude: number;
+    altitude?: number | null;
+    accuracy?: number;
+    timestamp: number;
+}
+
 export interface OrbitalSystem {
     id: string;
     name: string;
@@ -11,6 +19,8 @@ export interface OrbitalSystem {
     modalUrls: string[];
     satellites: Satellite[];
     mapCoordinates?: { x: number, y: number };
+    locationData?: LocationData;
+    path?: LocationData[];
 }
 
 export interface SearchItem {

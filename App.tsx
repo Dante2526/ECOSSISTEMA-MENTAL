@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { OrbitalSystem as OrbitalSystemType, SearchItem, Tour, OrbitalSystemRef } from './types';
 import { orbitalSystemsData as initialSystems } from './data/initialData';
 import { useVoiceRecognition } from './hooks/useVoiceRecognition';
-import { buildSearchCache, findMatchingItems, applyPhoneticCorrections, normalizeText } from './services/searchService';
+import { buildSearchCache, findMatchingItems, applyPhoneticCorrections, normalizeText, parseFromToCommand } from './services/searchService';
 import { ParallaxBackground } from './components/ParallaxBackground';
 import { OrbitalSystem } from './components/OrbitalSystem';
 import { ImageModal } from './components/ImageModal';
@@ -16,8 +16,11 @@ import { FeedbackMessage } from './components/FeedbackMessage';
 import { MapModal } from './components/MapModal';
 import { UpdatePrompt } from './components/UpdatePrompt';
 import { useRegisterSW } from 'virtual:pwa-register/react';
-import { usePreloadProgress } from './hooks/usePreloadProgress';
 import { OfflineSetupProgress } from './components/OfflineSetupProgress';
+import { FromToModal } from './components/FromToModal';
+import { useGeolocation } from './hooks/useGeolocation';
+import { usePreloadProgress } from './hooks/usePreloadProgress';
+import { RailwayMapModal } from './components/RailwayMapModal';
 
 const App: React.FC = () => {
     const [modalImages, setModalImages] = useState<string[]>([]);
@@ -30,9 +33,20 @@ const App: React.FC = () => {
     const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
     const [isQuickSearchOpen, setIsQuickSearchOpen] = useState(false);
     const [isTourSelectionOpen, setIsTourSelectionOpen] = useState(false);
+    const [isFromToModalOpen, setIsFromToModalOpen] = useState(false);
     const [activeTour, setActiveTour] = useState<Tour | null>(null);
+    const [showIconLabels, setShowIconLabels] = useState(true);
+    const [isRailwayMapOpen, setIsRailwayMapOpen] = useState(false);
 
     const orbitalSystemRef = useRef<OrbitalSystemRef>(null);
+
+    // Temporizador para sumir os nomes dos ícones após 10 segundos
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setShowIconLabels(false);
+        }, 10000);
+        return () => clearTimeout(timer);
+    }, []);
 
     // PWA Service Worker registration
     const {
@@ -50,7 +64,7 @@ const App: React.FC = () => {
 
     const [systems, setSystems] = useState<OrbitalSystemType[]>(() => {
         try {
-            const DATA_VERSION = '1.4'; // Increment to force data reset
+            const DATA_VERSION = '1.5'; // Incrementado para garantir compatibilidade com GPS
             const storedVersion = localStorage.getItem('orbitalDataVersion');
 
             if (storedVersion !== DATA_VERSION) {
@@ -61,7 +75,11 @@ const App: React.FC = () => {
             }
 
             const storedSystems = localStorage.getItem('orbitalSystems');
-            return storedSystems ? JSON.parse(storedSystems) : initialSystems;
+            const parsed = storedSystems ? JSON.parse(storedSystems) : initialSystems;
+            
+            // Validação extra: se não for array, reseta
+            if (!Array.isArray(parsed)) throw new Error("Dados de sistemas corrompidos");
+            return parsed;
         } catch (error) {
             console.error("Falha ao carregar sistemas do localStorage", error);
             localStorage.removeItem('orbitalSystems');
@@ -127,7 +145,7 @@ const App: React.FC = () => {
 
     const [tours, setTours] = useState<Tour[]>(() => {
         try {
-            const TOURS_VERSION = '1.0';
+            const TOURS_VERSION = '1.1'; // Bumping tours version too
             const storedToursVersion = localStorage.getItem('orbitalToursVersion');
             if (storedToursVersion !== TOURS_VERSION) {
                 localStorage.setItem('orbitalToursVersion', TOURS_VERSION);
@@ -135,7 +153,10 @@ const App: React.FC = () => {
                 return DEFAULT_TOURS;
             }
             const storedTours = localStorage.getItem('orbitalTours');
-            return storedTours ? JSON.parse(storedTours) : DEFAULT_TOURS;
+            const parsed = storedTours ? JSON.parse(storedTours) : DEFAULT_TOURS;
+
+            if (!Array.isArray(parsed)) throw new Error("Dados de tours corrompidos");
+            return parsed;
         } catch (error) {
             console.error("Falha ao carregar tours do localStorage", error);
             localStorage.removeItem('orbitalTours');
@@ -179,7 +200,7 @@ const App: React.FC = () => {
         feedbackTimeoutRef.current = window.setTimeout(() => setFeedbackMessage(''), duration);
     }, []);
 
-    const { isListening, isProcessing, isLoadingModel, start, stop, permissionGranted, setPermissionGranted } = useVoiceRecognition({
+    const { isListening, isProcessing, isLoadingModel, modelLoadProgress, start, stop, permissionGranted, setPermissionGranted, handleNetworkFallback } = useVoiceRecognition({
         onStart: () => {
             showFeedback("OUVINDO...");
             if (!permissionGranted) setPermissionGranted(true);
@@ -193,12 +214,48 @@ const App: React.FC = () => {
                 showFeedback("NÃO OUVI NADA. TENTE DE NOVO.");
             } else if (error === 'not-supported') {
                 showFeedback("RECONHECIMENTO DE VOZ NÃO SUPORTADO.");
+            } else if (error === 'network-fallback') {
+                // Fallback automático: rede caiu, tentando Whisper
+                showFeedback("REDE INSTÁVEL — TENTANDO MODO OFFLINE...");
+                handleNetworkFallback();
+            } else if (error === 'network') {
+                showFeedback("ERRO DE REDE. VERIFIQUE A CONEXÃO.");
+            } else if (error === 'timeout') {
+                showFeedback("TEMPO ESGOTADO. TENTE DE NOVO.");
             } else {
                 showFeedback(`ERRO: ${error.toUpperCase()}`);
             }
         },
         onResult: (transcript) => {
             console.log("🎤 App: Recebido transcript:", transcript);
+            
+            const lowerTranscript = transcript.toLowerCase();
+            
+            // Verifica perguntas de localização
+            const locationTriggers = ["onde estou", "qual linha", "que linha", "minha localização", "qual o local"];
+            const specificLocationTrigger = "estou na ";
+            
+            let isLocationQuery = locationTriggers.some(t => lowerTranscript.includes(t));
+            let suggestedLine = undefined;
+
+            if (lowerTranscript.includes(specificLocationTrigger)) {
+                isLocationQuery = true;
+                suggestedLine = lowerTranscript.split(specificLocationTrigger)[1]?.replace(/[?]/g, '').trim();
+            }
+
+            if (isLocationQuery) {
+                handleWhereAmI(suggestedLine);
+                return;
+            }
+
+            // 0. Check if it's a "From-To" command
+            const fromTo = parseFromToCommand(transcript);
+            if (fromTo) {
+                showFeedback(`NAVEGANDO: ${fromTo.from.toUpperCase()} ➔ ${fromTo.to.toUpperCase()}`);
+                handleFromToNavigation(fromTo.from, fromTo.to);
+                return;
+            }
+
             const correctedTranscript = applyPhoneticCorrections(transcript);
             
             if (!correctedTranscript || correctedTranscript.trim().length === 0) {
@@ -220,7 +277,7 @@ const App: React.FC = () => {
                 setTimeout(() => {
                     startTour(matchingTour);
                 }, 1000);
-                return; // Stop further search if a tour matched
+                return;
             }
 
             // 2. Fallback to normal System/Satellite search
@@ -247,11 +304,14 @@ const App: React.FC = () => {
     // Feedback visual para o processamento do Whisper
     useEffect(() => {
         if (isLoadingModel) {
-            showFeedback("INICIANDO...", 5000);
+            const progressText = modelLoadProgress > 0 && modelLoadProgress < 100 
+                ? `BAIXANDO MODELO: ${modelLoadProgress}%` 
+                : "INICIANDO...";
+            showFeedback(progressText, 10000);
         } else if (isProcessing) {
-            showFeedback("PROCESSANDO...", 15000);
+            showFeedback("PROCESSANDO...", 30000);
         }
-    }, [isLoadingModel, isProcessing, showFeedback]);
+    }, [isLoadingModel, isProcessing, modelLoadProgress, showFeedback]);
 
     const handleOrbClick = useCallback((systemId: string) => {
         if (activeTour) return;
@@ -368,14 +428,17 @@ const App: React.FC = () => {
 
     const endTour = useCallback(() => {
         setActiveTour(null);
+        setCurrentTargetId(null);
+        setDistanceToTarget(null);
         // Reset orbital system
         setTimeout(() => {
             orbitalSystemRef.current?.highlightSystemsByIds([]);
             orbitalSystemRef.current?.focusSystem(null);
-        }, 100);
+        }, 1000);
     }, []);
 
     const handleTourSystemFocus = useCallback((systemId: string) => {
+        setCurrentTargetId(systemId);
         orbitalSystemRef.current?.highlightSystemsByIds([systemId]);
         orbitalSystemRef.current?.focusSystem(systemId);
     }, []);
@@ -399,6 +462,182 @@ const App: React.FC = () => {
     const handleCloseEditingSystem = useCallback(() => setEditingSystem(null), []);
     const handleOpenMapModal = useCallback(() => setIsMapModalOpen(true), []);
     const handleCloseMapModal = useCallback(() => setIsMapModalOpen(false), []);
+    const handleOpenFromToModal = useCallback(() => setIsFromToModalOpen(true), []);
+    const handleCloseFromToModal = useCallback(() => setIsFromToModalOpen(false), []);
+    const handleUpdateSW = useCallback(() => updateServiceWorker(true), [updateServiceWorker]);
+    const handleDismissRefresh = useCallback(() => setNeedRefresh(false), [setNeedRefresh]);
+
+
+
+    const speak = useCallback((text: string) => {
+        if (!window.speechSynthesis) return;
+
+        // Cancela falas anteriores para não encavalar
+        window.speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'pt-BR';
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+
+        // Tenta encontrar uma voz masculina natural
+        const voices = window.speechSynthesis.getVoices();
+        const preferredVoice = voices.find(v => 
+            (v.name.includes('Google') || v.name.includes('Natural')) && 
+            v.lang.includes('pt-BR') && 
+            (v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('homem') || v.name.includes('Daniel') || v.name.includes('Antonio'))
+        ) || voices.find(v => v.lang.includes('pt-BR'));
+
+        if (preferredVoice) utterance.voice = preferredVoice;
+
+        window.speechSynthesis.speak(utterance);
+    }, []);
+
+    const { getStablePosition, findNearestSystem, isLocating: isLocatingGPS, startWatching, lastLocation } = useGeolocation();
+
+    // Inicia o monitoramento contínuo logo no início para garantir que o GPS esteja "Quente"
+    useEffect(() => {
+        startWatching();
+    }, [startWatching]);
+
+    const [currentTargetId, setCurrentTargetId] = useState<string | null>(null);
+    const [distanceToTarget, setDistanceToTarget] = useState<number | null>(null);
+    const lastSpokenDistanceRef = useRef<number | null>(null);
+
+    // Navegação Reativa: Calcula distância ao alvo atual do Tour (Apenas ADMIN)
+    useEffect(() => {
+        if (isAdmin && activeTour && currentTargetId && lastLocation) {
+            const system = systems.find(s => s.id === currentTargetId);
+            if (!system) return;
+
+            let dist = Infinity;
+            if (system.path && system.path.length > 0) {
+                dist = findNearestSystem(lastLocation, [system])?.distance ?? Infinity;
+            } else if (system.locationData) {
+                const R = 6371e3;
+                const toRad = Math.PI / 180;
+                const Δφ = (lastLocation.latitude - system.locationData.latitude) * toRad;
+                const Δλ = (lastLocation.longitude - system.locationData.longitude) * toRad;
+                const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                    Math.cos(system.locationData.latitude * toRad) * Math.cos(lastLocation.latitude * toRad) *
+                    Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+                dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            }
+
+            setDistanceToTarget(dist);
+
+            // Interface de Voz para Navegação (Alertas de proximidade)
+            if (dist <= 100 && dist > 80 && lastSpokenDistanceRef.current !== 100) {
+                speak(`Faltam 100 metros para ${system.name}`);
+                lastSpokenDistanceRef.current = 100;
+            } else if (dist <= 55 && dist > 45 && lastSpokenDistanceRef.current !== 50) {
+                speak(`Faltam 50 metros para ${system.name}`);
+                lastSpokenDistanceRef.current = 50;
+            } else if (dist <= 25 && dist > 15 && lastSpokenDistanceRef.current !== 20) {
+                speak(`Você está chegando na ${system.name}. Faltam 20 metros.`);
+                lastSpokenDistanceRef.current = 20;
+            } else if (dist <= 10 && lastSpokenDistanceRef.current !== 0) {
+                speak(`Você chegou na ${system.name}!`);
+                lastSpokenDistanceRef.current = 0;
+            }
+        } else {
+            setDistanceToTarget(null);
+            lastSpokenDistanceRef.current = null;
+        }
+    }, [isAdmin, activeTour, currentTargetId, lastLocation, systems, findNearestSystem, speak]);
+
+    const handleWhereAmI = useCallback(async (suggestedLine?: string) => {
+        showFeedback("BUSCANDO LOCALIZAÇÃO...");
+        try {
+            const currentPos = await getStablePosition(1);
+            
+            // Log para debug no console do administrador
+            console.log(`📍 GPS: Lat=${currentPos.latitude}, Lon=${currentPos.longitude}, Acurácia=${currentPos.accuracy}m`);
+
+            const result = findNearestSystem(currentPos, systems);
+
+            // Se a acurácia for ruim (ex: > 15m), avisar o usuário
+            const isLowAccuracy = currentPos.accuracy && currentPos.accuracy > 15;
+            if (isLowAccuracy) {
+                showFeedback(`SINAL GPS FRACO: ${Math.round(currentPos.accuracy)} METROS.`);
+            }
+
+            if (result) {
+                const { nearest, others, lowConfidence } = result;
+                const systemName = nearest.system.name;
+                const normalizedSystemName = normalizeText(systemName);
+                const normalizedSuggested = suggestedLine ? normalizeText(suggestedLine) : null;
+
+                let responseText = "";
+                
+                if (normalizedSuggested) {
+                    // O usuário perguntou: "Estou na [suggestedLine]?"
+                    const isCorrect = normalizedSystemName.includes(normalizedSuggested) || normalizedSuggested.includes(normalizedSystemName);
+                    
+                    if (isCorrect) {
+                        responseText = `Sim, você está na linha ${systemName}`;
+                    } else {
+                        responseText = `Não, você não está na linha ${suggestedLine}. Você está na linha ${systemName}`;
+                    }
+                } else {
+                    // Pergunta genérica: "Onde estou?"
+                    responseText = `Você está na linha ${systemName}`;
+                }
+
+                // Adiciona aviso se houver outra linha muito próxima (ambiguidade)
+                if (lowConfidence && others.length > 0) {
+                    const otherName = others[0].system.name;
+                    responseText += `. Atenção: a linha ${otherName} também está muito próxima.`;
+                }
+
+                showFeedback(responseText.toUpperCase());
+                speak(responseText);
+            } else {
+                const errorMsg = "Não encontrei nenhuma linha mapeada neste local.";
+                showFeedback(errorMsg.toUpperCase());
+                speak(errorMsg);
+            }
+        } catch (err) {
+            const errorMsg = "Erro ao buscar geolocalização. Verifique se o GPS está ativo.";
+            showFeedback("ERRO AO BUSCAR GPS");
+            speak(errorMsg);
+            console.error(err);
+        }
+    }, [getStablePosition, findNearestSystem, systems, showFeedback, speak]);
+
+    const handleFromToNavigation = useCallback((from: string, to: string) => {
+        setIsFromToModalOpen(false);
+        
+        // Use our search service to find match for each
+        const fromItems = findMatchingItems(from, searchCache);
+        const toItems = findMatchingItems(to, searchCache);
+
+        if (fromItems.length === 0 || toItems.length === 0) {
+            const missing = fromItems.length === 0 ? from : to;
+            showFeedback(`NÃO ENCONTREI: "${missing.toUpperCase()}"`);
+            return;
+        }
+
+        // Create a temporary tour
+        const combinedSteps = [
+            ...fromItems.map(item => ({ systemId: item.systemId })),
+            ...toItems.map(item => ({ systemId: item.systemId }))
+        ];
+
+        // Remove duplicates while keeping order
+        const uniqueSteps = combinedSteps.filter((step, index, self) =>
+            index === self.findIndex((s) => s.systemId === step.systemId)
+        );
+
+        const tempTour: Tour = {
+            id: `temp-from-to-${Date.now()}`,
+            name: `DE: ${from.toUpperCase()} PARA: ${to.toUpperCase()}`,
+            steps: uniqueSteps
+        };
+
+        startTour(tempTour);
+    }, [searchCache, startTour, showFeedback]);
+
     const handleOpenSystemImages = useCallback((urls: string[]) => {
         setModalImages(urls);
         setIsModalOpen(true);
@@ -414,12 +653,22 @@ const App: React.FC = () => {
                 isOpen={!!activeTour}
                 tour={activeTour}
                 systems={systems}
+                isAdmin={isAdmin}
+                distanceToTarget={distanceToTarget}
                 onClose={endTour}
                 onSystemFocus={handleTourSystemFocus}
             />
 
+            <RailwayMapModal
+                isOpen={isRailwayMapOpen}
+                systems={systems}
+                userLocation={lastLocation}
+                activeTourSystemId={currentTargetId}
+                onClose={() => setIsRailwayMapOpen(false)}
+            />
+
             <div className="relative z-10 flex items-center justify-center w-full h-full min-h-screen">
-                <OrbitalSystem
+                    <OrbitalSystem
                     ref={orbitalSystemRef}
                     systems={systems}
                     onOrbClick={handleOrbClick}
@@ -431,6 +680,7 @@ const App: React.FC = () => {
                     isEditing={!!editingSystem}
                     onOpenQuickSearch={handleOpenQuickSearch}
                     onOpenTours={handleOpenTours}
+                    showLabels={showIconLabels}
                 />
             </div>
 
@@ -463,8 +713,15 @@ const App: React.FC = () => {
                     onSave={handleSaveSystem}
                     onDelete={handleDeleteSystem}
                     onClose={handleCloseEditingSystem}
+                    onOpenMap={() => setIsRailwayMapOpen(true)}
                 />
             )}
+
+            <FromToModal 
+                isOpen={isFromToModalOpen}
+                onClose={handleCloseFromToModal}
+                onNavigate={handleFromToNavigation}
+            />
 
             <FeedbackMessage message={feedbackMessage} />
 
@@ -477,8 +734,8 @@ const App: React.FC = () => {
             <UpdatePrompt
                 offlineReady={offlineReady}
                 needRefresh={needRefresh}
-                onUpdate={useCallback(() => updateServiceWorker(true), [updateServiceWorker])}
-                onClose={useCallback(() => setNeedRefresh(false), [setNeedRefresh])}
+                onUpdate={handleUpdateSW}
+                onClose={handleDismissRefresh}
             />
 
             <MapModal
@@ -495,23 +752,41 @@ const App: React.FC = () => {
                 {!editingSystem && !activeTour && (
                     <>
                         <button
+                            title="Navegação De-Para"
+                            onClick={handleOpenFromToModal}
+                            className="group relative w-12 h-12 rounded-full bg-black/60 border border-blue-500 flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:bg-blue-500/20"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                            </svg>
+                            <span className={`absolute left-14 whitespace-nowrap bg-black/80 px-2 py-1 rounded text-xs font-bold border border-blue-500/50 transition-all duration-1000 ${showIconLabels ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                                DE-PARA
+                            </span>
+                        </button>
+                        <button
                             title="Ver Mapa do Ecossistema"
                             onClick={handleOpenMapModal}
-                            className="w-12 h-12 rounded-full bg-black/60 border border-emerald-500 flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:bg-emerald-500/20"
+                            className="group relative w-12 h-12 rounded-full bg-black/60 border border-emerald-500 flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:bg-emerald-500/20"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                             </svg>
+                            <span className={`absolute left-14 whitespace-nowrap bg-black/80 px-2 py-1 rounded text-xs font-bold border border-emerald-500/50 transition-all duration-1000 ${showIconLabels ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                                LAYOUT
+                            </span>
                         </button>
                         <button
                             title={isAdmin ? "Sair do Modo Admin" : "Acesso de Admin"}
                             onClick={handleAdminToggle}
-                            className="w-12 h-12 rounded-full bg-black/60 border border-purple-500 flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:bg-purple-500/20"
+                            className="group relative w-12 h-12 rounded-full bg-black/60 border border-purple-500 flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:bg-purple-500/20"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                             </svg>
+                            <span className={`absolute left-14 whitespace-nowrap bg-black/80 px-2 py-1 rounded text-xs font-bold border border-purple-500/50 transition-all duration-1000 ${showIconLabels ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                                {isAdmin ? 'SAIR' : 'CONFIG'}
+                            </span>
                         </button>
                     </>
                 )}

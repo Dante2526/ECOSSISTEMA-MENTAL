@@ -213,6 +213,7 @@ interface OrbitalSystemProps {
     isEditing: boolean;
     onOpenQuickSearch: () => void;
     onOpenTours: () => void;
+    showLabels?: boolean;
 }
 
 // Helper function moved outside component for performance
@@ -230,6 +231,7 @@ const OrbitalSystemComponent: React.ForwardRefRenderFunction<OrbitalSystemRef, O
     isEditing,
     onOpenQuickSearch,
     onOpenTours,
+    showLabels = false,
 }, ref) => {
     const [highlightedSystems, setHighlightedSystems] = useState<Set<string>>(new Set());
     const [isFocused, setIsFocused] = useState(false);
@@ -480,8 +482,7 @@ const OrbitalSystemComponent: React.ForwardRefRenderFunction<OrbitalSystemRef, O
 
     useEffect(() => {
         const el = containerRef.current;
-        // Check ref instead of prop
-        if (!el || !!focusedSystemIdRef.current) return;
+        if (!el) return;
 
         const panLimit = config.baseRadius * 3;
 
@@ -796,42 +797,54 @@ const OrbitalSystemComponent: React.ForwardRefRenderFunction<OrbitalSystemRef, O
                     <button
                         title="Adicionar Novo Sistema"
                         onClick={onAddSystem}
-                        className="w-12 h-12 rounded-full bg-black/60 border border-green-500 flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:bg-green-500/20"
+                        className="group relative w-12 h-12 rounded-full bg-black/60 border border-green-500 flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:bg-green-500/20"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                         </svg>
+                        <span className={`absolute right-14 whitespace-nowrap bg-black/80 px-2 py-1 rounded text-xs font-bold border border-green-500/50 transition-all duration-1000 ${showLabels ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                            ADICIONAR
+                        </span>
                     </button>
                 )}
                 {!isFocused && (
                     <button
                         title="Iniciar Tour Guiado"
                         onClick={onOpenTours}
-                        className="w-12 h-12 rounded-full bg-black/60 border border-yellow-500 flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:bg-yellow-500/20"
+                        className="group relative w-12 h-12 rounded-full bg-black/60 border border-yellow-500 flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:bg-yellow-500/20"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                             <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
+                        <span className={`absolute right-14 whitespace-nowrap bg-black/80 px-2 py-1 rounded text-xs font-bold border border-yellow-500/50 transition-all duration-1000 ${showLabels ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                            TOUR
+                        </span>
                     </button>
                 )}
                 <button
                     title="Busca Rápida (Ctrl+K)"
                     onClick={onOpenQuickSearch}
-                    className="w-12 h-12 rounded-full bg-black/60 border border-cyan-500 flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:bg-cyan-500/20"
+                    className="group relative w-12 h-12 rounded-full bg-black/60 border border-cyan-500 flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:bg-cyan-500/20"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
+                    <span className={`absolute right-14 whitespace-nowrap bg-black/80 px-2 py-1 rounded text-xs font-bold border border-cyan-500/50 transition-all duration-1000 ${showLabels ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                        PESQUISA
+                    </span>
                 </button>
                 <button
                     title="Resetar Visão"
                     onClick={handleResetView}
-                    className="w-12 h-12 rounded-full bg-black/60 border border-blue-500 flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:bg-blue-500/20"
+                    className="group relative w-12 h-12 rounded-full bg-black/60 border border-blue-500 flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:bg-blue-500/20"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                     </svg>
+                    <span className={`absolute right-14 whitespace-nowrap bg-black/80 px-2 py-1 rounded text-xs font-bold border border-blue-500/50 transition-all duration-1000 ${showLabels ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                        RECENTRALIZAR
+                    </span>
                 </button>
             </div>
         </>
