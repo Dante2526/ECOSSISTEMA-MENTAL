@@ -1,0 +1,6 @@
+{
+  "name": "Graph Analysis Dashboard",
+  "description": "Ferramenta de auditoria ferroviária determinística baseada em regras matemáticas e telemetria bruta.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

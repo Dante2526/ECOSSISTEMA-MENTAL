@@ -1,0 +1,68 @@
+
+{
+  "rules": [
+    {
+      "id": "drain-time",
+      "name": "Tempo de Dreno (Viradores)",
+      "limit": 4,
+      "unit": "minutos",
+      "description": "Garantir o cumprimento do tempo de 4 minutos exclusivos para o processo de dreno nos viradores."
+    },
+    {
+      "id": "emergency-application",
+      "name": "Aplicação de Emergência",
+      "limit": 1,
+      "unit": "minuto",
+      "description": "Tempo obrigatório de 1 minuto para aplicação de emergência pelo maquinista após o dreno."
+    },
+    {
+      "id": "giroflex-positioning",
+      "name": "Circulação até GIROFLEX",
+      "limit": 16,
+      "unit": "minutos",
+      "description": "Tempo máximo de 16 minutos para circulação de locomotivas pós-posicionamento até o GIROFLEX/PIAL."
+    },
+    {
+      "id": "security-locking",
+      "name": "Travamento de Segurança",
+      "limit": 1,
+      "unit": "minuto",
+      "description": "Garantir o travamento de segurança dos viradores no tempo de 1 minuto."
+    },
+    {
+      "id": "yard-speed-limit",
+      "name": "Velocidade em Pátio",
+      "limit": 40,
+      "unit": "km/h",
+      "description": "Velocidade máxima permitida em áreas de manobra e pátios conforme ROF."
+    },
+    {
+      "id": "pneumatic-refill",
+      "name": "Abastecimento Pneumático",
+      "limit": 1,
+      "unit": "minuto",
+      "description": "Garantir o cumprimento do tempo de 1 minuto para o processo de abastecimento do sistema pneumático."
+    },
+    {
+      "id": "correct-startup",
+      "name": "Arrancada Correta",
+      "limit": 1,
+      "unit": "check",
+      "description": "Verificação obrigatória do acionamento da buzina e progressão gradual do acelerador durante a arrancada."
+    },
+    {
+      "id": "dumper-speed",
+      "name": "Velocidade no Virador",
+      "limit": 30,
+      "unit": "km/h",
+      "description": "Velocidade máxima permitida durante a circulação e posicionamento no virador de vagões."
+    },
+    {
+      "id": "positive-pressure-test",
+      "name": "Teste de Pressão Positiva",
+      "limit": 1,
+      "unit": "minuto",
+      "description": "Duração obrigatória de 1 minuto para a realização do teste de pressão positiva."
+    }
+  ]
+}
