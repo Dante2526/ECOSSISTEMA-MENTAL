@@ -30,6 +30,41 @@ function debugLog(...args: any[]) {
     if (DEBUG) console.log(...args);
 }
 
+/**
+ * Realiza o downsampling de um buffer de áudio de uma taxa de amostragem nativa para 16kHz.
+ * Essencial para que o Whisper processe a voz na velocidade e tonalidade corretas.
+ */
+function resampleTo16k(audioBuffer: Float32Array, inputSampleRate: number): Float32Array {
+    if (inputSampleRate === 16000) {
+        return audioBuffer;
+    }
+    
+    const sampleRateRatio = inputSampleRate / 16000;
+    const newLength = Math.round(audioBuffer.length / sampleRateRatio);
+    const result = new Float32Array(newLength);
+    
+    let offsetResult = 0;
+    let offsetBuffer = 0;
+    
+    while (offsetResult < result.length) {
+        const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
+        
+        // Média de amplitude simples no intervalo
+        let accum = 0;
+        let count = 0;
+        for (let i = offsetBuffer; i < nextOffsetBuffer && i < audioBuffer.length; i++) {
+            accum += audioBuffer[i];
+            count++;
+        }
+        
+        result[offsetResult] = count > 0 ? accum / count : 0;
+        offsetResult++;
+        offsetBuffer = nextOffsetBuffer;
+    }
+    
+    return result;
+}
+
 export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult, shouldPreload = true }: WhisperRecognitionOptions) => {
     const [isListening, setIsListening] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -202,7 +237,15 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult, shoul
 
         if (samplesRecorded > 0 && hasSpeechStartedRef.current) {
             // Copiar apenas a porção preenchida do buffer (não o buffer inteiro)
-            const mergedArray = audioBufferRef.current.slice(0, samplesRecorded);
+            let mergedArray = audioBufferRef.current.slice(0, samplesRecorded);
+
+            // Resampling para 16kHz se a taxa do AudioContext nativo for diferente
+            const currentSampleRate = audioContextRef.current?.sampleRate || 16000;
+            if (currentSampleRate !== 16000) {
+                debugLog(`🔊 [Whisper Hook] Fazendo resampling de ${currentSampleRate}Hz para 16000Hz...`);
+                mergedArray = resampleTo16k(mergedArray, currentSampleRate);
+                debugLog(`🔊 [Whisper Hook] Resampling concluído. Novos samples: ${mergedArray.length}`);
+            }
 
             // Enviar direto ao worker — ele calcula a energia
             debugLog(`⚡ [Whisper Hook] Enviando ${mergedArray.length} samples para o worker.`);
@@ -217,10 +260,11 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult, shoul
                 callbacksRef.current.onEnd?.();
             }, PROCESSING_TIMEOUT_MS);
 
+            // Otimizado: Usar Transferable Objects para evitar cópia de dados na thread
             workerRef.current?.postMessage({
                 audio: mergedArray,
                 language: 'portuguese'
-            });
+            }, [mergedArray.buffer]);
         } else {
             if (!hasSpeechStartedRef.current) {
                 debugLog("⚡ [Whisper Hook] Nenhuma fala detectada durante a gravação.");
@@ -253,8 +297,15 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult, shoul
         smoothedRmsRef.current = (smoothedRmsRef.current * 0.7) + (rms * 0.3);
         framesAnalyzedRef.current++;
 
-        if (framesAnalyzedRef.current < CALIBRATION_FRAMES) {
-            noiseFloorRef.current = Math.max(noiseFloorRef.current, smoothedRmsRef.current);
+        // Correção: Ignorar os 2 primeiros frames de estabilização física do hardware (evita "pop/click" inicial do microfone)
+        if (framesAnalyzedRef.current <= 2) {
+            return;
+        }
+
+        if (framesAnalyzedRef.current < CALIBRATION_FRAMES + 2) {
+            // Correção: Limitar o noiseFloor a um teto realista para evitar calibrar um estalo isolado como ruído de fundo perpétuo
+            const cappedRms = Math.min(smoothedRmsRef.current, 0.025);
+            noiseFloorRef.current = Math.max(noiseFloorRef.current, cappedRms);
             return;
         }
 
