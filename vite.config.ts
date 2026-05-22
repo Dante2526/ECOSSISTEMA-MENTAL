@@ -6,9 +6,6 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   return {
-    esbuild: {
-      keepNames: true,
-    },
     server: {
       port: 3000,
       host: '0.0.0.0',
@@ -125,7 +122,12 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       sourcemap: false,
-      chunkSizeWarningLimit: 2000
+      chunkSizeWarningLimit: 2000,
+      minify: 'terser',
+      terserOptions: {
+        keep_classnames: true,
+        keep_fnames: true,
+      },
     },
     resolve: {
       alias: {
