@@ -1,9 +1,35 @@
-import { env, pipeline } from '@xenova/transformers';
+import { env, pipeline, AutoModelForSpeechSeq2Seq, AutoModelForCTC } from '@xenova/transformers';
 
 // Configuração para uso do cache do navegador (Cache API)
 env.allowLocalModels = false;
 env.allowRemoteModels = true;
 env.useBrowserCache = true;
+
+// 🔍 Interceptar from_pretrained para expor erros reais que o pipeline engole silenciosamente
+const _origSeq2Seq = AutoModelForSpeechSeq2Seq.from_pretrained.bind(AutoModelForSpeechSeq2Seq);
+AutoModelForSpeechSeq2Seq.from_pretrained = async (...args: any[]) => {
+    try {
+        console.log("🔍 [DEBUG] AutoModelForSpeechSeq2Seq.from_pretrained chamado...");
+        const result = await _origSeq2Seq(...args);
+        console.log("✅ [DEBUG] AutoModelForSpeechSeq2Seq carregado com sucesso!");
+        return result;
+    } catch (e: any) {
+        console.error("🔴 [DEBUG] AutoModelForSpeechSeq2Seq ERRO REAL:", e?.message || e);
+        throw e;
+    }
+};
+
+const _origCTC = AutoModelForCTC.from_pretrained.bind(AutoModelForCTC);
+AutoModelForCTC.from_pretrained = async (...args: any[]) => {
+    try {
+        console.log("🔍 [DEBUG] AutoModelForCTC.from_pretrained chamado (fallback)...");
+        const result = await _origCTC(...args);
+        return result;
+    } catch (e: any) {
+        console.error("🔴 [DEBUG] AutoModelForCTC ERRO:", e?.message || e);
+        throw e;
+    }
+};
 
 // Flag de debug — reduz console.logs em produção para menos jank mobile
 const DEBUG = false;
