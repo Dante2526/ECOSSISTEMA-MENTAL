@@ -1,4 +1,4 @@
-import { env, pipeline } from '@xenova/transformers';
+import { env, pipeline } from '@huggingface/transformers';
 
 // Configuração para uso do cache do navegador (Cache API)
 env.allowLocalModels = false;
