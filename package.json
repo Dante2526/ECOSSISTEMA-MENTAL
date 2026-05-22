@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "cross-env NODE_OPTIONS=--max-old-space-size=4096 vite build",
+    "build": "node -e \"const fs = require('fs'); fs.rmSync('public/ort', {recursive:true, force:true}); fs.cpSync('node_modules/onnxruntime-web/dist', 'public/ort', {recursive: true})\" && cross-env NODE_OPTIONS=--max-old-space-size=4096 vite build",
     "preview": "vite preview"
   },
   "dependencies": {

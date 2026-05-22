@@ -4,6 +4,7 @@ import { env, pipeline } from '@huggingface/transformers';
 env.allowLocalModels = false;
 env.allowRemoteModels = true;
 env.useBrowserCache = true;
+env.backends.onnx.wasm.wasmPaths = '/ort/';
 
 // Flag de debug — reduz console.logs em produção para menos jank mobile
 const DEBUG = false;
