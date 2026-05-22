@@ -5,31 +5,25 @@ env.allowLocalModels = false;
 env.allowRemoteModels = true;
 env.useBrowserCache = true;
 
-// 🔍 Interceptar from_pretrained para expor erros reais que o pipeline engole silenciosamente
-const _origSeq2Seq = AutoModelForSpeechSeq2Seq.from_pretrained.bind(AutoModelForSpeechSeq2Seq);
-AutoModelForSpeechSeq2Seq.from_pretrained = async (...args: any[]) => {
-    try {
-        console.log("🔍 [DEBUG] AutoModelForSpeechSeq2Seq.from_pretrained chamado...");
-        const result = await _origSeq2Seq(...args);
-        console.log("✅ [DEBUG] AutoModelForSpeechSeq2Seq carregado com sucesso!");
-        return result;
-    } catch (e: any) {
-        console.error("🔴 [DEBUG] AutoModelForSpeechSeq2Seq ERRO REAL:", e?.message || e);
-        throw e;
+// 🔍 DIAGNÓSTICO: Testar se a classe exportada funciona diretamente
+console.log("🔍 [DEBUG] AutoModelForSpeechSeq2Seq class:", typeof AutoModelForSpeechSeq2Seq);
+console.log("🔍 [DEBUG] MODEL_CLASS_MAPPINGS:", AutoModelForSpeechSeq2Seq.MODEL_CLASS_MAPPINGS);
+if (AutoModelForSpeechSeq2Seq.MODEL_CLASS_MAPPINGS) {
+    for (const map of AutoModelForSpeechSeq2Seq.MODEL_CLASS_MAPPINGS) {
+        console.log("🔍 [DEBUG] Map has 'whisper':", map.has('whisper'), "Map keys:", [...map.keys()]);
     }
-};
+}
 
-const _origCTC = AutoModelForCTC.from_pretrained.bind(AutoModelForCTC);
-AutoModelForCTC.from_pretrained = async (...args: any[]) => {
+// Teste de carregamento direto (sem pipeline)
+(async () => {
     try {
-        console.log("🔍 [DEBUG] AutoModelForCTC.from_pretrained chamado (fallback)...");
-        const result = await _origCTC(...args);
-        return result;
+        console.log("🔍 [DEBUG] Tentando carregar modelo diretamente via AutoModelForSpeechSeq2Seq...");
+        const testModel = await AutoModelForSpeechSeq2Seq.from_pretrained('Xenova/whisper-tiny', { quantized: true });
+        console.log("✅ [DEBUG] CARREGAMENTO DIRETO FUNCIONOU:", testModel);
     } catch (e: any) {
-        console.error("🔴 [DEBUG] AutoModelForCTC ERRO:", e?.message || e);
-        throw e;
+        console.error("🔴 [DEBUG] CARREGAMENTO DIRETO FALHOU:", e?.message || e);
     }
-};
+})();
 
 // Flag de debug — reduz console.logs em produção para menos jank mobile
 const DEBUG = false;
