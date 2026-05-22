@@ -87,30 +87,52 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
             }
         };
 
-        // 3. Pré-carregar Imagens (lotes de 5 para não travar a UI)
+        // 3. Pré-carregar Imagens (lotes de 5 para não travar a UI) usando Cache API para garantir persistência offline
         const BATCH_SIZE = 5;
         let i = 0;
-        const loadNextBatch = () => {
+
+        const preloadImageToCache = async (url: string) => {
+            try {
+                if ('caches' in window) {
+                    const cache = await caches.open('ibb-images-cache');
+                    const cachedResponse = await cache.match(url);
+                    if (cachedResponse) {
+                        return; // Já está no cache
+                    }
+                    // 'no-cors' permite buscar imagens de origens diferentes com segurança
+                    const response = await fetch(url, { mode: 'no-cors' });
+                    await cache.put(url, response);
+                } else {
+                    throw new Error('Cache API não suportado');
+                }
+            } catch (err) {
+                // Fallback tradicional se o fetch falhar ou não suportar caches
+                await new Promise<void>((resolve) => {
+                    const img = new Image();
+                    img.onload = img.onerror = () => resolve();
+                    img.src = url;
+                });
+            }
+        };
+
+        const loadNextBatch = async () => {
             if (i >= urls.length) return;
 
             const batch = urls.slice(i, i + BATCH_SIZE);
             i += BATCH_SIZE;
 
-            let completedInBatch = 0;
-            batch.forEach(url => {
-                const img = new Image();
-                img.onload = img.onerror = () => {
-                    tickProgress(1); // Imagens = peso 1
-                    completedInBatch++;
-                    if (completedInBatch === batch.length) {
-                        setTimeout(loadNextBatch, 50); // Respirar UI
-                    }
-                };
-                img.src = url;
-            });
+            // Executa o lote de downloads concorrentemente
+            await Promise.all(batch.map(async (url) => {
+                await preloadImageToCache(url);
+                tickProgress(1); // Imagens = peso 1
+            }));
+
+            setTimeout(loadNextBatch, 50); // Respirar UI antes do próximo lote
         };
 
-        setTimeout(loadNextBatch, 500);
+        setTimeout(() => {
+            loadNextBatch();
+        }, 500);
 
         // 4. Pré-carregar Model Whisper (Xenova) via Worker para garantir cache 100%
         const preloadWhisperModel = () => {
@@ -168,20 +190,29 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
             system.modalUrls.forEach(url => urlsToCache.add(url));
         });
         const urls = Array.from(urlsToCache);
+
+        const preloadImageToCache = async (url: string) => {
+            try {
+                if ('caches' in window) {
+                    const cache = await caches.open('ibb-images-cache');
+                    const cachedResponse = await cache.match(url);
+                    if (cachedResponse) return;
+                    const response = await fetch(url, { mode: 'no-cors' });
+                    await cache.put(url, response);
+                }
+            } catch (_) {
+                // Fallback silencioso
+                new Image().src = url;
+            }
+        };
+
         let i = 0;
-        const loadNextBatch = () => {
+        const loadNextBatch = async () => {
             if (i >= urls.length) return;
             const batch = urls.slice(i, i + 5);
             i += 5;
-            let completedInBatch = 0;
-            batch.forEach(url => {
-                const img = new Image();
-                img.onload = img.onerror = () => {
-                    completedInBatch++;
-                    if (completedInBatch === batch.length) setTimeout(loadNextBatch, 100);
-                };
-                img.src = url;
-            });
+            await Promise.all(batch.map(url => preloadImageToCache(url)));
+            setTimeout(loadNextBatch, 100);
         };
         setTimeout(loadNextBatch, 2000);
 
