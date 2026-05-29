@@ -81,6 +81,13 @@ export function applyPhoneticCorrections(transcript: string): string {
     const fillerWords = ['então', 'tipo', 'eh', 'ah', 'hmm', 'quero', 'procurar', 'ir', 'no', 'na', 'para', 'veja', 'mostre', 'me', 'por', 'favor', 'linhas', 'dos', 'das', 'a', 'o', 'e', 'vamos', 'vamu', 'vamus', 'bora'];
 
     let corrected = transcript.toLowerCase()
+        // --- REGRA PRIORITÁRIA 201-B ---
+        // Captura agressiva de "201-B" ignorando vírgulas, pontos e separações.
+        // Cobre: "dois, zero be", "2, 0 1 b", "dois zero beio", "dois zero 1 v", etc.
+        .replace(/\b(dois|2)\s*[,.]?\s*(zero|0)\s*[,.]?\s*(um|1)?\s*[,.]?\s*(b|v|be[ioa]?|b[eêiy][oa]?|v[eê])\b/g, '201b')
+        .replace(/\b(duzentos|200)\s*[,.]?\s*(e)?\s*[,.]?\s*(um|1)\s*[,.]?\s*(b|v|be[ioa]?|b[eêiy][oa]?|v[eê])\b/g, '201b')
+        .replace(/\b201\s*[,.]?\s*(b|v|be[ioa]?|b[eêiy][oa]?|v[eê])\b/g, '201b')
+        // -------------------------------
         .replace(/-/g, ' ')
         .replace(/½/g, ' meia ')
         .replace(/\b1\/2\b/g, ' um meia ') 
