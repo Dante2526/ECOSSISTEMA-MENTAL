@@ -30,13 +30,13 @@ export default defineConfig(({ mode }) => {
           runtimeCaching: [
             {
               // Cache de modelos da IA (Whisper) do HuggingFace - Metadados/Config
-              // Importante: Manter status [0, 200] para lidar com requisições opaque da Google/HF
-              urlPattern: /^https:\/\/huggingface\.co\/Xenova\/.*/i,
+              // Suporta tanto Xenova (legado) quanto onnx-community (v3)
+              urlPattern: /^https:\/\/huggingface\.co\/(Xenova|onnx-community)\/.*/i,
               handler: 'CacheFirst',
               options: {
                 cacheName: 'whisper-model-cache',
                 expiration: {
-                  maxEntries: 20,
+                  maxEntries: 30,
                   maxAgeSeconds: 30 * 24 * 60 * 60, // 30 dias
                 },
                 cacheableResponse: {

@@ -4,7 +4,7 @@ import {
     AutoProcessor, 
     AutoModelForSpeechSeq2Seq, 
     AutomaticSpeechRecognitionPipeline 
-} from '@xenova/transformers';
+} from '@huggingface/transformers';
 
 // Configuração para uso do cache do navegador (Cache API)
 env.allowLocalModels = false;
@@ -25,7 +25,7 @@ class WhisperWorker {
         if (this.instance === null) {
             console.log("⚡ [Whisper Worker] Construindo Pipeline ASR manualmente...");
             try {
-                const modelName = 'Xenova/whisper-tiny';
+                const modelName = 'onnx-community/whisper-tiny';
                 
                 console.log("⏳ [1/3] Carregando Tokenizer...");
                 const tokenizer = await AutoTokenizer.from_pretrained(modelName, { progress_callback });
@@ -33,10 +33,12 @@ class WhisperWorker {
                 console.log("⏳ [2/3] Carregando Processor...");
                 const processor = await AutoProcessor.from_pretrained(modelName, { progress_callback });
                 
-                console.log("⏳ [3/3] Carregando Modelo Seq2Seq (ONNX)...");
-                // Aqui é onde o erro real estava sendo engolido pelo pipeline()
+                console.log("⏳ [3/3] Carregando Modelo Seq2Seq (ONNX q8)...");
+                // IMPORTANTE: dtype 'q8' (INT8) é obrigatório para WASM.
+                // O padrão do onnx-community usa 4-bit (MatMulNBits) que NÃO funciona no ONNX Runtime WASM.
                 const model = await AutoModelForSpeechSeq2Seq.from_pretrained(modelName, { 
-                    quantized: true, 
+                    dtype: 'q8',
+                    device: 'wasm',
                     progress_callback 
                 });
 
