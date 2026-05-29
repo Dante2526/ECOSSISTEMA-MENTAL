@@ -157,19 +157,23 @@ self.onmessage = async (event) => {
         const startTime = performance.now();
         
         // Geração via Pipeline (ASR)
-        // IMPORTANTE: No v3, parâmetros de geração devem ser TOP-LEVEL, não em generate_kwargs
+        // v3: parâmetros de geração são TOP-LEVEL, prompt vai em generate_kwargs
         const output = await transcriber(audio, {
             language: language || 'portuguese',
             task: 'transcribe',
-            chunk_length_s: 30,
-            stride_length_s: 5,
+            chunk_length_s: 15, // Otimizado para áudio curto (códigos industriais)
+            stride_length_s: 3,
             return_timestamps: false,
-            // Parâmetros de geração — TOP-LEVEL para compatibilidade com v3
+            // Parâmetros de geração — TOP-LEVEL para v3
             max_new_tokens: 20,
             repetition_penalty: 1.8,
             no_repeat_ngram_size: 3,
             do_sample: false,
             num_beams: 1,
+            // Prompt de contexto — informa ao Whisper que são códigos industriais
+            generate_kwargs: {
+                initial_prompt: "Código 201-B, linha 161, 162, 163, 164, 165, 166, 167, 187, 151, 175, 176, 177, 178, 179, 180, 181, 182, 202, estação, pial."
+            }
         });
 
         const transcript = output.text.trim();
