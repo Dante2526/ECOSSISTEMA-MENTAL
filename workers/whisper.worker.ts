@@ -25,7 +25,7 @@ class WhisperWorker {
         if (this.instance === null) {
             console.log("⚡ [Whisper Worker] Construindo Pipeline ASR manualmente...");
             try {
-                const modelName = 'onnx-community/whisper-tiny';
+                const modelName = 'Xenova/whisper-tiny';
                 
                 console.log("⏳ [1/3] Carregando Tokenizer...");
                 const tokenizer = await AutoTokenizer.from_pretrained(modelName, { progress_callback });
