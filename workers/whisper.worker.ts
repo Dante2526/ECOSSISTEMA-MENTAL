@@ -4,7 +4,7 @@ import {
     AutoProcessor, 
     AutoModelForSpeechSeq2Seq, 
     AutomaticSpeechRecognitionPipeline 
-} from '@huggingface/transformers';
+} from '@xenova/transformers';
 
 // Configuração para uso do cache do navegador (Cache API)
 env.allowLocalModels = false;
