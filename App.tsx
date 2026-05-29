@@ -64,7 +64,7 @@ const App: React.FC = () => {
 
     const [systems, setSystems] = useState<OrbitalSystemType[]>(() => {
         try {
-            const DATA_VERSION = '1.5'; // Incrementado para garantir compatibilidade com GPS
+            const DATA_VERSION = '1.9'; // Incrementado para garantir compatibilidade com GPS
             const storedVersion = localStorage.getItem('orbitalDataVersion');
 
             if (storedVersion !== DATA_VERSION) {

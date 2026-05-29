@@ -1,29 +1,15 @@
-import { env, pipeline, AutoModelForSpeechSeq2Seq, AutoModelForCTC } from '@xenova/transformers';
+import { 
+    env, 
+    AutoTokenizer, 
+    AutoProcessor, 
+    AutoModelForSpeechSeq2Seq, 
+    AutomaticSpeechRecognitionPipeline 
+} from '@huggingface/transformers';
 
 // Configuração para uso do cache do navegador (Cache API)
 env.allowLocalModels = false;
 env.allowRemoteModels = true;
 env.useBrowserCache = true;
-
-// 🔍 DIAGNÓSTICO: Testar se a classe exportada funciona diretamente
-console.log("🔍 [DEBUG] AutoModelForSpeechSeq2Seq class:", typeof AutoModelForSpeechSeq2Seq);
-console.log("🔍 [DEBUG] MODEL_CLASS_MAPPINGS:", AutoModelForSpeechSeq2Seq.MODEL_CLASS_MAPPINGS);
-if (AutoModelForSpeechSeq2Seq.MODEL_CLASS_MAPPINGS) {
-    for (const map of AutoModelForSpeechSeq2Seq.MODEL_CLASS_MAPPINGS) {
-        console.log("🔍 [DEBUG] Map has 'whisper':", map.has('whisper'), "Map keys:", [...map.keys()]);
-    }
-}
-
-// Teste de carregamento direto (sem pipeline)
-(async () => {
-    try {
-        console.log("🔍 [DEBUG] Tentando carregar modelo diretamente via AutoModelForSpeechSeq2Seq...");
-        const testModel = await AutoModelForSpeechSeq2Seq.from_pretrained('Xenova/whisper-tiny', { quantized: true });
-        console.log("✅ [DEBUG] CARREGAMENTO DIRETO FUNCIONOU:", testModel);
-    } catch (e: any) {
-        console.error("🔴 [DEBUG] CARREGAMENTO DIRETO FALHOU:", e?.message || e);
-    }
-})();
 
 // Flag de debug — reduz console.logs em produção para menos jank mobile
 const DEBUG = false;
@@ -37,15 +23,33 @@ class WhisperWorker {
 
     static async getInstance(progress_callback = null) {
         if (this.instance === null) {
-            console.log("⚡ [Whisper Worker] Carregando Pipeline ASR (OpenAI Whisper)...");
+            console.log("⚡ [Whisper Worker] Construindo Pipeline ASR manualmente...");
             try {
-                this.instance = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
-                    quantized: true,
-                    progress_callback
+                const modelName = 'onnx-community/whisper-tiny';
+                
+                console.log("⏳ [1/3] Carregando Tokenizer...");
+                const tokenizer = await AutoTokenizer.from_pretrained(modelName, { progress_callback });
+                
+                console.log("⏳ [2/3] Carregando Processor...");
+                const processor = await AutoProcessor.from_pretrained(modelName, { progress_callback });
+                
+                console.log("⏳ [3/3] Carregando Modelo Seq2Seq (ONNX)...");
+                // Aqui é onde o erro real estava sendo engolido pelo pipeline()
+                const model = await AutoModelForSpeechSeq2Seq.from_pretrained(modelName, { 
+                    quantized: true, 
+                    progress_callback 
                 });
+
+                console.log("🧠 [Whisper Worker] Instanciando Pipeline...");
+                this.instance = new AutomaticSpeechRecognitionPipeline({ 
+                    tokenizer, 
+                    processor, 
+                    model 
+                });
+                
                 console.log("✅ [Whisper Worker] Pipeline carregado com sucesso!");
             } catch (err) {
-                console.error("❌ [Whisper Worker] Erro ao carregar pipeline:", err);
+                console.error("🔴 [Whisper Worker] ERRO FATAL AO CARREGAR:", err);
                 throw err;
             }
         }

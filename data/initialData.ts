@@ -244,8 +244,8 @@ export const orbitalSystemsData: OrbitalSystem[] = [
   {
     id: "watchSystem32",
     name: "POR CIMA DO GALPÃO DA OFICINA 01",
-    iconUrl: "https://i.ibb.co/q3fR7DRZ/LINHAS-KAIZEN-35.png",
-    modalUrls: ["https://i.ibb.co/NdPLtFL4/LINHAS-KAIZEN-35.png"],
+    iconUrl: "https://i.ibb.co/gFJr1wLF/LINHAS-KAIZEN-34.png",
+    modalUrls: ["https://i.ibb.co/NnKFhpdn/LINHAS-KAIZEN-34.png"],
     satellites: [{ name: "175" }, { name: "178" }, { name: "181" }, { name: "182" }],
     mapCoordinates: { x: 29.838461538461537, y: 60.01453043619792 }
   },
@@ -260,9 +260,17 @@ export const orbitalSystemsData: OrbitalSystem[] = [
   {
     id: "watchSystem34",
     name: "POR CIMA DO GALPÃO DA OFICINA 02",
-    iconUrl: "https://i.ibb.co/F4ZF83jk/LINHAS-KAIZEN-34-1.png",
-    modalUrls: ["https://i.ibb.co/RTrqQbVG/LINHAS-KAIZEN-34-1.png"],
+    iconUrl: "https://i.ibb.co/9HmhcWV1/LINHAS-KAIZEN-33.png",
+    modalUrls: ["https://i.ibb.co/xqKYX6fB/LINHAS-KAIZEN-33.png"],
     satellites: [{ name: "179" }, { name: "180" }, { name: "181" }, { name: "182" }],
     mapCoordinates: { x: 32.18076923076923, y: 63.58860812717014 }
+  },
+  {
+    id: "watchSystem35",
+    name: "LINHAS DO TRIÂNGULO DA OFICINA 03",
+    iconUrl: "https://i.ibb.co/ZztT2kPh/LINHAS-KAIZEN-35.png",
+    modalUrls: ["https://i.ibb.co/3mGhRLq0/LINHAS-KAIZEN-35.png"],
+    satellites: [{ name: "186" }, { name: "185" }, { name: "184" }, { name: "5KM", style: "neon-yellow" }, { name: "5KM", style: "neon-yellow" }],
+    mapCoordinates: { x: 27.0, y: 58.0 }
   }
 ];
