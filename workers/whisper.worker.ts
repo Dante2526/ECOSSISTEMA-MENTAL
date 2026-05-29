@@ -100,7 +100,26 @@ function isRepetitionLoop(text: string): boolean {
 }
 
 // Comprimento máximo razoável para transcrição de código industrial
-const MAX_TRANSCRIPT_LENGTH = 60;
+// O maior código legítimo tem ~20 chars (ex: "dois zero um b")
+const MAX_TRANSCRIPT_LENGTH = 40;
+
+// Palavras que indicam frase em português natural — jamais são parte de um código industrial
+const PORTUGUESE_SENTENCE_WORDS = [
+    'você', 'voce', 'pode', 'isso', 'aqui', 'quando', 'porque', 'como',
+    'fazer', 'feito', 'estou', 'está', 'temos', 'quero', 'queria',
+    'não pode', 'é isso', 'sendo', 'então', 'portanto', 'porém',
+    'esses', 'esse', 'essa', 'essas', 'minha', 'nosso', 'nossa',
+    'eles', 'elas', 'dele', 'dela', 'deles', 'delas',
+    'muito', 'pouco', 'sempre', 'nunca', 'ainda', 'agora',
+    'anos', 'meses', 'dias', 'horas',
+];
+
+function isNaturalLanguageSentence(text: string): boolean {
+    const lower = text.toLowerCase();
+    // Se contém alguma palavra-gatilho de frase natural, é alucinação
+    return PORTUGUESE_SENTENCE_WORDS.some(word => lower.includes(word));
+}
+
 
 self.onmessage = async (event) => {
     const { type, audio, language } = event.data;
@@ -184,9 +203,10 @@ self.onmessage = async (event) => {
         const isHallucination = HALLUCINATION_PATTERNS.some(pattern => pattern.test(transcript));
         const isLoop = isRepetitionLoop(transcript);
         const isTooLong = transcript.length > MAX_TRANSCRIPT_LENGTH;
+        const isNaturalLanguage = isNaturalLanguageSentence(transcript);
         
-        if (isHallucination || isLoop || isTooLong || transcript.length < 2) {
-            console.warn(`⚠️ [Whisper Worker] Alucinação filtrada (padrão=${isHallucination}, loop=${isLoop}, longo=${isTooLong}): "${transcript.substring(0, 80)}..."`);
+        if (isHallucination || isLoop || isTooLong || isNaturalLanguage || transcript.length < 2) {
+            console.warn(`⚠️ [Whisper Worker] Alucinação filtrada (padrão=${isHallucination}, loop=${isLoop}, longo=${isTooLong}, frase=${isNaturalLanguage}): "${transcript.substring(0, 60)}"`);
             self.postMessage({ type: 'RESULT', text: '' });
         } else {
             console.log(`✅ [Whisper Worker] Transcrição: "${transcript}" (${duration}s)`);

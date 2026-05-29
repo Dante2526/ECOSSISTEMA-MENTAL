@@ -40,7 +40,16 @@ export function applyPhoneticCorrections(transcript: string): string {
         'tep dois b': 'tp2b', 'tepê': 'tp', 'tp dois bê': 'tp2b',
         'tp zero um': 'tp01', 'tepe zero um': 'tp01', 'tepe 01': 'tp01',
         'tp zero quatro': 'tp04', 'tepe zero quatro': 'tp04', 'tp 4': 'tp4', 'tepe 4': 'tp4',
-        'dois zero um b': '201b', 'dois zero um bê': '201b',
+        // 201-B — todas as variações do Whisper v3
+        'dois zero um b': '201b', 'dois zero um bê': '201b', 'dois zero um be': '201b',
+        'dois zero beio': '201b', 'dois zero beyo': '201b', 'dois zero bei': '201b',
+        'dois zero b': '201b', 'dois zero bê': '201b', 'dois zero vê': '201b',
+        'dois zero 1 b': '201b', 'dois zero um v': '201b', 'dois zero 1 v': '201b',
+        '2 zero um b': '201b', '2 zero 1 b': '201b', '2 0 1 b': '201b',
+        '2 0 um b': '201b', '2 0 1 bê': '201b', '2 0 1 be': '201b',
+        '201 beio': '201b', '201 bei': '201b', '201 bê': '201b', '201 be': '201b', '201 ve': '201b',
+        '201 v': '201b', '2 1 b': '201b', '2 1 bê': '201b', '2 1 be': '201b',
+        '2 1 beio': '201b', '2 1 v': '201b', '21b': '201b', '21 b': '201b',
         'um meia sete': '167', 'um meia set': '167', 'um me sete': '167',
         'cento e sessenta e sete': '167', 'cento sessenta e sete': '167',
         'um oito sete': '187', '87': '187',
@@ -75,6 +84,16 @@ export function applyPhoneticCorrections(transcript: string): string {
         .replace(/-/g, ' ')
         .replace(/½/g, ' meia ')
         .replace(/\b1\/2\b/g, ' um meia ') 
+        // Confusão B/V do Whisper: "beio", "bei", "beyo", "ve", "vê" como sufixo → "b"
+        .replace(/\b(\d+)\s*[,.]?\s*bei[oa]?\b/g, '$1b')
+        .replace(/\b(\d+)\s*[,.]?\s*bey[oa]?\b/g, '$1b')
+        .replace(/\b(\d+)\s*[,.]?\s*v[eê]\b/g, '$1b')
+        // Normalização de sufixos alfanuméricos (ex: "201 a" -> "201a", "P 13, B" -> "p13b")
+        // Agora aceita vírgula ou ponto opcional entre número e letra
+        .replace(/\b(\d+)\s*[,.]?\s*([ab])\b/g, '$1$2')
+        .replace(/\b(\d+)\s*[,.]?\s*be\b/g, '$1b')
+        // Limpar lixo fonético do início ("alim", "há", "é isso")
+        .replace(/^(alim[,.]?\s*|há[,.]?\s*|é isso[^,]*,?\s*|ei[,.]?\s*)/i, '')
         // Uni-letras: unir "t p" ou "t e p e" em "tp"
         .replace(/\bt\s+p\b/g, 'tp')
         .replace(/\bt\s+e\s+p\s+e\b/g, 'tp')
@@ -89,11 +108,7 @@ export function applyPhoneticCorrections(transcript: string): string {
         // Remove "a", "e", "o" entre dígitos
         .replace(/(\d)\s+[aeo]\s+(\d)/g, '$1 $2')
         .replace(/[、]/g, ' ') 
-        .replace(/\by\b/g, ' e ') 
-        // Normalização de sufixos alfanuméricos (ex: "201 a" -> "201a", "P 13, B" -> "p13b")
-        // Agora aceita vírgula ou ponto opcional entre número e letra
-        .replace(/\b(\d+)\s*[,.]?\s*([ab])\b/g, '$1$2')
-        .replace(/\b(\d+)\s*[,.]?\s*be\b/g, '$1b')
+        .replace(/\by\b/g, ' e ')
         
         // Unir prefixos P/TP (ex: "p 13" -> "p13", "p 1, 3" -> "p13", "be 17" -> "p17")
         // Esta regra vem ANTES da regra do 160 para proteger os códigos P.
