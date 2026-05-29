@@ -214,7 +214,7 @@ export const useVoiceRecognition = ({ onStart, onEnd, onError, onResult }: Voice
         onEnd: () => callbacksRef.current.onEnd?.(),
         onError: (e) => callbacksRef.current.onError?.(e),
         onResult: (t) => callbacksRef.current.onResult?.(t),
-        shouldPreload: !isOnline  // Lazy: só pré-carrega quando offline
+        shouldPreload: true  // Pré-carrega sempre em background para garantir que o modelo esteja cacheado antes de ficar offline
     });
 
     // Refs para funções de start/stop do Whisper (evita recriar callbacks)
