@@ -2486,7 +2486,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
       <div className="flex-1 lg:flex-1 flex flex-col relative overflow-hidden bg-[#0a0a0c] shrink-0 min-h-[30svh]">
          
          {/* TOP CONTROL BAR */}
-         <header className="absolute top-4 left-4 right-4 lg:top-6 lg:left-8 lg:right-8 z-10 flex justify-center items-start pointer-events-none">
+         <header className="absolute top-12 left-4 right-4 lg:top-6 lg:left-8 lg:right-8 z-10 flex justify-center items-start pointer-events-none">
 
             {/* Camera Controls & Mobile Close Button */}
             <div className="flex items-center gap-3">
@@ -2870,7 +2870,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
       </aside>
 
       {/* MOBILE BOTTOM CONTROL AREA */}
-      <div className="lg:hidden w-full bg-[#0a0a0c] border-t border-white/5 flex flex-col p-3 pb-6 gap-3 relative z-20 shrink-0 overflow-y-auto">
+      <div className="lg:hidden w-full bg-[#0a0a0c] border-t border-white/5 flex flex-col p-3 pb-10 gap-3 relative z-20 shrink-0 overflow-y-auto">
           
           {/* STATUS */}
           <div className={`shrink-0 p-3 rounded-2xl flex items-center gap-3 shadow-md border ${safety?.bg}`}>
