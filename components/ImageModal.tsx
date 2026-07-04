@@ -1,25 +1,30 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
+import AmvSimulation from './AmvSimulation';
 
 interface ImageModalProps {
     isOpen: boolean;
     imageUrls: string[];
+    systemId?: string;
+    systemName?: string;
     onClose: () => void;
 }
 
 const FALLBACK_IMAGE_URL = 'https://placehold.co/600x400/222/FFF?text=Imagem+Nao+Encontrada';
 
-export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, imageUrls, onClose }) => {
+export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, imageUrls, systemId = '', systemName = '', onClose }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
     const [isRendered, setIsRendered] = useState(isOpen);
     const [isVisible, setIsVisible] = useState(isOpen);
+    const [isSimulationOpen, setIsSimulationOpen] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
             setIsRendered(true);
             setCurrentIndex(0);
             setIsLoading(true);
+            setIsSimulationOpen(false);
             // Small delay to allow DOM to render before applying opacity 1
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
@@ -127,9 +132,8 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
                 className={`fixed inset-0 z-[9999] flex items-center justify-center transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
                 onClick={onClose}
             >
-                {/* Wrapper que encolhe ao tamanho da imagem - sem espaço preto */}
                 <div
-                    className="relative flex items-center justify-center bg-black rounded-lg border border-white/20 shadow-[0_0_50px_rgba(255,255,255,0.1)] overflow-hidden"
+                    className={`relative flex items-center justify-center bg-black rounded-lg border border-white/20 shadow-[0_0_50px_rgba(255,255,255,0.1)] overflow-hidden transition-all duration-500 ${isSimulationOpen ? 'w-[95vw] h-[90vh]' : ''}`}
                     onClick={(e) => e.stopPropagation()}
                 >
                     {/* Imagem fantasma invisível que define as dimensões reais do container */}
@@ -181,6 +185,20 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
                         ✕
                     </button>
 
+                    {systemId && (
+                        <button 
+                            title="Simular AMV 3D" 
+                            onClick={() => setIsSimulationOpen(true)} 
+                            className="absolute top-4 left-4 h-10 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider rounded-full border border-indigo-400/30 flex items-center gap-2 z-[101] hover:scale-105 transition-all duration-300 shadow-[0_4px_15px_rgba(79,70,229,0.4)] animate-fade-in"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Simular AMV 3D
+                        </button>
+                    )}
+
                     {showNav && (
                         <>
                             <button title="Anterior" onClick={handlePrev} className="absolute top-1/2 -translate-y-1/2 left-4 w-12 h-12 bg-black/60 text-white border border-white/30 rounded-full grid place-items-center z-[101] hover:bg-white/20 transition-colors">
@@ -193,6 +211,15 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
                                 {currentIndex + 1} / {imageUrls.length}
                             </div>
                         </>
+                    )}
+
+                    {isSimulationOpen && (
+                        <AmvSimulation
+                            systemId={systemId}
+                            systemName={systemName}
+                            onClose={() => setIsSimulationOpen(false)}
+                            inlineMode={true}
+                        />
                     )}
                 </div>
             </div>

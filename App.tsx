@@ -25,6 +25,7 @@ import { RailwayMapModal } from './components/RailwayMapModal';
 const App: React.FC = () => {
     const [modalImages, setModalImages] = useState<string[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [activeSystem, setActiveSystem] = useState<OrbitalSystemType | null>(null);
     const [isMapModalOpen, setIsMapModalOpen] = useState(false);
     const [feedbackMessage, setFeedbackMessage] = useState<string>('');
     const [searchCache, setSearchCache] = useState<SearchItem[]>([]);
@@ -193,7 +194,7 @@ const App: React.FC = () => {
     }, []);
 
 
-    const feedbackTimeoutRef = useRef<number>();
+    const feedbackTimeoutRef = useRef<any>(null);
     const showFeedback = useCallback((message: string, duration: number = 3000) => {
         clearTimeout(feedbackTimeoutRef.current);
         setFeedbackMessage(message);
@@ -287,6 +288,8 @@ const App: React.FC = () => {
             orbitalSystemRef.current?.highlightSystemsByIds(systemIdsToHighlight);
 
             if (found.length > 0) {
+                const system = systems.find(s => s.id === found[0].systemId);
+                if (system) setActiveSystem(system);
                 const imageUrls = Array.from(new Set(found.flatMap((item: SearchItem) => item.imageUrls)));
                 orbitalSystemRef.current?.focusSystem(found[0].systemId);
                 setTimeout(() => {
@@ -321,6 +324,7 @@ const App: React.FC = () => {
         if (isAdmin) {
             setEditingSystem(system);
         } else {
+            setActiveSystem(system);
             setModalImages(system.modalUrls);
             setIsModalOpen(true);
         }
@@ -332,6 +336,7 @@ const App: React.FC = () => {
             setIsQuickSearchOpen(false);
             // Use imperative focus instead of state to prevent re-renders
             orbitalSystemRef.current?.focusSystem(system.id);
+            setActiveSystem(system);
             setModalImages(system.modalUrls);
             setIsModalOpen(true);
         }
@@ -340,6 +345,7 @@ const App: React.FC = () => {
     const handleCloseModal = useCallback(() => {
 
         setIsModalOpen(false);
+        setActiveSystem(null);
 
         // Delay the heavy orbital system reset until the modal fade-out is done (300ms)
         // This prevents frame drops/flickering on mobile by separating the animations
@@ -512,7 +518,7 @@ const App: React.FC = () => {
 
             let dist = Infinity;
             if (system.path && system.path.length > 0) {
-                dist = findNearestSystem(lastLocation, [system])?.distance ?? Infinity;
+                dist = findNearestSystem(lastLocation, [system])?.nearest.distance ?? Infinity;
             } else if (system.locationData) {
                 const R = 6371e3;
                 const toRad = Math.PI / 180;
@@ -728,6 +734,8 @@ const App: React.FC = () => {
             <ImageModal
                 isOpen={isModalOpen}
                 imageUrls={modalImages}
+                systemId={activeSystem?.id || ''}
+                systemName={activeSystem?.name || ''}
                 onClose={handleCloseModal}
             />
 

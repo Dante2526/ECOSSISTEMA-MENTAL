@@ -46,8 +46,9 @@ class WhisperWorker {
                 this.instance = new AutomaticSpeechRecognitionPipeline({ 
                     tokenizer, 
                     processor, 
-                    model 
-                });
+                    model,
+                    task: 'transcribe'
+                } as any);
                 
                 console.log("✅ [Whisper Worker] Pipeline carregado com sucesso!");
             } catch (err) {

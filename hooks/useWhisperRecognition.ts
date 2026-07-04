@@ -237,7 +237,7 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult, shoul
 
         if (samplesRecorded > 0 && hasSpeechStartedRef.current) {
             // Copiar apenas a porção preenchida do buffer (não o buffer inteiro)
-            let mergedArray = audioBufferRef.current.slice(0, samplesRecorded);
+            let mergedArray: any = audioBufferRef.current.slice(0, samplesRecorded);
 
             // Resampling para 16kHz se a taxa do AudioContext nativo for diferente
             const currentSampleRate = audioContextRef.current?.sampleRate || 16000;
