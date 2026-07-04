@@ -2870,7 +2870,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
       </aside>
 
       {/* MOBILE BOTTOM CONTROL AREA */}
-      <div className="lg:hidden flex-1 w-full bg-[#0a0a0c] border-t border-white/5 flex flex-col p-3 gap-3 relative z-20 shrink-0 overflow-y-auto">
+      <div className="lg:hidden w-full bg-[#0a0a0c] border-t border-white/5 flex flex-col p-3 pb-6 gap-3 relative z-20 shrink-0 overflow-y-auto">
           
           {/* STATUS */}
           <div className={`shrink-0 p-3 rounded-2xl flex items-center gap-3 shadow-md border ${safety?.bg}`}>
@@ -2927,18 +2927,6 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
                   <span className="text-[8px] font-black uppercase tracking-widest">{isMoving ? 'Parar' : 'Iniciar'}</span>
               </button>
 
-              <button 
-                  onClick={() => setNightMode(!nightMode)}
-                  className={`w-[50px] h-full rounded-2xl flex flex-col items-center justify-center gap-1 transition-all outline-none active:scale-95 ${
-                      nightMode 
-                      ? 'bg-indigo-500/20 border border-indigo-500/40 text-indigo-400 shadow-[inset_0_0_8px_rgba(99,102,241,0.2)]' 
-                      : 'bg-[#18181c] border border-white/5 text-slate-500'
-                  }`}
-              >
-                  {nightMode ? <Moon className="w-4 h-4 text-indigo-400" /> : <Sun className="w-4 h-4 text-slate-500" />}
-                  <span className="text-[8px] font-black uppercase tracking-widest">{nightMode ? 'Noite' : 'Dia'}</span>
-              </button>
-
               <div className="flex-1 bg-[#18181c] border border-white/5 rounded-2xl p-1 flex gap-1 shadow-inner">
                   {[
                        { val: 'NORMAL', label: 'Normal' },
@@ -2988,7 +2976,15 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
           {/* Spawn Origin Mobile */}
           {direction === 'SUL_NORTE' && (layoutType === 'freio' || layoutType === 'oficina' || layoutType === 'reclassificacao') && (
              <div className="bg-[#18181c] border border-white/5 rounded-2xl p-2.5 shrink-0 flex flex-col gap-1">
-                 <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 px-1">Linha de Origem</span>
+                 <div className="flex justify-between items-center mb-1.5 px-1">
+                   <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Linha de Origem</span>
+                   <button
+                     onClick={() => setIsAutoLineSelection(!isAutoLineSelection)}
+                     className={`shrink-0 px-2 py-0.5 rounded-[4px] text-[8px] font-bold transition-all border ${isAutoLineSelection ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' : 'bg-[#222228] text-slate-500 border-white/5'}`}
+                   >
+                     {isAutoLineSelection ? 'AUTO ON' : 'AUTO OFF'}
+                   </button>
+                 </div>
                  <div className="flex gap-2">
                      {(layoutType === 'freio' ? [
                           { val: '2', label: 'Linha 2' },
@@ -3005,7 +3001,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
                      ]).map(s => (
                          <button
                             key={s.val}
-                            onClick={() => { setSpawnLine(s.val as SpawnLine); setIsMoving(false); }}
+                            onClick={() => { setSpawnLine(s.val as SpawnLine); setIsMoving(false); setIsAutoLineSelection(false); }}
                             className={`flex-1 p-2 rounded-xl border transition-all ${
                                spawnLine === s.val 
                                ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300' 
@@ -3023,7 +3019,15 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
           {/* Spawn Dest Mobile */}
           {direction === 'NORTE_SUL' && (layoutType === 'freio' || layoutType === 'oficina' || layoutType === 'reclassificacao') && (
              <div className="bg-[#18181c] border border-white/5 rounded-2xl p-2.5 shrink-0 flex flex-col gap-1">
-                 <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 px-1">Linha de Destino</span>
+                 <div className="flex justify-between items-center mb-1.5 px-1">
+                   <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Linha de Destino</span>
+                   <button
+                     onClick={() => setIsAutoLineSelection(!isAutoLineSelection)}
+                     className={`shrink-0 px-2 py-0.5 rounded-[4px] text-[8px] font-bold transition-all border ${isAutoLineSelection ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' : 'bg-[#222228] text-slate-500 border-white/5'}`}
+                   >
+                     {isAutoLineSelection ? 'AUTO ON' : 'AUTO OFF'}
+                   </button>
+                 </div>
                  <div className="flex gap-2">
                      {(layoutType === 'freio' ? [
                           { val: '2', label: 'Linha 2' },
