@@ -2479,11 +2479,11 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
   );
 
   return (
-    <div className={`${inlineMode ? 'absolute inset-0 z-[1000] rounded-lg' : 'fixed inset-0 z-[10000]'} flex flex-col lg:flex-row bg-[#0a0a0c] text-slate-200 overflow-hidden font-sans select-none animate-fade-in`}>
+    <div className={`${inlineMode ? 'absolute inset-0 z-[1000] rounded-lg' : 'fixed top-0 left-0 w-full h-[100svh] z-[10000]'} flex flex-col lg:flex-row bg-[#0a0a0c] text-slate-200 overflow-hidden font-sans select-none animate-fade-in`}>
       
 
       {/* MAIN SIMULATOR VIEW */}
-      <div className="h-[55vh] lg:h-auto lg:flex-1 flex flex-col relative overflow-hidden bg-[#0a0a0c] shrink-0">
+      <div className="flex-1 lg:flex-1 flex flex-col relative overflow-hidden bg-[#0a0a0c] shrink-0 min-h-[30svh]">
          
          {/* TOP CONTROL BAR */}
          <header className="absolute top-4 left-4 right-4 lg:top-6 lg:left-8 lg:right-8 z-10 flex justify-center items-start pointer-events-none">
