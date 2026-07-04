@@ -2872,7 +2872,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
       </aside>
 
       {/* MOBILE BOTTOM CONTROL AREA */}
-      <div className={`lg:hidden w-full bg-[#0a0a0c] border-t border-white/5 flex flex-col relative z-20 shrink-0 transition-all duration-300 ease-in-out ${isMobilePanelOpen ? 'p-3 pb-10 gap-0 overflow-y-auto' : 'p-3 pb-6 gap-0 overflow-hidden'}`}>
+      <div className={`lg:hidden w-full bg-[#0a0a0c] border-t border-white/5 flex flex-col relative z-20 shrink-0 transition-all duration-300 ease-in-out ${isMobilePanelOpen ? 'p-3 pb-10 gap-0 overflow-y-auto' : 'p-3 pb-10 gap-0 overflow-hidden'}`}>
           
           {/* STATUS TOGGLE */}
           <button 
