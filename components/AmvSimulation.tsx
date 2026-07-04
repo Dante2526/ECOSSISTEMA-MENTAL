@@ -2481,7 +2481,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
   );
 
   return (
-    <div className={`${inlineMode ? 'absolute inset-0 z-[1000] rounded-lg' : 'fixed top-0 left-0 w-full h-[100svh] z-[10000]'} flex flex-col lg:flex-row bg-[#0a0a0c] text-slate-200 overflow-hidden font-sans select-none animate-fade-in`}>
+    <div className={`${inlineMode ? 'absolute inset-0 z-[1000] rounded-lg' : 'fixed top-0 left-0 w-full h-[100svh] z-[10000]'} flex flex-col lg:flex-row bg-[#0a0a0c] text-slate-200 overflow-hidden font-sans select-none animate-cinematic`}>
       
 
       {/* MAIN SIMULATOR VIEW */}
@@ -2872,7 +2872,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
       </aside>
 
       {/* MOBILE BOTTOM CONTROL AREA */}
-      <div className={`lg:hidden w-full bg-[#0a0a0c] border-t border-white/5 flex flex-col relative z-20 shrink-0 transition-all duration-300 ease-in-out ${isMobilePanelOpen ? 'p-3 pb-10 gap-0 overflow-y-auto' : 'p-3 pb-10 gap-0 overflow-hidden'}`}>
+      <div className={`lg:hidden w-full bg-[#0a0a0c] border-t border-white/5 flex flex-col relative z-20 shrink-0 transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] ${isMobilePanelOpen ? 'p-3 pb-10 gap-0 overflow-y-auto' : 'p-3 pb-10 gap-0 overflow-hidden'}`}>
           
           {/* STATUS TOGGLE */}
           <button 
@@ -2886,12 +2886,12 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
                   <h3 className={`font-bold text-[12px] leading-tight uppercase ${safety?.color}`}>{safety?.status}</h3>
                   <div className="text-[10px] text-slate-400 font-medium line-clamp-1 leading-tight mt-0.5">{safety?.desc}</div>
               </div>
-              <div className="shrink-0 w-6 h-6 flex items-center justify-center bg-black/10 rounded-full ml-1">
-                 {isMobilePanelOpen ? <ChevronDown className={`w-4 h-4 ${safety?.color}`} /> : <ChevronUp className={`w-4 h-4 ${safety?.color}`} />}
+              <div className={`shrink-0 w-6 h-6 flex items-center justify-center bg-black/10 rounded-full ml-1 transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] ${isMobilePanelOpen ? 'rotate-0' : '-rotate-180'}`}>
+                 <ChevronDown className={`w-4 h-4 ${safety?.color}`} />
               </div>
           </button>
 
-          <div className={`grid transition-all duration-300 ease-in-out ${isMobilePanelOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+          <div className={`grid transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] ${isMobilePanelOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
              <div className="overflow-hidden flex flex-col gap-3">
                  {/* AMV Selection Mobile */}
                  <div className="flex gap-2">
