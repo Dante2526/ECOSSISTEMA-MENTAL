@@ -5,7 +5,8 @@ import * as THREE from 'three';
 import { 
   ShieldCheck, AlertTriangle, Train, Power, Moon, Sun, 
   Video, LayoutDashboard, ArrowRightLeft, RadioReceiver, 
-  Map as MapIcon, X, Compass, HelpCircle, Layers
+  Map as MapIcon, X, Compass, HelpCircle, Layers,
+  ChevronDown, ChevronUp
 } from 'lucide-react';
 
 type Direction = 'NORTE_SUL' | 'SUL_NORTE';
@@ -2404,6 +2405,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
   const [isMoving, setIsMoving] = useState(false);
   const [nightMode, setNightMode] = useState(false);
   const [isAutoLineSelection, setIsAutoLineSelection] = useState(true);
+  const [isMobilePanelOpen, setIsMobilePanelOpen] = useState(true);
 
   const baseLayout = systemId === 'watchSystem7' ? 'reclassificacao' : systemId === 'watchSystem4' ? 'oficina' : (systemId === 'watchSystem5' || systemId === 'watchSystem3') ? 'freio' : 'default';
   const layoutType = baseLayout as 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'default';
@@ -2870,21 +2872,29 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
       </aside>
 
       {/* MOBILE BOTTOM CONTROL AREA */}
-      <div className="lg:hidden w-full bg-[#0a0a0c] border-t border-white/5 flex flex-col p-3 pb-10 gap-3 relative z-20 shrink-0 overflow-y-auto">
+      <div className={`lg:hidden w-full bg-[#0a0a0c] border-t border-white/5 flex flex-col relative z-20 shrink-0 transition-all duration-300 ease-in-out ${isMobilePanelOpen ? 'p-3 pb-10 gap-0 overflow-y-auto' : 'p-3 pb-6 gap-0 overflow-hidden'}`}>
           
-          {/* STATUS */}
-          <div className={`shrink-0 p-3 rounded-2xl flex items-center gap-3 shadow-md border ${safety?.bg}`}>
+          {/* STATUS TOGGLE */}
+          <button 
+              onClick={() => setIsMobilePanelOpen(!isMobilePanelOpen)}
+              className={`shrink-0 p-3 rounded-2xl flex items-center gap-3 shadow-md border outline-none active:scale-[0.98] transition-all ${safety?.bg} ${!isMobilePanelOpen ? '' : 'mb-3'}`}
+          >
               <div className="shrink-0 w-8 h-8 flex items-center justify-center bg-black/20 rounded-full">
                   {safety?.icon && React.cloneElement(safety.icon as React.ReactElement<any>, { className: "w-5 h-5 " + safety.color })}
               </div>
-              <div className="flex-1 flex flex-col justify-center">
+              <div className="flex-1 flex flex-col justify-center text-left">
                   <h3 className={`font-bold text-[12px] leading-tight uppercase ${safety?.color}`}>{safety?.status}</h3>
                   <div className="text-[10px] text-slate-400 font-medium line-clamp-1 leading-tight mt-0.5">{safety?.desc}</div>
               </div>
-          </div>
+              <div className="shrink-0 w-6 h-6 flex items-center justify-center bg-black/10 rounded-full ml-1">
+                 {isMobilePanelOpen ? <ChevronDown className={`w-4 h-4 ${safety?.color}`} /> : <ChevronUp className={`w-4 h-4 ${safety?.color}`} />}
+              </div>
+          </button>
 
-          {/* AMV Selection Mobile */}
-          <div className="flex gap-2">
+          <div className={`grid transition-all duration-300 ease-in-out ${isMobilePanelOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+             <div className="overflow-hidden flex flex-col gap-3">
+                 {/* AMV Selection Mobile */}
+                 <div className="flex gap-2">
                {(layoutType === 'freio_02' ? [0, 1, 2] : [0, 1]).map(index => {
                    let name = '';
                    if (layoutType === 'freio_02') {
@@ -3058,6 +3068,8 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
                  </div>
              </div>
           )}
+             </div>
+          </div>
       </div>
     </div>
   );
