@@ -46,6 +46,10 @@ function RailSegment({ start, end, highlight }: { start: [number, number, number
 function AnimatedPoint({ hinge, tipTargetX, tipZ }: { hinge: [number, number, number], tipTargetX: number, tipZ: number }) {
   const meshRef = useRef<THREE.Mesh>(null);
 
+  useEffect(() => {
+    console.log(`AnimatedPoint [${hinge.join(',')}] tipTargetX changed to: ${tipTargetX}`);
+  }, [tipTargetX, hinge]);
+
   useFrame((state, delta) => {
     if (!meshRef.current) return;
     if (meshRef.current.userData.tipX === undefined) {
@@ -111,7 +115,9 @@ function TieBar({ getLeftTipX, getRightTipX, tipZ }: { getLeftTipX: () => number
 function SwitchMachine({ getLeftTipX, tipZ, isLeftSide = false }: { getLeftTipX: () => number, tipZ: number, isLeftSide?: boolean }) {
   const machineRef = useRef<THREE.Group>(null);
   const rodRef = useRef<THREE.Mesh>(null);
-  const leverRef = useRef<THREE.Mesh>(null);
+  const leverRef = useRef<THREE.Group>(null);
+  const flagMatRef = useRef<THREE.MeshStandardMaterial>(null);
+  const flagGroupRef = useRef<THREE.Group>(null);
   const targetX = useRef({ left: getLeftTipX() });
   
   useEffect(() => {
@@ -138,6 +144,15 @@ function SwitchMachine({ getLeftTipX, tipZ, isLeftSide = false }: { getLeftTipX:
     
     const progress = (lx - (-0.8)) / 0.3; // 0 to 1
     leverRef.current.rotation.z = THREE.MathUtils.lerp(-Math.PI / 4, Math.PI / 4, Math.max(0, Math.min(1, progress)));
+
+    if (flagGroupRef.current) {
+      flagGroupRef.current.rotation.y = THREE.MathUtils.lerp(0, Math.PI, Math.max(0, Math.min(1, progress)));
+    }
+
+    if (flagMatRef.current) {
+      const targetColor = progress < 0.5 ? '#22c55e' : '#eab308';
+      flagMatRef.current.color.lerp(new THREE.Color(targetColor), 8 * delta);
+    }
   });
 
   return (
@@ -150,25 +165,69 @@ function SwitchMachine({ getLeftTipX, tipZ, isLeftSide = false }: { getLeftTipX:
       <group position={[isLeftSide ? -1.8 : 1.8, -0.1, 0]} ref={machineRef}>
         <mesh receiveShadow castShadow position={[0, 0, 0]}>
           <boxGeometry args={[0.7, 0.2, 0.5]} />
-          <meshStandardMaterial color="#fbbf24" metalness={0.2} roughness={0.6} />
+          <meshStandardMaterial color="#475569" metalness={0.4} roughness={0.7} />
         </mesh>
         <mesh receiveShadow castShadow position={[0, 0.12, -0.08]} rotation={[0, 0, Math.PI / 2]}>
           <cylinderGeometry args={[0.12, 0.12, 0.7, 16]} />
           <meshStandardMaterial color="#334155" metalness={0.5} roughness={0.5} />
         </mesh>
+        {/* Alavanca e Articulação */}
         <group position={[0, 0.1, 0.15]}>
-          <mesh ref={leverRef} position={[0, 0.2, 0]} castShadow>
-            <cylinderGeometry args={[0.02, 0.02, 0.35]} />
-            <meshStandardMaterial color="#ef4444" />
-            <mesh position={[0, 0.18, 0]}>
-              <sphereGeometry args={[0.05]} />
-              <meshStandardMaterial color="#ef4444" />
+          <group ref={leverRef}>
+            {/* Eixo / Dobradiça base */}
+            <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
+              <cylinderGeometry args={[0.04, 0.04, 0.08]} />
+              <meshStandardMaterial color="#1e293b" metalness={0.8} roughness={0.4} />
             </mesh>
+            
+            {/* Haste metálica */}
+            <mesh position={[0, 0.2, 0]} castShadow>
+              <cylinderGeometry args={[0.025, 0.025, 0.4]} />
+              <meshStandardMaterial color="#94a3b8" metalness={0.7} roughness={0.3} />
+            </mesh>
+
+            {/* Puxador (Grip) vermelho no topo */}
+            <mesh position={[0, 0.4, 0]} castShadow>
+              <capsuleGeometry args={[0.035, 0.1, 4, 16]} />
+              <meshStandardMaterial color="#ef4444" roughness={0.6} />
+            </mesh>
+          </group>
+        </group>
+        
+        {/* Bandeirola (Target) */}
+        <group ref={flagGroupRef} position={[0, 0.3, -0.08]}>
+          {/* Mastro da bandeirola */}
+          <mesh position={[0, 0.15, 0]} castShadow>
+            <cylinderGeometry args={[0.02, 0.02, 0.3]} />
+            <meshStandardMaterial color="#94a3b8" />
+          </mesh>
+          {/* Placa da bandeirola */}
+          <mesh position={[0, 0.35, 0]} castShadow>
+            <boxGeometry args={[0.4, 0.3, 0.05]} />
+            <meshStandardMaterial ref={flagMatRef} color="#22c55e" />
           </mesh>
         </group>
       </group>
     </group>
   );
+}
+
+// ---------------------------------------------------------
+// PATHING & VEHICLE COORDINATE MATH FOR LINHAS CARGA GERAL 02
+// ---------------------------------------------------------
+
+function getCargaGeral02Track1X(z: number) {
+  if (z >= 25) return 0;
+  if (z <= 5) return -5.0;
+  const u = (25 - z) / 20; // 0 to 1
+  return -5.0 * (3 * u ** 2 - 2 * u ** 3);
+}
+
+function getCargaGeral02Track2X(z: number) {
+  if (z >= 10) return 0;
+  if (z <= -10) return -2.5;
+  const u = (10 - z) / 20; // 0 to 1
+  return -2.5 * (3 * u ** 2 - 2 * u ** 3);
 }
 
 // ---------------------------------------------------------
@@ -235,6 +294,16 @@ function getOficinaTrack2X(z: number) {
 }
 
 // ---------------------------------------------------------
+// PATHING & VEHICLE COORDINATE MATH FOR PN OFICINA
+// ---------------------------------------------------------
+function getPnOficinaTrack1X(z: number) {
+  if (z >= 5) return 0; // Starts curving at z = 5 (closer to 0)
+  if (z <= -15) return -2.5; // Ends at x = -2.5 (L-159)
+  const u = (5 - z) / 20; // 0 to 1
+  return -2.5 * (3 * u ** 2 - 2 * u ** 3);
+}
+
+// ---------------------------------------------------------
 // PATHING & VEHICLE COORDINATE MATH FOR RECLASSIFICACAO
 // ---------------------------------------------------------
 function getReclassificacaoTrack1X(z: number) {
@@ -253,102 +322,100 @@ function getReclassificacaoTrack2X(z: number) {
 
 function Sleepers({ layoutType }: { layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'default' }) {
   const sleepers = [];
+  const tw = 1.9; // Sleeper width, leaves a visible 'entrevia' gap between parallel tracks
   
   if (layoutType === 'freio') {
-    // Reta inicial principal antes do AMV 1 / 65B (45 a 18)
     for (let z = 55; z > 18; z -= 0.6) {
-      sleepers.push(
-        <Box key={`m-${z}`} args={[2.6, 0.1, 0.25]} position={[0, -0.15, z]} castShadow receiveShadow>
-          <meshStandardMaterial color="#3f3f46" roughness={0.9} />
-        </Box>
-      );
+      sleepers.push(<Box key={`m-${z}`} args={[tw, 0.1, 0.25]} position={[0, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
     }
-    // Transição do AMV 1 / 65B para a Linha 2 (18 a -2)
     for (let z = 18; z > -2; z -= 0.6) {
       const branchX = getFreioTrack1X(z);
-      const width = branchX + 2.6;
-      sleepers.push(
-        <Box key={`amv1-${z}`} args={[width, 0.1, 0.25]} position={[branchX / 2, -0.15, z]} castShadow receiveShadow>
-          <meshStandardMaterial color="#3f3f46" roughness={0.9} />
-        </Box>
-      );
+      sleepers.push(<Box key={`m-${z}`} args={[tw, 0.1, 0.25]} position={[0, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
+      sleepers.push(<Box key={`amv1-${z}`} args={[tw, 0.1, 0.25]} position={[branchX, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
     }
-    // Transição do AMV 2 / 65A na Linha 2 para a Linha 3 (-2 a -22)
     for (let z = -2; z > -22; z -= 0.6) {
       const branch2X = getFreioTrack2X(z);
-      const width = branch2X + 2.6; // de x=-1.3 até x=branch2X+1.3 (cobre Linha 1, 2 e 3)
-      sleepers.push(
-        <Box key={`amv2-${z}`} args={[width, 0.1, 0.25]} position={[branch2X / 2, -0.15, z]} castShadow receiveShadow>
-          <meshStandardMaterial color="#3f3f46" roughness={0.9} />
-        </Box>
-      );
+      sleepers.push(<Box key={`m-${z}`} args={[tw, 0.1, 0.25]} position={[0, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
+      sleepers.push(<Box key={`amv1-${z}`} args={[tw, 0.1, 0.25]} position={[2.5, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
+      sleepers.push(<Box key={`amv2-${z}`} args={[tw, 0.1, 0.25]} position={[branch2X, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
     }
-    // Três vias retas paralelas finais (-22 a -45)
     for (let z = -22; z >= -55; z -= 0.6) {
-      // 3 vias: x=0, x=2.5, x=5.0. Largura total = 5.0 + 2.6 = 7.6. Centro = 2.5.
-      sleepers.push(
-        <Box key={`parallel-${z}`} args={[7.6, 0.1, 0.25]} position={[2.5, -0.15, z]} castShadow receiveShadow>
-          <meshStandardMaterial color="#3f3f46" roughness={0.9} />
-        </Box>
-      );
+      sleepers.push(<Box key={`m-${z}`} args={[tw, 0.1, 0.25]} position={[0, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
+      sleepers.push(<Box key={`amv1-${z}`} args={[tw, 0.1, 0.25]} position={[2.5, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
+      sleepers.push(<Box key={`amv2-${z}`} args={[tw, 0.1, 0.25]} position={[5.0, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
     }
   } else if (layoutType === 'freio_02') {
-    // Sleepers para 3 AMVs / 4 Vias paralelas
     for (let z = 55; z > 25; z -= 0.6) {
-      sleepers.push(
-        <Box key={`m-${z}`} args={[2.6, 0.1, 0.25]} position={[0, -0.15, z]} castShadow receiveShadow>
-          <meshStandardMaterial color="#3f3f46" roughness={0.9} />
-        </Box>
-      );
+      sleepers.push(<Box key={`m-${z}`} args={[tw, 0.1, 0.25]} position={[0, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
     }
     for (let z = 25; z > 10; z -= 0.6) {
-      sleepers.push(
-        <Box key={`amv1-${z}`} args={[5.6, 0.1, 0.25]} position={[0, -0.15, z]} castShadow receiveShadow>
-          <meshStandardMaterial color="#3f3f46" roughness={0.9} />
-        </Box>
-      );
+      const leftX = getFreio02Track1X(z, 'L');
+      const rightX = getFreio02Track1X(z, 'R');
+      sleepers.push(<Box key={`L-${z}`} args={[tw, 0.1, 0.25]} position={[leftX, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
+      sleepers.push(<Box key={`R-${z}`} args={[tw, 0.1, 0.25]} position={[rightX, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
     }
     for (let z = 10; z >= -55; z -= 0.6) {
-      sleepers.push(
-        <Box key={`amv2-${z}`} args={[8.6, 0.1, 0.25]} position={[0, -0.15, z]} castShadow receiveShadow>
-          <meshStandardMaterial color="#3f3f46" roughness={0.9} />
-        </Box>
-      );
+      const l1 = z >= -2 ? getFreio02Track2X(z, 'L') : -3.0;
+      const r1 = z >= -2 ? getFreio02Track2X(z, 'R') : -1.0;
+      const l2 = z >= -2 ? getFreio02Track3X(z, 'L') : 1.0;
+      const r2 = z >= -2 ? getFreio02Track3X(z, 'R') : 3.0;
+      sleepers.push(<Box key={`L1-${z}`} args={[tw, 0.1, 0.25]} position={[l1, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
+      sleepers.push(<Box key={`R1-${z}`} args={[tw, 0.1, 0.25]} position={[r1, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
+      sleepers.push(<Box key={`L2-${z}`} args={[tw, 0.1, 0.25]} position={[l2, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
+      sleepers.push(<Box key={`R2-${z}`} args={[tw, 0.1, 0.25]} position={[r2, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
     }
   } else if (layoutType === 'oficina') {
-    // Linha Principal (Sopro)
     for (let z = 55; z >= -55; z -= 0.6) {
-      sleepers.push(<Box key={`m-${z}`} args={[2.6, 0.1, 0.25]} position={[0, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
+      sleepers.push(<Box key={`m-${z}`} args={[tw, 0.1, 0.25]} position={[0, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
     }
-    // Ramificação 1 (L-167)
     for (let z = 25; z >= -55; z -= 0.6) {
       const x = z >= -5 ? getOficinaTrack1X(z) : -5.0;
-      sleepers.push(<Box key={`amv1-${z}`} args={[2.6, 0.1, 0.25]} position={[x, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
+      sleepers.push(<Box key={`amv1-${z}`} args={[tw, 0.1, 0.25]} position={[x, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
     }
-    // Ramificação 2 (L-166)
     for (let z = 5; z >= -55; z -= 0.6) {
       const x = z >= -15 ? getOficinaTrack2X(z) : -2.5;
-      sleepers.push(<Box key={`amv2-${z}`} args={[2.6, 0.1, 0.25]} position={[x, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
+      sleepers.push(<Box key={`amv2-${z}`} args={[tw, 0.1, 0.25]} position={[x, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
     }
   } else if (layoutType === 'reclassificacao') {
-    // Linha Principal (L-105A)
     for (let z = 55; z >= -55; z -= 0.6) {
-      sleepers.push(<Box key={`r-m-${z}`} args={[2.6, 0.1, 0.25]} position={[0, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
+      sleepers.push(<Box key={`r-m-${z}`} args={[tw, 0.1, 0.25]} position={[0, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
     }
-    // Ramificação 1 (L-107A)
     for (let z = 25; z >= -55; z -= 0.6) {
       const x = z >= 5 ? getReclassificacaoTrack1X(z) : -5.0;
-      sleepers.push(<Box key={`r-amv1-${z}`} args={[2.6, 0.1, 0.25]} position={[x, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
+      sleepers.push(<Box key={`r-amv1-${z}`} args={[tw, 0.1, 0.25]} position={[x, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
     }
-    // Ramificação 2 (L-106A)
     for (let z = 5; z >= -55; z -= 0.6) {
       const x = z >= -15 ? getReclassificacaoTrack2X(z) : -2.5;
-      sleepers.push(<Box key={`r-amv2-${z}`} args={[2.6, 0.1, 0.25]} position={[x, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
+      sleepers.push(<Box key={`r-amv2-${z}`} args={[tw, 0.1, 0.25]} position={[x, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
+    }
+  } else if (layoutType === 'carga_geral_02') {
+    // Main line (L-22A)
+    for (let z = 55; z >= -55; z -= 0.6) {
+      sleepers.push(<Box key={`cg-m-${z}`} args={[tw, 0.1, 0.25]} position={[0, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
+    }
+    // Branch 1 (Auxiliar / L-24A)
+    for (let z = 25; z >= -55; z -= 0.6) {
+      const x = z >= 5 ? getCargaGeral02Track1X(z) : -5.0;
+      sleepers.push(<Box key={`cg-amv1-${z}`} args={[tw, 0.1, 0.25]} position={[x, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
+    }
+    // Branch 2 (L-23A)
+    for (let z = 10; z >= -55; z -= 0.6) {
+      const x = z >= -10 ? getCargaGeral02Track2X(z) : -2.5;
+      sleepers.push(<Box key={`cg-amv2-${z}`} args={[tw, 0.1, 0.25]} position={[x, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
+    }
+  } else if (layoutType === 'pn_oficina') {
+    // Main line (L-173) straight
+    for (let z = 55; z >= -55; z -= 0.6) {
+      sleepers.push(<Box key={`pno-m-${z}`} args={[tw, 0.1, 0.25]} position={[0, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
+    }
+    // Branch (L-159) left
+    for (let z = 5; z >= -55; z -= 0.6) {
+      const x = z >= -15 ? getPnOficinaTrack1X(z) : -2.5;
+      sleepers.push(<Box key={`pno-amv1-${z}`} args={[tw, 0.1, 0.25]} position={[x, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
     }
   } else {
-    // Siding with two AMVs Layout sleepers (Default Siding)
     for (let z = 55; z > 5; z -= 0.6) {
-      sleepers.push(<Box key={`m-${z}`} args={[2.6, 0.1, 0.25]} position={[0, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
+      sleepers.push(<Box key={`m-${z}`} args={[tw, 0.1, 0.25]} position={[0, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
     }
     for (let z = 5; z >= -10; z -= 0.6) {
       let outerRightX = 0;
@@ -359,23 +426,23 @@ function Sleepers({ layoutType }: { layoutType: 'freio' | 'freio_02' | 'oficina'
         const branchCx = -3.4 * (u ** 3) + 2.6 * (u ** 2) + 5.0 * u + 1.0;
         outerRightX = branchCx + 0.8;
       }
-      const width = (outerRightX + 0.8) + 1.2;
+      const width = (outerRightX + 0.8) + 0.3;
       const cx = (-0.8 + outerRightX) / 2;
       sleepers.push(<Box key={`amv-${z}`} args={[width, 0.1, 0.25]} position={[cx, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
     }
     for (let z = -10.6; z >= -55; z -= 0.6) {
-      sleepers.push(<Box key={`m2-${z}`} args={[2.6, 0.1, 0.25]} position={[0, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
+      sleepers.push(<Box key={`m2-${z}`} args={[tw, 0.1, 0.25]} position={[0, -0.15, z]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
       const u = -z / 25;
       const branchCx = -3.4 * (u ** 3) + 2.6 * (u ** 2) + 5.0 * u + 1.0;
       const dxdz = (-10.2 * u * u + 5.2 * u + 5.0) / -25;
-      sleepers.push(<Box key={`b-${z}`} args={[2.6, 0.1, 0.25]} position={[branchCx, -0.15, z]} rotation={[0, Math.atan(dxdz), 0]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
+      sleepers.push(<Box key={`b-${z}`} args={[tw, 0.1, 0.25]} position={[branchCx, -0.15, z]} rotation={[0, Math.atan(dxdz), 0]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
     }
   }
   
   return <group>{sleepers}</group>;
 }
 
-function LedFlow({ layoutType, direction, amvs, spawnLine }: { layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'default', direction: Direction, amvs: SwitchState[], spawnLine: SpawnLine }) {
+function LedFlow({ layoutType, direction, amvs, spawnLine, routeColor }: { layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'default', direction: Direction, amvs: SwitchState[], spawnLine: SpawnLine, routeColor?: string }) {
   const groupRef = useRef<THREE.Group>(null);
   const time = useRef(0);
 
@@ -402,8 +469,8 @@ function LedFlow({ layoutType, direction, amvs, spawnLine }: { layoutType: 'frei
       const dx = Math.cos(angle) * 0.8;
       const dz = -Math.sin(angle) * 0.8;
 
-      pts.push({ x: res.pos[0] - dx, y: 0.01, z: res.pos[2] - dz, progress, side: 'L' });
-      pts.push({ x: res.pos[0] + dx, y: 0.01, z: res.pos[2] + dz, progress, side: 'R' });
+      pts.push({ x: res.pos[0] - dx, y: 0.01, z: res.pos[2] - dz, progress, side: 'L', color: res.color });
+      pts.push({ x: res.pos[0] + dx, y: 0.01, z: res.pos[2] + dz, progress, side: 'R', color: res.color });
     }
     return pts;
   }, [layoutType, direction, amvs, spawnLine]);
@@ -427,21 +494,19 @@ function LedFlow({ layoutType, direction, amvs, spawnLine }: { layoutType: 'frei
     }
   });
 
-  const ledColor = direction === 'NORTE_SUL' ? '#06b6d4' : '#8b5cf6';
-
   return (
     <group ref={groupRef}>
       {points.map((pt, i) => (
         <mesh key={`led-${direction}-${i}`} position={[pt.x, pt.y, pt.z]} rotation={[0, 0, 0]}>
           <boxGeometry args={[0.2, 0.02, 0.2]} />
-          <meshStandardMaterial color="#111" emissive={ledColor} emissiveIntensity={0} toneMapped={false} />
+          <meshStandardMaterial color="#111" emissive={routeColor === '#ef4444' ? '#ef4444' : pt.color} emissiveIntensity={0} toneMapped={false} />
         </mesh>
       ))}
     </group>
   );
 }
 
-function CurveBranch({ layoutType }: { layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'default' }) {
+function CurveBranch({ layoutType }: { layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'carga_geral_02' | 'default' }) {
   const segments = 25;
   const rails = [];
   
@@ -684,6 +749,84 @@ function CurveBranch({ layoutType }: { layoutType: 'freio' | 'freio_02' | 'ofici
     // L-106A straight segment after branch
     rails.push(<RailSegment key="r-2-str-L" start={[-2.5 - 0.8, 0, -15]} end={[-2.5 - 0.8, 0, -55]} />);
     rails.push(<RailSegment key="r-2-str-R" start={[-2.5 + 0.8, 0, -15]} end={[-2.5 + 0.8, 0, -55]} />);
+
+  } else if (layoutType === 'carga_geral_02') {
+    // -----------------------------------------------------
+    // Carga Geral 02 Layout Rails (2 AMVs branching left)
+    // -----------------------------------------------------
+    
+    // Main line (straight from 55 to -55) L-22A
+    rails.push(<RailSegment key="cg-m-L-pre1" start={[-0.8, 0, 55]} end={[-0.8, 0, 25]} />);
+    rails.push(<RailSegment key="cg-m-L-mid" start={[-0.8, 0, 20]} end={[-0.8, 0, 10]} />);
+    rails.push(<RailSegment key="cg-m-L-post2" start={[-0.8, 0, 5]} end={[-0.8, 0, -55]} />);
+    rails.push(<RailSegment key="cg-m-R" start={[0.8, 0, 55]} end={[0.8, 0, -55]} />);
+
+    // Branch 1 (Auxiliar / L-24A) - AMV 1 at z=25 curves to x=-5.0
+    for (let i = 0; i < segments; i++) {
+      const u1 = i / segments;
+      const u2 = (i + 1) / segments;
+      const z1_L = 25 - 20 * u1;
+      const z2_L = 25 - 20 * u2;
+      const x1_L = getCargaGeral02Track1X(z1_L);
+      const x2_L = getCargaGeral02Track1X(z2_L);
+      rails.push(<RailSegment key={`cg-1-L-${i}`} start={[x1_L - 0.8, 0, z1_L]} end={[x2_L - 0.8, 0, z2_L]} />);
+
+      const z1_R = 20 - 15 * u1;
+      const z2_R = 20 - 15 * u2;
+      const x1_R = getCargaGeral02Track1X(z1_R);
+      const x2_R = getCargaGeral02Track1X(z2_R);
+      rails.push(<RailSegment key={`cg-1-R-${i}`} start={[x1_R + 0.8, 0, z1_R]} end={[x2_R + 0.8, 0, z2_R]} />);
+    }
+    rails.push(<RailSegment key="cg-1-str-L" start={[-5.0 - 0.8, 0, 5]} end={[-5.0 - 0.8, 0, -55]} />);
+    rails.push(<RailSegment key="cg-1-str-R" start={[-5.0 + 0.8, 0, 5]} end={[-5.0 + 0.8, 0, -55]} />);
+
+    // Branch 2 (L-23A) - AMV 2 at z=10 curves to x=-2.5
+    for (let i = 0; i < segments; i++) {
+      const u1 = i / segments;
+      const u2 = (i + 1) / segments;
+      const z1_L = 10 - 20 * u1;
+      const z2_L = 10 - 20 * u2;
+      const x1_L = getCargaGeral02Track2X(z1_L);
+      const x2_L = getCargaGeral02Track2X(z2_L);
+      rails.push(<RailSegment key={`cg-2-L-${i}`} start={[x1_L - 0.8, 0, z1_L]} end={[x2_L - 0.8, 0, z2_L]} />);
+
+      const z1_R = 5 - 15 * u1;
+      const z2_R = 5 - 15 * u2;
+      const x1_R = getCargaGeral02Track2X(z1_R);
+      const x2_R = getCargaGeral02Track2X(z2_R);
+      rails.push(<RailSegment key={`cg-2-R-${i}`} start={[x1_R + 0.8, 0, z1_R]} end={[x2_R + 0.8, 0, z2_R]} />);
+    }
+    rails.push(<RailSegment key="cg-2-str-L" start={[-2.5 - 0.8, 0, -10]} end={[-2.5 - 0.8, 0, -55]} />);
+    rails.push(<RailSegment key="cg-2-str-R" start={[-2.5 + 0.8, 0, -10]} end={[-2.5 + 0.8, 0, -55]} />);
+
+  } else if (layoutType === 'pn_oficina') {
+    // -----------------------------------------------------
+    // PN Oficina Layout Rails (1 AMV branching left)
+    // -----------------------------------------------------
+    
+    // Main line (straight from 55 to -55) L-173
+    rails.push(<RailSegment key="pno-m-L-pre1" start={[-0.8, 0, 55]} end={[-0.8, 0, 5]} />);
+    rails.push(<RailSegment key="pno-m-L-post1" start={[-0.8, 0, 0]} end={[-0.8, 0, -55]} />);
+    rails.push(<RailSegment key="pno-m-R" start={[0.8, 0, 55]} end={[0.8, 0, -55]} />);
+
+    // Branch (L-159) - AMV 1 at z=5 curves to x=-2.5
+    for (let i = 0; i < segments; i++) {
+      const u1 = i / segments;
+      const u2 = (i + 1) / segments;
+      const z1_L = 5 - 20 * u1;
+      const z2_L = 5 - 20 * u2;
+      const x1_L = getPnOficinaTrack1X(z1_L);
+      const x2_L = getPnOficinaTrack1X(z2_L);
+      rails.push(<RailSegment key={`pno-1-L-${i}`} start={[x1_L - 0.8, 0, z1_L]} end={[x2_L - 0.8, 0, z2_L]} />);
+
+      const z1_R = 0 - 15 * u1; // Starts at 0 due to frog
+      const z2_R = 0 - 15 * u2;
+      const x1_R = getPnOficinaTrack1X(z1_R);
+      const x2_R = getPnOficinaTrack1X(z2_R);
+      rails.push(<RailSegment key={`pno-1-R-${i}`} start={[x1_R + 0.8, 0, z1_R]} end={[x2_R + 0.8, 0, z2_R]} />);
+    }
+    rails.push(<RailSegment key="pno-1-str-L" start={[-2.5 - 0.8, 0, -15]} end={[-2.5 - 0.8, 0, -55]} />);
+    rails.push(<RailSegment key="pno-1-str-R" start={[-2.5 + 0.8, 0, -15]} end={[-2.5 + 0.8, 0, -55]} />);
 
   } else {
     // Siding double AMV rails
@@ -955,7 +1098,7 @@ function FreioAmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv }: any) {
         <TieBar getLeftTipX={() => getTips2().left} getRightTipX={() => getTips2().right} tipZ={0} />
         <SwitchMachine getLeftTipX={() => getTips2().left} tipZ={0} />
         
-        <Text position={[-3, 0.1, -1]} rotation={[-Math.PI / 2, 0, -Math.PI / 2]} fontSize={1.4} color={selectedAmv === 1 ? "#818cf8" : "#64748b"}>
+        <Text position={[-5, 0.1, 0]} rotation={[-Math.PI / 2, 0, -Math.PI / 2]} fontSize={1.4} color={selectedAmv === 1 ? "#818cf8" : "#64748b"}>
           AMV 2
         </Text>
       </group>
@@ -974,7 +1117,7 @@ function FreioAmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv }: any) {
         <TieBar getLeftTipX={() => getTips1().left} getRightTipX={() => getTips1().right} tipZ={0} />
         <SwitchMachine getLeftTipX={() => getTips1().left} tipZ={0} />
         
-        <Text position={[-3, 0.1, 0]} rotation={[-Math.PI / 2, 0, -Math.PI / 2]} fontSize={1.6} color={selectedAmv === 0 ? "#818cf8" : "#64748b"}>
+        <Text position={[-4, 0.1, 0]} rotation={[-Math.PI / 2, 0, -Math.PI / 2]} fontSize={1.6} color={selectedAmv === 0 ? "#818cf8" : "#64748b"}>
           AMV 65B (1)
         </Text>
       </group>
@@ -1031,7 +1174,7 @@ function Freio02AmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv }: any) {
         <TieBar getLeftTipX={() => getTips1().left} getRightTipX={() => getTips1().right} tipZ={0} />
         <SwitchMachine getLeftTipX={() => getTips1().left} tipZ={0} />
         
-        <Text position={[-3, 0.1, -1]} rotation={[-Math.PI / 2, 0, -Math.PI / 2]} fontSize={1.5} color={selectedAmv === 0 ? "#818cf8" : "#64748b"}>
+        <Text position={[-5, 0.1, 0]} rotation={[-Math.PI / 2, 0, -Math.PI / 2]} fontSize={1.5} color={selectedAmv === 0 ? "#818cf8" : "#64748b"}>
           AMV 02 (1)
         </Text>
       </group>
@@ -1050,7 +1193,7 @@ function Freio02AmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv }: any) {
         <TieBar getLeftTipX={() => getTips2().left} getRightTipX={() => getTips2().right} tipZ={0} />
         <SwitchMachine getLeftTipX={() => getTips2().left} tipZ={0} isLeftSide={true} />
         
-        <Text position={[-2.8, 0.1, -1]} rotation={[-Math.PI / 2, 0, -Math.PI / 2]} fontSize={1.4} color={selectedAmv === 1 ? "#818cf8" : "#64748b"}>
+        <Text position={[-3.5, 0.1, 0]} rotation={[-Math.PI / 2, 0, -Math.PI / 2]} fontSize={1.4} color={selectedAmv === 1 ? "#818cf8" : "#64748b"}>
           AMV 01 (2)
         </Text>
       </group>
@@ -1069,7 +1212,7 @@ function Freio02AmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv }: any) {
         <TieBar getLeftTipX={() => getTips3().left} getRightTipX={() => getTips3().right} tipZ={0} />
         <SwitchMachine getLeftTipX={() => getTips3().left} tipZ={0} isLeftSide={false} />
         
-        <Text position={[2.8, 0.1, -1]} rotation={[-Math.PI / 2, 0, Math.PI / 2]} fontSize={1.4} color={selectedAmv === 2 ? "#818cf8" : "#64748b"}>
+        <Text position={[3.5, 0.1, 0]} rotation={[-Math.PI / 2, 0, Math.PI / 2]} fontSize={1.4} color={selectedAmv === 2 ? "#818cf8" : "#64748b"}>
           AMV 128 (3)
         </Text>
       </group>
@@ -1109,7 +1252,7 @@ function OficinaAmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv }: any) {
         <TieBar getLeftTipX={() => getTips1().left} getRightTipX={() => getTips1().right} tipZ={0} />
         <SwitchMachine getLeftTipX={() => getTips1().left} tipZ={0} isLeftSide={true} />
         
-        <Text position={[-8.0, 0.1, -15]} rotation={[-Math.PI / 2, 0, -Math.PI / 2]} fontSize={1.4} color={selectedAmv === 0 ? "#818cf8" : "#64748b"}>
+        <Text position={[3.5, 0.1, 0]} rotation={[-Math.PI / 2, 0, Math.PI / 2]} fontSize={1.4} color={selectedAmv === 0 ? "#818cf8" : "#64748b"}>
           AMV 1 (167)
         </Text>
       </group>
@@ -1128,7 +1271,7 @@ function OficinaAmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv }: any) {
         <TieBar getLeftTipX={() => getTips2().left} getRightTipX={() => getTips2().right} tipZ={0} />
         <SwitchMachine getLeftTipX={() => getTips2().left} tipZ={0} isLeftSide={true} />
         
-        <Text position={[-2.5, 0.1, -25]} rotation={[-Math.PI / 2, 0, -Math.PI / 2]} fontSize={0.8} color={selectedAmv === 1 ? "#818cf8" : "#64748b"}>
+        <Text position={[3.5, 0.1, 0]} rotation={[-Math.PI / 2, 0, Math.PI / 2]} fontSize={1.4} color={selectedAmv === 1 ? "#818cf8" : "#64748b"}>
           AMV 2 (166)
         </Text>
       </group>
@@ -1168,7 +1311,7 @@ function ReclassificacaoAmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv }
         <TieBar getLeftTipX={() => getTips1().left} getRightTipX={() => getTips1().right} tipZ={0} />
         <SwitchMachine getLeftTipX={() => getTips1().left} tipZ={0} isLeftSide={true} />
         
-        <Text position={[-3.0, 0.1, -10]} rotation={[-Math.PI / 2, 0, -Math.PI / 2]} fontSize={1.4} color={selectedAmv === 0 ? "#818cf8" : "#64748b"}>
+        <Text position={[3.5, 0.1, 0]} rotation={[-Math.PI / 2, 0, Math.PI / 2]} fontSize={1.4} color={selectedAmv === 0 ? "#818cf8" : "#64748b"}>
           AMV 1
         </Text>
       </group>
@@ -1187,12 +1330,73 @@ function ReclassificacaoAmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv }
         <TieBar getLeftTipX={() => getTips2().left} getRightTipX={() => getTips2().right} tipZ={0} />
         <SwitchMachine getLeftTipX={() => getTips2().left} tipZ={0} isLeftSide={false} />
         
-        <Text position={[2.0, 0.1, -10]} rotation={[-Math.PI / 2, 0, -Math.PI / 2]} fontSize={1.4} color={selectedAmv === 1 ? "#818cf8" : "#64748b"}>
+        <Text position={[-3.5, 0.1, 0]} rotation={[-Math.PI / 2, 0, -Math.PI / 2]} fontSize={1.4} color={selectedAmv === 1 ? "#818cf8" : "#64748b"}>
           AMV 2
         </Text>
       </group>
 
       <FrogInfo x={-3.5} z={-2} />
+    </group>
+  );
+}
+
+function PnOficinaAmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv }: any) {
+  const getTips1 = () => {
+    if (amvs[0] === 'FALHA') return { left: -0.65, right: 0.65 };
+    if (amvs[0] === 'REVERSO') return { left: -0.5, right: 0.8 };
+    return { left: -0.8, right: 0.5 };
+  };
+
+  return (
+    <group>
+      <CurveBranch layoutType="pn_oficina" />
+      <Sleepers layoutType="pn_oficina" />
+      
+      {/* Visual PN (Passagem em Nível) at z = 15 */}
+      <group position={[0, 0.02, 15]}>
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <mesh key={`pn-plank-${i}`} position={[0, 0, -i * 0.8 + 2]} castShadow receiveShadow>
+            <boxGeometry args={[4, 0.05, 0.7]} />
+            <meshStandardMaterial color="#8B4513" roughness={0.9} />
+          </mesh>
+        ))}
+        <Text position={[4, 0.5, 0]} rotation={[-Math.PI / 2, 0, -Math.PI / 2]} fontSize={1.2} color="#facc15">
+          PN OFICINA
+        </Text>
+      </group>
+
+      {/* Main line 173 */}
+      <RailSegment start={[-0.8, 0, 55]} end={[-0.8, 0, 5]} />
+      <RailSegment start={[-0.8, 0, 0]} end={[-0.8, 0, -55]} />
+      
+      <RailSegment start={[0.8, 0, 55]} end={[0.8, 0, -55]} />
+
+      {/* AMV 1 - Branches Left (z = 5, x = 0) */}
+      <group 
+        position={[0, 0, 5]} 
+        onClick={(e) => { e.stopPropagation(); onSelectAmv(0); onToggleAmv(0); }}
+        onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'pointer'; }}
+        onPointerOut={(e) => { e.stopPropagation(); document.body.style.cursor = 'auto'; }}
+      >
+        <AnimatedPoint hinge={[-0.8, 0, -5]} tipTargetX={getTips1().left} tipZ={0} />
+        <AnimatedPoint hinge={[0.41, 0, -5]} tipTargetX={getTips1().right} tipZ={0} />
+        <TieBar getLeftTipX={() => getTips1().left} getRightTipX={() => getTips1().right} tipZ={0} />
+        <SwitchMachine getLeftTipX={() => getTips1().left} tipZ={0} isLeftSide={false} />
+        
+        <Text position={[3.5, 0.1, 0]} rotation={[-Math.PI / 2, 0, Math.PI / 2]} fontSize={1.4} color={selectedAmv === 0 ? "#818cf8" : "#64748b"}>
+          AMV 1
+        </Text>
+      </group>
+
+      <FrogInfo x={-0.8} z={-2} />
+      
+      <Text position={[-5.5, 0.1, -20]} rotation={[-Math.PI / 2, 0, -Math.PI / 2]} fontSize={2} color="#cbd5e1">
+        L-159
+      </Text>
+      
+      <Text position={[2.5, 0.1, -20]} rotation={[-Math.PI / 2, 0, -Math.PI / 2]} fontSize={2} color="#cbd5e1">
+        L-173
+      </Text>
     </group>
   );
 }
@@ -1247,7 +1451,7 @@ function DoubleAmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv }: any) {
         <AnimatedPoint hinge={[0.8, 0, -5]} tipTargetX={getTips2().right} tipZ={0} />
         <TieBar getLeftTipX={() => getTips2().left} getRightTipX={() => getTips2().right} tipZ={0} />
         <SwitchMachine getLeftTipX={() => getTips2().left} tipZ={0} />
-        <Text position={[3, 0.1, 0]} rotation={[-Math.PI / 2, 0, Math.PI / 2]} scale={[-1, 1, 1]} fontSize={2} color={selectedAmv === 1 ? "#818cf8" : "#64748b"}>
+        <Text position={[-3, 0.1, 0]} rotation={[-Math.PI / 2, 0, -Math.PI / 2]} scale={[-1, 1, 1]} fontSize={2} color={selectedAmv === 1 ? "#818cf8" : "#64748b"}>
           AMV 2
         </Text>
       </group>
@@ -1261,9 +1465,35 @@ function DoubleAmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv }: any) {
 // SAFETY LOGIC & DIAGNOSIS
 // ---------------------------------------------------------
 
-function getSafetyStatus(layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'default', direction: Direction, amvs: SwitchState[], spawnLine: SpawnLine = '128', destLine: SpawnLine = '128') {
+function getSafetyStatus(layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'pn_oficina' | 'carga_geral_02' | 'default', direction: Direction, amvs: SwitchState[], spawnLine: SpawnLine = '128', destLine: SpawnLine = '128') {
   const amv1 = amvs[0];
   const amv2 = amvs[1];
+
+  if (layoutType === 'pn_oficina') {
+    if (direction === 'NORTE_SUL') {
+      if (amv1 === 'FALHA') return { status: 'PERIGO CRÍTICO (FALHA AMV 1)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Descarrilamento no AMV 1.' };
+      
+      if (destLine === '159') {
+        if (amv1 !== 'REVERSO') {
+          return { status: 'ROTA INCORRETA', bg: 'bg-orange-500/10 border-orange-500/30', color: 'text-orange-400', icon: <MapIcon className="w-8 h-8 text-orange-400" />, desc: 'Destino incorreto! O trem seguirá em frente (L-173) ao invés de entrar na L-159.' };
+        }
+        return { status: 'ROTA SEGURA (LINHA 159)', bg: 'bg-emerald-500/10 border-emerald-500/20', color: 'text-emerald-500', icon: <ShieldCheck className="w-8 h-8 text-emerald-500" />, desc: 'Rota alinhada corretamente para a Linha 159.' };
+      }
+      
+      if (destLine === '173') {
+        if (amv1 === 'REVERSO') return { status: 'ROTA INCORRETA', bg: 'bg-orange-500/10 border-orange-500/30', color: 'text-orange-400', icon: <MapIcon className="w-8 h-8 text-orange-400" />, desc: 'Destino incorreto! O trem entrará na L-159 ao invés de seguir reto para a L-173.' };
+        return { status: 'ROTA SEGURA (LINHA 173)', bg: 'bg-emerald-500/10 border-emerald-500/20', color: 'text-emerald-500', icon: <ShieldCheck className="w-8 h-8 text-emerald-500" />, desc: 'Rota alinhada corretamente para a Linha 173.' };
+      }
+    } else {
+      // Sentido Sul -> Norte (vindo das ramificações)
+      if (spawnLine === '159') {
+        if (amv1 !== 'REVERSO') return { status: 'PERIGO CRÍTICO (VIOLAÇÃO AMV 1)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Trem saindo da Linha 159 talonará o AMV 1 se não estiver Reverso.' };
+      } else {
+        if (amv1 !== 'NORMAL') return { status: 'PERIGO CRÍTICO (VIOLAÇÃO AMV 1)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Trem saindo da Linha 173 talonará o AMV 1 se não estiver Normal.' };
+      }
+      return { status: 'ROTA SEGURA (SAÍDA)', bg: 'bg-emerald-500/10 border-emerald-500/20', color: 'text-emerald-500', icon: <ShieldCheck className="w-8 h-8 text-emerald-500" />, desc: 'Saída da PN alinhada com segurança.' };
+    }
+  }
 
   if (layoutType === 'oficina') {
     if (direction === 'NORTE_SUL') {
@@ -1418,6 +1648,42 @@ function getSafetyStatus(layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclass
         icon: <ShieldCheck className="w-8 h-8 text-indigo-400" />,
         desc: 'Trem subindo de Sul para Norte. Certifique o alinhamento correto das 3 agulhas por trás para evitar AMV contra.'
       };
+    }
+  }
+
+  if (layoutType === 'carga_geral_02') {
+    if (direction === 'NORTE_SUL') {
+      if (amv1 === 'FALHA') return { status: 'PERIGO CRÍTICO (FALHA AMV 1)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Descarrilamento no AMV 1.' };
+      
+      if (destLine === '24A') {
+        if (amv1 !== 'REVERSO') return { status: 'ROTA INCORRETA', bg: 'bg-orange-500/10 border-orange-500/30', color: 'text-orange-400', icon: <MapIcon className="w-8 h-8 text-orange-400" />, desc: 'Destino incorreto! O trem seguirá direto para 22A ao invés de entrar na Auxiliar (24A).' };
+        return { status: 'ROTA SEGURA (AUXILIAR 24A)', bg: 'bg-emerald-500/10 border-emerald-500/20', color: 'text-emerald-500', icon: <ShieldCheck className="w-8 h-8 text-emerald-500" />, desc: 'Rota alinhada corretamente para a linha Auxiliar (24A).' };
+      }
+      
+      if (destLine === '23A') {
+        if (amv1 === 'REVERSO') return { status: 'ROTA INCORRETA', bg: 'bg-orange-500/10 border-orange-500/30', color: 'text-orange-400', icon: <MapIcon className="w-8 h-8 text-orange-400" />, desc: 'Destino incorreto! O trem entrará na Auxiliar (24A) ao invés de prosseguir para a L-23A.' };
+        if (amv2 === 'FALHA') return { status: 'PERIGO CRÍTICO (FALHA AMV 2)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Descarrilamento no AMV 2.' };
+        if (amv2 !== 'REVERSO') return { status: 'ROTA INCORRETA', bg: 'bg-orange-500/10 border-orange-500/30', color: 'text-orange-400', icon: <MapIcon className="w-8 h-8 text-orange-400" />, desc: 'Destino incorreto! O trem seguirá direto para L-22A ao invés de entrar na L-23A.' };
+        return { status: 'ROTA SEGURA (LINHA 23A)', bg: 'bg-emerald-500/10 border-emerald-500/20', color: 'text-emerald-500', icon: <ShieldCheck className="w-8 h-8 text-emerald-500" />, desc: 'Rota alinhada corretamente para a Linha 23A.' };
+      }
+
+      if (destLine === '22A') {
+        if (amv1 === 'REVERSO') return { status: 'ROTA INCORRETA', bg: 'bg-orange-500/10 border-orange-500/30', color: 'text-orange-400', icon: <MapIcon className="w-8 h-8 text-orange-400" />, desc: 'Destino incorreto! O trem entrará na Auxiliar (24A) ao invés de seguir na reta principal L-22A.' };
+        if (amv2 === 'FALHA') return { status: 'PERIGO CRÍTICO (FALHA AMV 2)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Descarrilamento no AMV 2.' };
+        if (amv2 === 'REVERSO') return { status: 'ROTA INCORRETA', bg: 'bg-orange-500/10 border-orange-500/30', color: 'text-orange-400', icon: <MapIcon className="w-8 h-8 text-orange-400" />, desc: 'Destino incorreto! O trem entrará na L-23A ao invés de seguir na reta principal L-22A.' };
+        return { status: 'ROTA SEGURA (LINHA 22A)', bg: 'bg-emerald-500/10 border-emerald-500/20', color: 'text-emerald-500', icon: <ShieldCheck className="w-8 h-8 text-emerald-500" />, desc: 'Rota alinhada corretamente para a Linha Principal 22A.' };
+      }
+    } else {
+      if (spawnLine === '24A') {
+        if (amv1 !== 'REVERSO') return { status: 'PERIGO CRÍTICO (VIOLAÇÃO AMV 1)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Trem saindo da Auxiliar (24A) talonará o AMV 1 se não estiver Reverso.' };
+      } else if (spawnLine === '23A') {
+        if (amv2 !== 'REVERSO') return { status: 'PERIGO CRÍTICO (VIOLAÇÃO AMV 2)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Trem saindo da L-23A talonará o AMV 2 se não estiver Reverso.' };
+        if (amv1 !== 'NORMAL') return { status: 'PERIGO CRÍTICO (VIOLAÇÃO AMV 1)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Trem saindo da L-23A talonará o AMV 1 se não estiver Normal.' };
+      } else {
+        if (amv2 !== 'NORMAL') return { status: 'PERIGO CRÍTICO (VIOLAÇÃO AMV 2)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Trem na principal 22A talonará o AMV 2 se não estiver Normal.' };
+        if (amv1 !== 'NORMAL') return { status: 'PERIGO CRÍTICO (VIOLAÇÃO AMV 1)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Trem na principal 22A talonará o AMV 1 se não estiver Normal.' };
+      }
+      return { status: 'ROTA SEGURA (SAÍDA)', bg: 'bg-emerald-500/10 border-emerald-500/20', color: 'text-emerald-500', icon: <ShieldCheck className="w-8 h-8 text-emerald-500" />, desc: 'Saída da Carga Geral 02 alinhada com segurança.' };
     }
   }
 
@@ -1722,7 +1988,7 @@ function getSafetyStatus(layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclass
 // ---------------------------------------------------------
 
 function getRoutePosRot(
-  layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'default',
+  layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'pn_oficina' | 'carga_geral_02' | 'default',
   direction: Direction,
   amvs: SwitchState[],
   progress: number,
@@ -1740,16 +2006,85 @@ function getRoutePosRot(
   let rotX = 0;
   let rotY = direction === 'NORTE_SUL' ? Math.PI : 0;
   let rotZ = 0;
+  let ledColor = '#10b981'; // Default green
 
-  if (layoutType === 'oficina') {
+  if (layoutType === 'pn_oficina') {
+    // ------------------ PN OFICINA ------------------
+    if (direction === 'NORTE_SUL') {
+      if (amv1 === 'FALHA' && tz <= (5 + carIndex * 5.5) && tz >= -15) {
+        const clampZ = 4 + carIndex * 5.5;
+        const isApproaching = tz <= clampZ + 2;
+        tz = Math.max(tz, clampZ);
+        if (isApproaching) ledColor = '#ef4444';
+        if (tz === clampZ) { x = -0.5; y = -0.1; rotX = 0.1; rotY += 0.25; rotZ = 0.25; }
+      } else if (amv1 === 'REVERSO') {
+        if (tz <= (5 + carIndex * 5.5)) ledColor = '#fbbf24';
+        if (tz <= (5 + carIndex * 5.5) && tz >= -15) {
+          x = getPnOficinaTrack1X(tz);
+          const nextX = getPnOficinaTrack1X(tz - 0.1);
+          rotY = Math.atan2(nextX - x, -0.1);
+        } else if (tz < -15) {
+          x = -2.5; // L-159
+        }
+      } else {
+        // amv1 is NORMAL, so train stays on main line (L-173)
+        x = 0;
+      }
+    } else {
+      // SUL_NORTE
+      const startedOnBranch = spawnLine === '159';
+      let isDerailed = false;
+      
+      if (startedOnBranch) {
+        if (amv1 === 'FALHA' || amv1 !== 'REVERSO') {
+          const clampZ = -2.5 - carIndex * 5.5; // -2.5 is exactly 2 LEDs (2 * 1.25m) before the original z=0 collision point
+          if (tz >= clampZ - 2) ledColor = '#ef4444';
+          if (tz >= clampZ) {
+            tz = clampZ;
+            isDerailed = true;
+          }
+        }
+        
+        if (tz >= -15 && tz <= 5) {
+          x = getPnOficinaTrack1X(tz);
+          const nextX = getPnOficinaTrack1X(tz + 0.1);
+          rotY = Math.atan2(nextX - x, 0.1);
+        } else if (tz > 5) {
+          x = 0;
+        } else {
+          x = -2.5;
+        }
+        
+        if (isDerailed) {
+          x += 0.5; y = -0.1; rotX = -0.1; rotY -= 0.25; rotZ = -0.25;
+        }
+      } else {
+        // Started on L-173 (straight)
+        if (amv1 === 'FALHA' || amv1 !== 'NORMAL') {
+          const clampZ = -2 - carIndex * 5.5; // Frog is at z=-2
+          if (tz >= clampZ - 2) ledColor = '#ef4444';
+          if (tz >= clampZ) {
+            tz = clampZ;
+            isDerailed = true;
+          }
+        }
+        x = 0;
+        if (isDerailed) {
+          x += 0.5; y = -0.1; rotX = -0.1; rotY -= 0.25; rotZ = -0.25;
+        }
+      }
+    }
+  } else if (layoutType === 'oficina') {
     // ------------------ 2 AMVs LAYOUT (oficina) ------------------
     if (direction === 'NORTE_SUL') {
       if (amv1 === 'FALHA' && tz <= (25 + carIndex * 5.5) && tz >= -5) {
         const clampZ = 24 + carIndex * 5.5;
+        if (tz <= clampZ + 2) ledColor = '#ef4444';
         tz = Math.max(tz, clampZ);
         const isDerailed = tz === clampZ;
         if (isDerailed) { x = -0.5; rotX = 0.1; rotY += 0.25; rotZ = 0.25; }
       } else if (amv1 === 'REVERSO') {
+        if (tz <= (25 + carIndex * 5.5)) ledColor = '#fbbf24';
         if (tz <= (25 + carIndex * 5.5) && tz >= -5) {
           x = getOficinaTrack1X(tz);
           const nextX = getOficinaTrack1X(tz - 0.1);
@@ -1761,10 +2096,12 @@ function getRoutePosRot(
         // amv1 is NORMAL, so train stays on main line
         if (amv2 === 'FALHA' && tz <= (5 + carIndex * 5.5) && tz >= -15) {
           const clampZ = 4 + carIndex * 5.5;
+          if (tz <= clampZ + 2) ledColor = '#ef4444';
           tz = Math.max(tz, clampZ);
           const isDerailed = tz === clampZ;
           if (isDerailed) { x = -0.5; rotX = 0.1; rotY += 0.25; rotZ = 0.25; }
         } else if (amv2 === 'REVERSO') {
+          if (tz <= (5 + carIndex * 5.5)) ledColor = '#fbbf24';
           if (tz <= (5 + carIndex * 5.5) && tz >= -15) {
             x = getOficinaTrack2X(tz);
             const nextX = getOficinaTrack2X(tz - 0.1);
@@ -1787,6 +2124,8 @@ function getRoutePosRot(
          if (amv1 !== 'NORMAL') maxZ = Math.min(maxZ, 24 - carIndex * 5.5);
        }
        
+       const isApproaching = tz >= maxZ - 2;
+       if (isApproaching && maxZ < 100) ledColor = '#ef4444';
        const isDerailed = tz >= maxZ;
        tz = Math.min(tz, maxZ);
        
@@ -1820,6 +2159,7 @@ function getRoutePosRot(
     if (direction === 'NORTE_SUL') {
       if (amv1 === 'FALHA' && tz <= (25 + carIndex * 5.5) && tz >= 5) {
         const clampZ = 24 + carIndex * 5.5;
+        if (tz <= clampZ + 2) ledColor = '#ef4444';
         tz = Math.max(tz, clampZ);
         if (tz === clampZ) { x = -0.5; rotX = 0.1; rotY += 0.25; rotZ = 0.25; }
       } else if (amv1 === 'NORMAL') {
@@ -1827,6 +2167,7 @@ function getRoutePosRot(
         x = 0;
       } else {
         // amv1 === 'REVERSO', goes to left branch
+        if (tz <= (25 + carIndex * 5.5)) ledColor = '#fbbf24';
         if (tz <= (25 + carIndex * 5.5) && tz >= 5) {
           x = getReclassificacaoTrack1X(tz);
           const nextX = getReclassificacaoTrack1X(tz - 0.1);
@@ -1835,6 +2176,7 @@ function getRoutePosRot(
           // on left branch, approaching AMV 2
           if (amv2 === 'FALHA' && tz <= (5 + carIndex * 5.5) && tz >= -15) {
             const clampZ = 4 + carIndex * 5.5;
+            if (tz <= clampZ + 2) ledColor = '#ef4444';
             tz = Math.max(tz, clampZ);
             if (tz === clampZ) { x = -5.5; rotX = 0.1; rotY += 0.25; rotZ = 0.25; }
           } else if (amv2 === 'NORMAL') {
@@ -1842,6 +2184,7 @@ function getRoutePosRot(
             x = -5.0;
           } else {
             // amv2 === 'REVERSO', curves to L-106A
+            if (tz <= (5 + carIndex * 5.5)) ledColor = '#fbbf24';
             if (tz <= (5 + carIndex * 5.5) && tz >= -15) {
               x = getReclassificacaoTrack2X(tz);
               const nextX = getReclassificacaoTrack2X(tz - 0.1);
@@ -1865,6 +2208,8 @@ function getRoutePosRot(
          if (amv1 !== 'NORMAL') maxZ = Math.min(maxZ, 24 - carIndex * 5.5);
        }
        
+       const isApproaching = tz >= maxZ - 2;
+       if (isApproaching && maxZ < 100) ledColor = '#ef4444';
        const isDerailed = tz >= maxZ;
        tz = Math.min(tz, maxZ);
        
@@ -1975,24 +2320,28 @@ function getRoutePosRot(
 
       // Calcular rotação
       const dt = 0.1;
-      let x1 = 0;
-      let x0 = 0;
-      if (tz >= 25) {
-        x1 = 0; x0 = 0;
-      } else if (tz < 25 && tz >= 10) {
-        x1 = getFreio02Track1X(tz + dt, side1);
-        x0 = getFreio02Track1X(tz - dt, side1);
-      } else {
-        if (side1 === 'L') {
-          x1 = getFreio02Track2X(tz + dt, side23);
-          x0 = getFreio02Track2X(tz - dt, side23);
+      let nextX = x;
+      if (direction === 'NORTE_SUL') {
+        if ((tz - dt) >= 25) {
+          nextX = 0;
+        } else if ((tz - dt) < 25 && (tz - dt) >= 10) {
+          nextX = getFreio02Track1X(tz - dt, side1);
         } else {
-          x1 = getFreio02Track3X(tz + dt, side23);
-          x0 = getFreio02Track3X(tz - dt, side23);
+          if (side1 === 'L') nextX = getFreio02Track2X(tz - dt, side23);
+          else nextX = getFreio02Track3X(tz - dt, side23);
         }
+        rotY = Math.atan2(nextX - x, -dt);
+      } else {
+        if ((tz + dt) >= 25) {
+          nextX = 0;
+        } else if ((tz + dt) < 25 && (tz + dt) >= 10) {
+          nextX = getFreio02Track1X(tz + dt, side1);
+        } else {
+          if (side1 === 'L') nextX = getFreio02Track2X(tz + dt, side23);
+          else nextX = getFreio02Track3X(tz + dt, side23);
+        }
+        rotY = Math.atan2(nextX - x, dt);
       }
-      const dxdz = (x1 - x0) / (2 * dt);
-      rotY = direction === 'NORTE_SUL' ? Math.PI - Math.atan(dxdz) : -Math.atan(dxdz);
     }
   } else if (layoutType === 'freio') {
     let isOnBranch1 = false;
@@ -2030,14 +2379,8 @@ function getRoutePosRot(
       // Calculate position X
       x = getFreioXForZ(tz);
 
-      const dxdz = (zPos: number) => {
-        const dz = 0.1;
-        const x1 = getFreioXForZ(zPos);
-        const x2 = getFreioXForZ(zPos + dz);
-        return (x1 - x2) / dz; // positive means moving left as z increases
-      };
-      
-      rotY = Math.atan2(dxdz(tz), 1);
+      const nextX = getFreioXForZ(tz - 0.1);
+      rotY = Math.atan2(nextX - x, -0.1);
 
       // ----------------------------------------------------
       // FACING POINT DERAILMENTS (North to South)
@@ -2048,7 +2391,7 @@ function getRoutePosRot(
         const clampZ1 = 17 + carIndex * 5.5;
         if (amv1 === 'FALHA') {
           tz = Math.max(tz, clampZ1);
-          if (tz === clampZ1) { x = 0.35 + carIndex * 0.12; rotY -= 0.25; rotZ = -0.25; isOnBranch1 = false; }
+          if (tz === clampZ1) { x = 0.35 + carIndex * 0.12; y = -0.1; rotY -= 0.25; rotZ = -0.25; isOnBranch1 = false; }
         }
       }
 
@@ -2057,7 +2400,7 @@ function getRoutePosRot(
         const clampZ2 = -3 + carIndex * 5.5;
         if (amv2 === 'FALHA') {
           tz = Math.max(tz, clampZ2);
-          if (tz === clampZ2) { x = 2.5 + 0.35 + carIndex * 0.12; rotY -= 0.25; rotZ = -0.25; isOnBranch2 = false; }
+          if (tz === clampZ2) { x = 2.5 + 0.35 + carIndex * 0.12; y = -0.1; rotY -= 0.25; rotZ = -0.25; isOnBranch2 = false; }
         }
       }
 
@@ -2093,24 +2436,18 @@ function getRoutePosRot(
 
       x = getFreioXForZ(tz);
 
-      const dxdz = (zPos: number) => {
-        const dz = 0.1;
-        const x1 = getFreioXForZ(zPos);
-        const x2 = getFreioXForZ(zPos - dz);
-        return (x1 - x2) / dz;
-      };
-      
-      rotY = -Math.atan2(dxdz(tz), 1);
+      const nextX = getFreioXForZ(tz + 0.1);
+      rotY = Math.atan2(nextX - x, 0.1);
       
       // Talonamento / Falha no AMV 2 (65A, z = -2)
       if (tz >= (-2 - carIndex * 5.5) && tz <= 5) {
         const clampZ2 = -3 - carIndex * 5.5;
         if (startedOnBranch2 && (amv2 === 'NORMAL' || amv2 === 'FALHA')) {
           tz = Math.min(tz, clampZ2);
-          if (tz === clampZ2) { x = 5.0 - 0.35 - carIndex * 0.12; rotY += 0.3; rotZ = -0.3; }
+          if (tz === clampZ2) { x = 5.0 - 0.35 - carIndex * 0.12; y = -0.1; rotY += 0.3; rotZ = -0.3; }
         } else if (startedOnBranch1 && (amv2 === 'REVERSO' || amv2 === 'FALHA')) {
           tz = Math.min(tz, clampZ2);
-          if (tz === clampZ2) { x = 2.5 + 0.35 + carIndex * 0.12; rotY -= 0.3; rotZ = 0.3; }
+          if (tz === clampZ2) { x = 2.5 + 0.35 + carIndex * 0.12; y = -0.1; rotY -= 0.3; rotZ = 0.3; }
         }
       }
 
@@ -2120,44 +2457,91 @@ function getRoutePosRot(
         const comingFromBranches = startedOnBranch1 || startedOnBranch2;
         if (comingFromBranches && (amv1 === 'NORMAL' || amv1 === 'FALHA')) {
           tz = Math.min(tz, clampZ1);
-          if (tz === clampZ1) { x = 2.5 - 0.35 - carIndex * 0.12; rotY += 0.3; rotZ = -0.3; }
+          if (tz === clampZ1) { x = 2.5 - 0.35 - carIndex * 0.12; y = -0.1; rotY += 0.3; rotZ = -0.3; }
         } else if (!comingFromBranches && (amv1 === 'REVERSO' || amv1 === 'FALHA')) {
           tz = Math.min(tz, clampZ1);
-          if (tz === clampZ1) { x = 0.35 + carIndex * 0.12; rotY -= 0.3; rotZ = 0.3; }
+          if (tz === clampZ1) { x = 0.35 + carIndex * 0.12; y = -0.1; rotY -= 0.3; rotZ = 0.3; }
         }
       }
     }
 
-    // Path tracing for Freio
-    if (y > 0) {
-      if (isOnBranch2) {
-        x = getFreioTrack2X(tz);
-      } else if (isOnBranch1) {
-        x = getFreioTrack1X(tz);
-      } else {
-        x = 0;
-      }
-      
-      const dt = 0.1;
-      let x1 = 0, x0 = 0;
-      if (isOnBranch2) {
-        x1 = getFreioTrack2X(tz + dt);
-        x0 = getFreioTrack2X(tz - dt);
-      } else if (isOnBranch1) {
-        x1 = getFreioTrack1X(tz + dt);
-        x0 = getFreioTrack1X(tz - dt);
-      }
-      
-      if (isOnBranch1 || isOnBranch2) {
-        const dxdz = (x1 - x0) / (2 * dt);
-        if (direction === 'NORTE_SUL') {
-          rotY = Math.PI - Math.atan(dxdz);
-        } else {
-          rotY = -Math.atan(dxdz);
+
+  } else if (layoutType === 'carga_geral_02') {
+    // ------------------ CARGA GERAL 02 LAYOUT ------------------
+    if (direction === 'NORTE_SUL') {
+      // Main Line (L-22A) unless turning
+      if (amv1 === 'FALHA' && tz <= (25 + carIndex * 5.5) && tz >= 5) {
+        const clampZ = 24 + carIndex * 5.5;
+        if (tz <= clampZ + 2) ledColor = '#ef4444';
+        tz = Math.max(tz, clampZ);
+        if (tz === clampZ) { x = -0.5; rotX = 0.1; rotY += 0.25; rotZ = 0.25; }
+      } else if (amv1 === 'REVERSO') {
+        if (tz <= (25 + carIndex * 5.5)) ledColor = '#fbbf24';
+        if (tz <= (25 + carIndex * 5.5) && tz >= 5) {
+          x = getCargaGeral02Track1X(tz);
+          const nextX = getCargaGeral02Track1X(tz - 0.1);
+          rotY = Math.atan2(nextX - x, -0.1);
+        } else if (tz < 5) {
+          x = -5.0; // Straight on L-24A
         }
       } else {
-        rotY = direction === 'NORTE_SUL' ? Math.PI : 0;
+        // amv1 is NORMAL, so train stays on main line until AMV 2
+        if (amv2 === 'FALHA' && tz <= (10 + carIndex * 5.5) && tz >= -10) {
+          const clampZ = 9 + carIndex * 5.5;
+          if (tz <= clampZ + 2) ledColor = '#ef4444';
+          tz = Math.max(tz, clampZ);
+          if (tz === clampZ) { x = -0.5; rotX = 0.1; rotY += 0.25; rotZ = 0.25; }
+        } else if (amv2 === 'REVERSO') {
+          if (tz <= (10 + carIndex * 5.5)) ledColor = '#fbbf24';
+          if (tz <= (10 + carIndex * 5.5) && tz >= -10) {
+            x = getCargaGeral02Track2X(tz);
+            const nextX = getCargaGeral02Track2X(tz - 0.1);
+            rotY = Math.atan2(nextX - x, -0.1);
+          } else if (tz < -10) {
+            x = -2.5; // Straight on L-23A
+          }
+        }
       }
+    } else {
+       // SUL_NORTE (spawnLine dictates path)
+       let maxZ = 100;
+       if (spawnLine === '24A') {
+         if (amv1 !== 'REVERSO') maxZ = Math.min(maxZ, 24 - carIndex * 5.5);
+       } else if (spawnLine === '23A') {
+         if (amv2 !== 'REVERSO') maxZ = Math.min(maxZ, 9 - carIndex * 5.5);
+         if (amv1 !== 'NORMAL') maxZ = Math.min(maxZ, 24 - carIndex * 5.5);
+       } else { // 22A
+         if (amv2 !== 'NORMAL') maxZ = Math.min(maxZ, 9 - carIndex * 5.5);
+         if (amv1 !== 'NORMAL') maxZ = Math.min(maxZ, 24 - carIndex * 5.5);
+       }
+       
+       const isDerailed = tz >= maxZ;
+       tz = Math.min(tz, maxZ);
+       
+       if (spawnLine === '24A') {
+         x = -5.0;
+         if (tz >= 5 && tz <= 25) {
+           x = getCargaGeral02Track1X(tz);
+           const nextX = getCargaGeral02Track1X(tz + 0.1);
+           rotY = Math.atan2(nextX - x, 0.1);
+         } else if (tz > 25) {
+           x = 0;
+         }
+       } else if (spawnLine === '23A') {
+         x = -2.5;
+         if (tz >= -10 && tz <= 10) {
+           x = getCargaGeral02Track2X(tz);
+           const nextX = getCargaGeral02Track2X(tz + 0.1);
+           rotY = Math.atan2(nextX - x, 0.1);
+         } else if (tz > 10) {
+           x = 0;
+         }
+       } else {
+         // Main line 22A
+         x = 0;
+       }
+
+       if (isDerailed) { rotX = 0.1; rotY += 0.25; rotZ = 0.25; }
     }
   } else {
     // ------------------ DUAL AMV PATH (Default Siding) ------------------
@@ -2282,20 +2666,23 @@ function getRoutePosRot(
     if (isOnBranch && y > 0) {
       x = getTrackX(tz);
       const dt = 0.1;
-      const x1 = getTrackX(tz + dt);
-      const x0 = getTrackX(tz - dt);
-      const dxdz = (x1 - x0) / (2 * dt);
       if (direction === 'NORTE_SUL') {
-        rotY = Math.PI - Math.atan(dxdz);
+        const nextX = getTrackX(tz - dt);
+        rotY = Math.atan2(nextX - x, -dt);
       } else {
-        rotY = -Math.atan(dxdz);
+        const nextX = getTrackX(tz + dt);
+        rotY = Math.atan2(nextX - x, dt);
       }
     } else if (y > 0) {
       x = 0;
     }
   }
 
-  return { pos: [x, y, tz], rot: [rotX, rotY, rotZ] };
+  return {
+    pos: [x, y, tz],
+    rot: [rotX, rotY, rotZ],
+    color: ledColor
+  };
 }
 
 function PovCamera() {
@@ -2395,6 +2782,65 @@ function TrainGroup({
   );
 }
 
+function CargaGeral02AmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv }: any) {
+  const getTips1 = () => {
+    if (amvs[0] === 'FALHA') return { left: -0.65, right: 0.65 };
+    if (amvs[0] === 'REVERSO') return { left: -0.5, right: 0.8 };
+    return { left: -0.8, right: 0.5 };
+  };
+
+  const getTips2 = () => {
+    if (amvs[1] === 'FALHA') return { left: -0.65, right: 0.65 };
+    if (amvs[1] === 'REVERSO') return { left: -0.5, right: 0.8 };
+    return { left: -0.8, right: 0.5 };
+  };
+
+  return (
+    <group>
+      <Sleepers layoutType="carga_geral_02" />
+      <CurveBranch layoutType="carga_geral_02" />
+
+      {/* AMV 1 - (z = 25, x = 0) Branches left to Auxiliar */}
+      <group 
+        position={[0, 0, 25]} 
+        onClick={(e) => { e.stopPropagation(); onSelectAmv(0); onToggleAmv(0); }}
+        onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'pointer'; }}
+        onPointerOut={(e) => { e.stopPropagation(); document.body.style.cursor = 'auto'; }}
+      >
+        <AnimatedPoint hinge={[-0.4, 0, -5]} tipTargetX={getTips1().left} tipZ={0} />
+        <AnimatedPoint hinge={[0.4, 0, -5]} tipTargetX={getTips1().right} tipZ={0} />
+        <TieBar getLeftTipX={() => getTips1().left} getRightTipX={() => getTips1().right} tipZ={0} />
+        <SwitchMachine getLeftTipX={() => getTips1().left} tipZ={0} isLeftSide={true} />
+        
+        <Text position={[3, 0.1, 0]} rotation={[-Math.PI / 2, 0, Math.PI / 2]} fontSize={1.5} color={selectedAmv === 0 ? "#818cf8" : "#64748b"}>
+          AMV 1
+        </Text>
+      </group>
+
+      <FrogInfo x={0} z={18} />
+
+      {/* AMV 2 - (z = 10, x = 0) Branches left to 23A */}
+      <group 
+        position={[0, 0, 10]} 
+        onClick={(e) => { e.stopPropagation(); onSelectAmv(1); onToggleAmv(1); }}
+        onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'pointer'; }}
+        onPointerOut={(e) => { e.stopPropagation(); document.body.style.cursor = 'auto'; }}
+      >
+        <AnimatedPoint hinge={[-0.4, 0, -5]} tipTargetX={getTips2().left} tipZ={0} />
+        <AnimatedPoint hinge={[0.4, 0, -5]} tipTargetX={getTips2().right} tipZ={0} />
+        <TieBar getLeftTipX={() => getTips2().left} getRightTipX={() => getTips2().right} tipZ={0} />
+        <SwitchMachine getLeftTipX={() => getTips2().left} tipZ={0} isLeftSide={true} />
+        
+        <Text position={[3, 0.1, 0]} rotation={[-Math.PI / 2, 0, Math.PI / 2]} fontSize={1.4} color={selectedAmv === 1 ? "#818cf8" : "#64748b"}>
+          AMV 2
+        </Text>
+      </group>
+
+      <FrogInfo x={0} z={3} />
+    </group>
+  );
+}
+
 export default function AmvSimulation({ systemId, systemName, onClose, inlineMode }: AmvSimulationProps) {
   const [direction, setDirection] = useState<Direction>('NORTE_SUL');
   const [amvs, setAmvs] = useState<SwitchState[]>(['NORMAL', 'NORMAL', 'NORMAL']);
@@ -2407,8 +2853,8 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
   const [isAutoLineSelection, setIsAutoLineSelection] = useState(true);
   const [isMobilePanelOpen, setIsMobilePanelOpen] = useState(true);
 
-  const baseLayout = systemId === 'watchSystem7' ? 'reclassificacao' : systemId === 'watchSystem4' ? 'oficina' : (systemId === 'watchSystem5' || systemId === 'watchSystem3') ? 'freio' : 'default';
-  const layoutType = baseLayout as 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'default';
+  const baseLayout = systemId === 'watchSystem9' ? 'pn_oficina' : systemId === 'watchSystem8' ? 'carga_geral_02' : systemId === 'watchSystem7' ? 'reclassificacao' : systemId === 'watchSystem4' ? 'oficina' : (systemId === 'watchSystem5' || systemId === 'watchSystem3') ? 'freio' : 'default';
+  const layoutType = baseLayout as 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'pn_oficina' | 'carga_geral_02' | 'default';
 
   useEffect(() => {
     if (!isAutoLineSelection) return;
@@ -2420,10 +2866,17 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
       if (amv1 === 'NORMAL') expectedLine = '152';
       else if (amv2 === 'REVERSO') expectedLine = '166';
       else expectedLine = '167';
+    } else if (layoutType === 'pn_oficina') {
+      if (amv1 === 'REVERSO') expectedLine = '159';
+      else expectedLine = '173';
     } else if (layoutType === 'reclassificacao') {
       if (amv1 === 'NORMAL') expectedLine = '105A';
       else if (amv2 === 'REVERSO') expectedLine = '106A';
       else expectedLine = '107A';
+    } else if (layoutType === 'carga_geral_02') {
+      if (amv1 === 'REVERSO') expectedLine = '24A';
+      else if (amv2 === 'REVERSO') expectedLine = '23A';
+      else expectedLine = '22A';
     } else if (layoutType === 'freio') {
       if (amv1 === 'NORMAL') expectedLine = '128';
       else if (amv2 === 'REVERSO') expectedLine = '2';
@@ -2441,6 +2894,9 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
     if (layoutType === 'oficina') {
       setSpawnLine('167');
       setDestLine('167');
+    } else if (layoutType === 'pn_oficina') {
+      setSpawnLine('173');
+      setDestLine('173');
     } else if (layoutType === 'reclassificacao') {
       setSpawnLine('105A');
       setDestLine('105A');
@@ -2462,6 +2918,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
   };
 
   const handleToggleAmv = (index: number) => {
+    console.log(`AMV CLICKED: ${index}, current: ${amvs[index]}`);
     const currentState = amvs[index];
     const nextState = currentState === 'NORMAL' ? 'REVERSO' : 'NORMAL';
     const newAmvs = [...amvs];
@@ -2551,6 +3008,10 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
 
               {layoutType === 'reclassificacao' ? (
                 <ReclassificacaoAmvScene amvs={amvs} selectedAmv={selectedAmv} onSelectAmv={setSelectedAmv} onToggleAmv={handleToggleAmv} />
+              ) : layoutType === 'pn_oficina' ? (
+                <PnOficinaAmvScene amvs={amvs} selectedAmv={selectedAmv} onSelectAmv={setSelectedAmv} onToggleAmv={handleToggleAmv} />
+              ) : layoutType === 'carga_geral_02' ? (
+                <CargaGeral02AmvScene amvs={amvs} selectedAmv={selectedAmv} onSelectAmv={setSelectedAmv} onToggleAmv={handleToggleAmv} />
               ) : layoutType === 'oficina' ? (
                 <OficinaAmvScene amvs={amvs} selectedAmv={selectedAmv} onSelectAmv={setSelectedAmv} onToggleAmv={handleToggleAmv} />
               ) : layoutType === 'freio_02' ? (
@@ -2561,7 +3022,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
                 <DoubleAmvScene amvs={amvs} selectedAmv={selectedAmv} onSelectAmv={setSelectedAmv} onToggleAmv={handleToggleAmv} />
               )}
 
-              <LedFlow layoutType={layoutType} direction={direction} amvs={amvs} spawnLine={spawnLine} />
+              <LedFlow layoutType={layoutType} direction={direction} amvs={amvs} spawnLine={spawnLine} routeColor={safety?.status.includes('PERIGO') ? '#ef4444' : amvs[0] === 'NORMAL' ? '#10b981' : '#fbbf24'} />
 
               <TrainGroup 
                 layoutType={layoutType}
@@ -2600,27 +3061,29 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
                         <>
                           <div className={`flex flex-col items-center bg-[#0a0a0c]/80 border ${selectedAmv === 0 ? 'border-indigo-500/50 shadow-[0_0_10px_rgba(99,102,241,0.2)]' : 'border-white/5'} px-2.5 py-1.5 rounded-xl cursor-pointer hover:border-indigo-500/30 transition-all`} onClick={() => setSelectedAmv(0)}>
                               <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest leading-none mb-1">AMV 02</span>
-                              <span className={`text-[10px] font-black leading-none ${amvs[0] === 'NORMAL' ? 'text-emerald-400' : (amvs[0] === 'REVERSO' ? 'text-indigo-400' : 'text-red-500')}`}>{amvs[0]}</span>
+                              <span className={`text-[10px] font-black leading-none ${amvs[0] === 'NORMAL' ? 'text-emerald-400' : (amvs[0] === 'REVERSO' ? 'text-yellow-400' : 'text-red-500')}`}>{amvs[0] === 'NORMAL' ? 'RETA' : (amvs[0] === 'REVERSO' ? 'REVERSA' : 'AMV CONTRA')}</span>
                           </div>
                           <div className={`flex flex-col items-center bg-[#0a0a0c]/80 border ${selectedAmv === 1 ? 'border-indigo-500/50 shadow-[0_0_10px_rgba(99,102,241,0.2)]' : 'border-white/5'} px-2.5 py-1.5 rounded-xl cursor-pointer hover:border-indigo-500/30 transition-all`} onClick={() => setSelectedAmv(1)}>
                               <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest leading-none mb-1">AMV 01</span>
-                              <span className={`text-[10px] font-black leading-none ${amvs[1] === 'NORMAL' ? 'text-emerald-400' : (amvs[1] === 'REVERSO' ? 'text-indigo-400' : 'text-red-500')}`}>{amvs[1]}</span>
+                              <span className={`text-[10px] font-black leading-none ${amvs[1] === 'NORMAL' ? 'text-emerald-400' : (amvs[1] === 'REVERSO' ? 'text-yellow-400' : 'text-red-500')}`}>{amvs[1] === 'NORMAL' ? 'RETA' : (amvs[1] === 'REVERSO' ? 'REVERSA' : 'AMV CONTRA')}</span>
                           </div>
                           <div className={`flex flex-col items-center bg-[#0a0a0c]/80 border ${selectedAmv === 2 ? 'border-indigo-500/50 shadow-[0_0_10px_rgba(99,102,241,0.2)]' : 'border-white/5'} px-2.5 py-1.5 rounded-xl cursor-pointer hover:border-indigo-500/30 transition-all`} onClick={() => setSelectedAmv(2)}>
                               <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest leading-none mb-1">AMV 128</span>
-                              <span className={`text-[10px] font-black leading-none ${amvs[2] === 'NORMAL' ? 'text-emerald-400' : (amvs[2] === 'REVERSO' ? 'text-indigo-400' : 'text-red-500')}`}>{amvs[2]}</span>
+                              <span className={`text-[10px] font-black leading-none ${amvs[2] === 'NORMAL' ? 'text-emerald-400' : (amvs[2] === 'REVERSO' ? 'text-yellow-400' : 'text-red-500')}`}>{amvs[2] === 'NORMAL' ? 'RETA' : (amvs[2] === 'REVERSO' ? 'REVERSA' : 'AMV CONTRA')}</span>
                           </div>
                         </>
                       ) : (
                         <>
                           <div className={`flex flex-col items-center bg-[#0a0a0c]/80 border ${selectedAmv === 0 ? 'border-indigo-500/50 shadow-[0_0_10px_rgba(99,102,241,0.2)]' : 'border-white/5'} px-3 py-1.5 rounded-xl cursor-pointer hover:border-indigo-500/30 transition-all`} onClick={() => setSelectedAmv(0)}>
                               <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest leading-none mb-1">{layoutType === 'freio' ? 'AMV 65B' : 'AMV 1'}</span>
-                              <span className={`text-[10px] font-black leading-none ${amvs[0] === 'NORMAL' ? 'text-emerald-400' : (amvs[0] === 'REVERSO' ? 'text-indigo-400' : 'text-red-500')}`}>{amvs[0]}</span>
+                              <span className={`text-[10px] font-black leading-none ${amvs[0] === 'NORMAL' ? 'text-emerald-400' : (amvs[0] === 'REVERSO' ? 'text-yellow-400' : 'text-red-500')}`}>{amvs[0] === 'NORMAL' ? 'RETA' : (amvs[0] === 'REVERSO' ? 'REVERSA' : 'AMV CONTRA')}</span>
                           </div>
-                          <div className={`flex flex-col items-center bg-[#0a0a0c]/80 border ${selectedAmv === 1 ? 'border-indigo-500/50 shadow-[0_0_10px_rgba(99,102,241,0.2)]' : 'border-white/5'} px-3 py-1.5 rounded-xl cursor-pointer hover:border-indigo-500/30 transition-all`} onClick={() => setSelectedAmv(1)}>
-                              <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest leading-none mb-1">{layoutType === 'freio' ? 'AMV 65A' : 'AMV 2'}</span>
-                              <span className={`text-[10px] font-black leading-none ${amvs[1] === 'NORMAL' ? 'text-emerald-400' : (amvs[1] === 'REVERSO' ? 'text-indigo-400' : 'text-red-500')}`}>{amvs[1]}</span>
-                          </div>
+                          {layoutType !== 'pn_oficina' && (
+                            <div className={`flex flex-col items-center bg-[#0a0a0c]/80 border ${selectedAmv === 1 ? 'border-indigo-500/50 shadow-[0_0_10px_rgba(99,102,241,0.2)]' : 'border-white/5'} px-3 py-1.5 rounded-xl cursor-pointer hover:border-indigo-500/30 transition-all`} onClick={() => setSelectedAmv(1)}>
+                                <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest leading-none mb-1">{layoutType === 'freio' ? 'AMV 65A' : 'AMV 2'}</span>
+                                <span className={`text-[10px] font-black leading-none ${amvs[1] === 'NORMAL' ? 'text-emerald-400' : (amvs[1] === 'REVERSO' ? 'text-yellow-400' : 'text-red-500')}`}>{amvs[1] === 'NORMAL' ? 'RETA' : (amvs[1] === 'REVERSO' ? 'REVERSA' : 'AMV CONTRA')}</span>
+                            </div>
+                          )}
                         </>
                       )}
                   </div>
@@ -2677,12 +3140,14 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
 
             {/* SELECTION DOTS */}
             <div className="flex gap-2 mb-1.5">
-               {(layoutType === 'freio_02' ? [0, 1, 2] : [0, 1]).map(index => {
+               {(layoutType === 'freio_02' ? [0, 1, 2] : layoutType === 'pn_oficina' ? [0] : [0, 1]).map(index => {
                    let name = '';
                    if (layoutType === 'freio_02') {
                      name = index === 0 ? '02' : (index === 1 ? '01' : '128');
                    } else if (layoutType === 'freio') {
                      name = index === 0 ? '65B' : '65A';
+                   } else if (layoutType === 'pn_oficina') {
+                     name = '1';
                    } else {
                      name = index === 0 ? '1' : '2';
                    }
@@ -2697,8 +3162,8 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
                        }`}
                      >
                        <span className="text-[8px] font-black uppercase tracking-widest leading-none mb-1">AMV {name}</span>
-                       <span className={`text-[10px] font-bold leading-none ${amvs[index] === 'NORMAL' ? 'text-emerald-500' : (amvs[index] === 'REVERSO' ? 'text-indigo-500' : 'text-red-500')}`}>
-                          {amvs[index]}
+                       <span className={`text-[10px] font-bold leading-none ${amvs[index] === 'NORMAL' ? 'text-emerald-500' : (amvs[index] === 'REVERSO' ? 'text-yellow-500' : 'text-red-500')}`}>
+                          {amvs[index] === 'NORMAL' ? 'RETA' : (amvs[index] === 'REVERSO' ? 'REVERSA' : 'AMV CONTRA')}
                        </span>
                      </button>
                    );
@@ -2707,9 +3172,9 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
 
             <div className="flex bg-[#0a0a0c] p-1 rounded-[14px] border border-white/5 shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)]">
                {[
-                 { val: 'NORMAL', label: 'Normal' },
-                 { val: 'REVERSO', label: 'Reverso' },
-                 { val: 'FALHA', label: 'Falha' }
+                 { val: 'NORMAL', label: 'Reta' },
+                 { val: 'REVERSO', label: 'Reversa' },
+                 { val: 'FALHA', label: 'AMV Contra' }
                ].map(s => (
                   <button 
                     key={s.val}
@@ -2769,7 +3234,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
          </div>
 
          {/* SECTION: Spawn Origin */}
-         {direction === 'SUL_NORTE' && (layoutType === 'freio' || layoutType === 'oficina' || layoutType === 'reclassificacao') && (
+         {direction === 'SUL_NORTE' && (layoutType === 'freio' || layoutType === 'oficina' || layoutType === 'reclassificacao' || layoutType === 'pn_oficina') && (
             <div className="bg-[#18181c] border border-white/5 rounded-[16px] p-3 flex flex-col shadow-2xl shrink-0">
                <div className="flex justify-between items-center mb-1.5 gap-2">
                  <div>
@@ -2798,6 +3263,9 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
                     { val: '167', label: 'L-167' },
                     { val: '166', label: 'L-166' },
                     { val: '152', label: '152 trav' }
+                  ] : layoutType === 'pn_oficina' ? [
+                    { val: '159', label: 'L-159' },
+                    { val: '173', label: 'L-173' }
                   ] : [
                     { val: '107A', label: 'L-107A' },
                     { val: '106A', label: 'L-106A' },
@@ -2820,7 +3288,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
          )}
          
          {/* SECTION: Destination */}
-         {direction === 'NORTE_SUL' && (layoutType === 'freio' || layoutType === 'oficina' || layoutType === 'reclassificacao') && (
+         {direction === 'NORTE_SUL' && (layoutType === 'freio' || layoutType === 'oficina' || layoutType === 'reclassificacao' || layoutType === 'pn_oficina') && (
             <div className="bg-[#18181c] border border-white/5 rounded-[16px] p-3 flex flex-col shadow-2xl shrink-0">
                <div className="flex justify-between items-center mb-1.5 gap-2">
                  <div>
@@ -2849,6 +3317,9 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
                     { val: '167', label: 'L-167' },
                     { val: '166', label: 'L-166' },
                     { val: '152', label: '152 trav' }
+                  ] : layoutType === 'pn_oficina' ? [
+                    { val: '159', label: 'L-159' },
+                    { val: '173', label: 'L-173' }
                   ] : [
                     { val: '107A', label: 'L-107A' },
                     { val: '106A', label: 'L-106A' },
@@ -2915,8 +3386,8 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
                        }`}
                      >
                        <span className="text-[9px] font-black uppercase tracking-widest leading-none">AMV {name}</span>
-                       <span className={`text-[10px] font-black uppercase leading-none ${amvs[index] === 'NORMAL' ? 'text-emerald-500' : (amvs[index] === 'REVERSO' ? 'text-indigo-500' : 'text-red-500')}`}>
-                          {amvs[index]}
+                       <span className={`text-[10px] font-black uppercase leading-none ${amvs[index] === 'NORMAL' ? 'text-emerald-500' : (amvs[index] === 'REVERSO' ? 'text-yellow-500' : 'text-red-500')}`}>
+                          {amvs[index] === 'NORMAL' ? 'RETA' : (amvs[index] === 'REVERSO' ? 'REVERSA' : 'AMV CONTRA')}
                        </span>
                      </button>
                    );

@@ -185,7 +185,7 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
                         ✕
                     </button>
 
-                    {systemId && (
+                    {systemId && systemId !== 'watchSystem8' && (
                         <button 
                             title="Simular AMV 3D" 
                             onClick={() => setIsSimulationOpen(true)} 
