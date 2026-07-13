@@ -12,7 +12,7 @@ import {
 type Direction = 'NORTE_SUL' | 'SUL_NORTE';
 type SwitchState = 'NORMAL' | 'REVERSO' | 'FALHA';
 type CameraMode = 'ISOMETRIC' | 'TOP' | 'POV';
-type SpawnLine = '128' | '1' | '2' | '166' | '167' | '152' | '105A' | '106A' | '107A';
+type SpawnLine = '128' | '1' | '2' | '166' | '167' | '152' | '105A' | '106A' | '107A' | '159' | '173' | '22A' | '23A' | '24A' | '201A' | '32' | '28' | '31' | '27' | 'P13A';
 
 interface AmvSimulationProps {
   systemId: string;
@@ -320,7 +320,7 @@ function getReclassificacaoTrack2X(z: number) {
   return -5.0 + 2.5 * (3 * u ** 2 - 2 * u ** 3);
 }
 
-function Sleepers({ layoutType }: { layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'default' }) {
+function Sleepers({ layoutType }: { layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'pn_oficina' | 'carga_geral_02' | 'patio_oficina' | 'default' | 'default' }) {
   const sleepers = [];
   const tw = 1.9; // Sleeper width, leaves a visible 'entrevia' gap between parallel tracks
   
@@ -442,7 +442,7 @@ function Sleepers({ layoutType }: { layoutType: 'freio' | 'freio_02' | 'oficina'
   return <group>{sleepers}</group>;
 }
 
-function LedFlow({ layoutType, direction, amvs, spawnLine, routeColor }: { layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'default', direction: Direction, amvs: SwitchState[], spawnLine: SpawnLine, routeColor?: string }) {
+function LedFlow({ layoutType, direction, amvs, spawnLine, routeColor }: { layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'pn_oficina' | 'carga_geral_02' | 'patio_oficina' | 'default' | 'default', direction: Direction, amvs: SwitchState[], spawnLine: SpawnLine, routeColor?: string }) {
   const groupRef = useRef<THREE.Group>(null);
   const time = useRef(0);
 
@@ -506,7 +506,7 @@ function LedFlow({ layoutType, direction, amvs, spawnLine, routeColor }: { layou
   );
 }
 
-function CurveBranch({ layoutType }: { layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'carga_geral_02' | 'default' }) {
+function CurveBranch({ layoutType }: { layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'pn_oficina' | 'carga_geral_02' | 'patio_oficina' | 'default' | 'pn_oficina' | 'carga_geral_02' | 'patio_oficina' | 'default' | 'default' }) {
   const segments = 25;
   const rails = [];
   
@@ -1465,7 +1465,7 @@ function DoubleAmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv }: any) {
 // SAFETY LOGIC & DIAGNOSIS
 // ---------------------------------------------------------
 
-function getSafetyStatus(layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'pn_oficina' | 'carga_geral_02' | 'default', direction: Direction, amvs: SwitchState[], spawnLine: SpawnLine = '128', destLine: SpawnLine = '128') {
+function getSafetyStatus(layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'pn_oficina' | 'carga_geral_02' | 'patio_oficina' | 'default' | 'pn_oficina' | 'carga_geral_02' | 'default', direction: Direction, amvs: SwitchState[], spawnLine: SpawnLine = '128', destLine: SpawnLine = '128') {
   const amv1 = amvs[0];
   const amv2 = amvs[1];
 
@@ -1700,7 +1700,7 @@ function getSafetyStatus(layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclass
         };
       }
       
-      if (destLine === '128') {
+      if (destLine === '2') {
         if (amv1 === 'REVERSO') {
           return {
             status: 'ROTA INCORRETA (DESVIO)',
@@ -1756,7 +1756,7 @@ function getSafetyStatus(layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclass
         };
       }
 
-      if (destLine === '2') {
+      if (destLine === '128') {
         if (amv1 === 'NORMAL') {
           return {
             status: 'ROTA INCORRETA (PRINCIPAL)',
@@ -1794,7 +1794,7 @@ function getSafetyStatus(layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclass
       }
     } else {
       // SUL para NORTE (Trailing Points / Subida)
-      if (spawnLine === '2') {
+      if (spawnLine === '128') {
         if (amv2 === 'FALHA') {
           return {
             status: 'PERIGO CRÍTICO (FALHA AMV 2)',
@@ -1886,7 +1886,7 @@ function getSafetyStatus(layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclass
         };
       }
 
-      if (spawnLine === '128') {
+      if (spawnLine === '2') {
         if (amv1 === 'FALHA') {
           return {
             status: 'PERIGO CRÍTICO (FALHA AMV 1)',
@@ -1988,7 +1988,7 @@ function getSafetyStatus(layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclass
 // ---------------------------------------------------------
 
 function getRoutePosRot(
-  layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'pn_oficina' | 'carga_geral_02' | 'default',
+  layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'pn_oficina' | 'carga_geral_02' | 'patio_oficina' | 'default' | 'pn_oficina' | 'carga_geral_02' | 'default',
   direction: Direction,
   amvs: SwitchState[],
   progress: number,
@@ -2734,7 +2734,7 @@ function TrainGroup({
   spawnLine,
   destLine
 }: {
-  layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'default',
+  layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'pn_oficina' | 'carga_geral_02' | 'patio_oficina' | 'default' | 'default',
   direction: Direction,
   amvs: SwitchState[],
   cameraMode: CameraMode,
@@ -2854,7 +2854,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
   const [isMobilePanelOpen, setIsMobilePanelOpen] = useState(true);
 
   const baseLayout = systemId === 'watchSystem9' ? 'pn_oficina' : systemId === 'watchSystem8' ? 'carga_geral_02' : systemId === 'watchSystem7' ? 'reclassificacao' : systemId === 'watchSystem4' ? 'oficina' : (systemId === 'watchSystem5' || systemId === 'watchSystem3') ? 'freio' : 'default';
-  const layoutType = baseLayout as 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'pn_oficina' | 'carga_geral_02' | 'default';
+  const layoutType = baseLayout as 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'pn_oficina' | 'carga_geral_02' | 'patio_oficina' | 'default' | 'pn_oficina' | 'carga_geral_02' | 'patio_oficina' | 'default' | 'pn_oficina' | 'carga_geral_02' | 'default';
 
   useEffect(() => {
     if (!isAutoLineSelection) return;
