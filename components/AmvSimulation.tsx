@@ -112,7 +112,7 @@ function TieBar({ getLeftTipX, getRightTipX, tipZ }: { getLeftTipX: () => number
   );
 }
 
-function SwitchMachine({ getLeftTipX, tipZ, isLeftSide = false }: { getLeftTipX: () => number, tipZ: number, isLeftSide?: boolean }) {
+function SwitchMachine({ getLeftTipX, tipZ, isLeftSide = false, yellowOnly = false }: { getLeftTipX: () => number, tipZ: number, isLeftSide?: boolean, yellowOnly?: boolean }) {
   const machineRef = useRef<THREE.Group>(null);
   const rodRef = useRef<THREE.Mesh>(null);
   const leverRef = useRef<THREE.Group>(null);
@@ -150,7 +150,7 @@ function SwitchMachine({ getLeftTipX, tipZ, isLeftSide = false }: { getLeftTipX:
     }
 
     if (flagMatRef.current) {
-      const targetColor = progress < 0.5 ? '#22c55e' : '#eab308';
+      const targetColor = yellowOnly ? '#eab308' : (progress < 0.5 ? '#22c55e' : '#eab308');
       flagMatRef.current.color.lerp(new THREE.Color(targetColor), 8 * delta);
     }
   });
@@ -1096,7 +1096,7 @@ function FreioAmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv }: any) {
         <AnimatedPoint hinge={[-0.41, 0, -5]} tipTargetX={getTips2().left} tipZ={0} />
         <AnimatedPoint hinge={[0.8, 0, -5]} tipTargetX={getTips2().right} tipZ={0} />
         <TieBar getLeftTipX={() => getTips2().left} getRightTipX={() => getTips2().right} tipZ={0} />
-        <SwitchMachine getLeftTipX={() => getTips2().left} tipZ={0} />
+        <SwitchMachine getLeftTipX={() => getTips2().left} tipZ={0} yellowOnly={true} />
         
         <Text position={[-5, 0.1, 0]} rotation={[-Math.PI / 2, 0, -Math.PI / 2]} fontSize={1.4} color={selectedAmv === 1 ? "#818cf8" : "#64748b"}>
           AMV 2
@@ -1118,7 +1118,7 @@ function FreioAmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv }: any) {
         <SwitchMachine getLeftTipX={() => getTips1().left} tipZ={0} />
         
         <Text position={[-4, 0.1, 0]} rotation={[-Math.PI / 2, 0, -Math.PI / 2]} fontSize={1.6} color={selectedAmv === 0 ? "#818cf8" : "#64748b"}>
-          AMV 65B (1)
+          AMV 1
         </Text>
       </group>
       
@@ -1745,11 +1745,11 @@ function getSafetyStatus(layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclass
           bg: 'bg-red-500/10 border-red-500/20',
           color: 'text-red-500',
           icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />,
-          desc: 'Falha no AMV 65B (1). A agulha está entreaberta! A locomotiva descarrilará imediatamente ao entrar na chave.'
+          desc: 'Falha no AMV 1. A agulha está entreaberta! A locomotiva descarrilará imediatamente ao entrar na chave.'
         };
       }
       
-      if (destLine === '128') {
+      if (destLine === '2') {
         if (amv1 === 'REVERSO') {
           return {
             status: 'ROTA INCORRETA (DESVIO)',
@@ -1784,7 +1784,7 @@ function getSafetyStatus(layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclass
             bg: 'bg-red-500/10 border-red-500/20',
             color: 'text-red-500',
             icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />,
-            desc: 'Falha no AMV 65A (2). A agulha está entreaberta. O trem passará o desvio e descarrilará na segunda chave.'
+            desc: 'Falha no AMV 2. A agulha está entreaberta. O trem passará o desvio e descarrilará na segunda chave.'
           };
         }
         if (amv2 === 'REVERSO') {
@@ -1805,7 +1805,7 @@ function getSafetyStatus(layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclass
         };
       }
 
-      if (destLine === '2') {
+      if (destLine === '128') {
         if (amv1 === 'NORMAL') {
           return {
             status: 'ROTA INCORRETA (PRINCIPAL)',
@@ -1821,7 +1821,7 @@ function getSafetyStatus(layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclass
             bg: 'bg-red-500/10 border-red-500/20',
             color: 'text-red-500',
             icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />,
-            desc: 'Falha no AMV 65A (2). A agulha está entreaberta. O trem passará o desvio e descarrilará na segunda chave.'
+            desc: 'Falha no AMV 2. A agulha está entreaberta. O trem passará o desvio e descarrilará na segunda chave.'
           };
         }
         if (amv2 === 'NORMAL') {
@@ -1843,14 +1843,14 @@ function getSafetyStatus(layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclass
       }
     } else {
       // SUL para NORTE (Trailing Points / Subida)
-      if (spawnLine === '2') {
+      if (spawnLine === '128') {
         if (amv2 === 'FALHA') {
           return {
             status: 'PERIGO CRÍTICO (FALHA AMV 2)',
             bg: 'bg-red-500/10 border-red-500/20',
             color: 'text-red-500',
             icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />,
-            desc: 'Falha no AMV 65A (2). A locomotiva atingirá a ponta morta da agulha entreaberta logo na saída.'
+            desc: 'Falha no AMV 2. A locomotiva atingirá a ponta morta da agulha entreaberta logo na saída.'
           };
         }
         if (amv2 === 'NORMAL') {
@@ -1868,7 +1868,7 @@ function getSafetyStatus(layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclass
             bg: 'bg-red-500/10 border-red-500/20',
             color: 'text-red-500',
             icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />,
-            desc: 'Falha no AMV 65B (1). Agulha entreaberta, o trem descarrilará mesmo vindo por trás (ponta do talão).'
+            desc: 'Falha no AMV 1. Agulha entreaberta, o trem descarrilará mesmo vindo por trás (ponta do talão).'
           };
         }
         if (amv1 === 'NORMAL') {
@@ -1896,7 +1896,7 @@ function getSafetyStatus(layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclass
             bg: 'bg-red-500/10 border-red-500/20',
             color: 'text-red-500',
             icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />,
-            desc: 'Falha no AMV 65A (2). A locomotiva atingirá a ponta morta da agulha entreaberta logo na saída.'
+            desc: 'Falha no AMV 2. A locomotiva atingirá a ponta morta da agulha entreaberta logo na saída.'
           };
         }
         if (amv2 === 'REVERSO') {
@@ -1914,7 +1914,7 @@ function getSafetyStatus(layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclass
             bg: 'bg-red-500/10 border-red-500/20',
             color: 'text-red-500',
             icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />,
-            desc: 'Falha no AMV 65B (1). Agulha entreaberta, o trem descarrilará mesmo vindo por trás (ponta do talão).'
+            desc: 'Falha no AMV 1. Agulha entreaberta, o trem descarrilará mesmo vindo por trás (ponta do talão).'
           };
         }
         if (amv1 === 'NORMAL') {
@@ -1931,18 +1931,18 @@ function getSafetyStatus(layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclass
           bg: 'bg-emerald-500/10 border-emerald-500/20',
           color: 'text-emerald-500',
           icon: <ShieldCheck className="w-8 h-8 text-emerald-500" />,
-          desc: 'Trem despachado da L-01 seguirá direto no primeiro AMV e adentrará a via principal de forma segura pelo AMV 65B aberto.'
+          desc: 'Trem despachado da L-01 seguirá direto no primeiro AMV e adentrará a via principal de forma segura pelo AMV 1 aberto.'
         };
       }
 
-      if (spawnLine === '128') {
+      if (spawnLine === '2') {
         if (amv1 === 'FALHA') {
           return {
             status: 'PERIGO CRÍTICO (FALHA AMV 1)',
             bg: 'bg-red-500/10 border-red-500/20',
             color: 'text-red-500',
             icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />,
-            desc: 'Falha no AMV 65B (1). Agulha entreaberta, o trem descarrilará mesmo vindo por trás (ponta do talão).'
+            desc: 'Falha no AMV 1. Agulha entreaberta, o trem descarrilará mesmo vindo por trás (ponta do talão).'
           };
         }
         if (amv1 === 'REVERSO') {
@@ -1959,7 +1959,7 @@ function getSafetyStatus(layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclass
           bg: 'bg-emerald-500/10 border-emerald-500/20',
           color: 'text-emerald-500',
           icon: <ShieldCheck className="w-8 h-8 text-emerald-500" />,
-          desc: 'Movimento seguro subindo a Extensão. O trem passará livremente pela via principal com o AMV 65B posicionado na Normal.'
+          desc: 'Movimento seguro subindo a Extensão. O trem passará livremente pela via principal com o AMV 1 posicionado na Normal.'
         };
       }
     }
@@ -3338,12 +3338,12 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
                       ) : (
                         <>
                           <div className={`flex flex-col items-center bg-[#0a0a0c]/80 border ${selectedAmv === 0 ? 'border-indigo-500/50 shadow-[0_0_10px_rgba(99,102,241,0.2)]' : 'border-white/5'} px-3 py-1.5 rounded-xl cursor-pointer hover:border-indigo-500/30 transition-all`} onClick={() => setSelectedAmv(0)}>
-                              <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest leading-none mb-1">{layoutType === 'freio' ? 'AMV 65B' : 'AMV 1'}</span>
+                              <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest leading-none mb-1">{layoutType === 'freio' ? 'AMV 1' : 'AMV 1'}</span>
                               <span className={`text-[10px] font-black leading-none ${amvs[0] === 'NORMAL' ? 'text-emerald-400' : (amvs[0] === 'REVERSO' ? 'text-yellow-400' : 'text-red-500')}`}>{amvs[0] === 'NORMAL' ? 'RETA' : (amvs[0] === 'REVERSO' ? 'REVERSA' : 'AMV CONTRA')}</span>
                           </div>
                           {layoutType !== 'pn_oficina' && (
                             <div className={`flex flex-col items-center bg-[#0a0a0c]/80 border ${selectedAmv === 1 ? 'border-indigo-500/50 shadow-[0_0_10px_rgba(99,102,241,0.2)]' : 'border-white/5'} px-3 py-1.5 rounded-xl cursor-pointer hover:border-indigo-500/30 transition-all`} onClick={() => setSelectedAmv(1)}>
-                                <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest leading-none mb-1">{layoutType === 'freio' ? 'AMV 65A' : 'AMV 2'}</span>
+                                <span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest leading-none mb-1">{layoutType === 'freio' ? 'AMV 2' : 'AMV 2'}</span>
                                 <span className={`text-[10px] font-black leading-none ${amvs[1] === 'NORMAL' ? 'text-emerald-400' : (amvs[1] === 'REVERSO' ? 'text-yellow-400' : 'text-red-500')}`}>{amvs[1] === 'NORMAL' ? 'RETA' : (amvs[1] === 'REVERSO' ? 'REVERSA' : 'AMV CONTRA')}</span>
                             </div>
                           )}
@@ -3408,7 +3408,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
                    if (layoutType === 'freio_02') {
                      name = index === 0 ? '02' : (index === 1 ? '01' : '128');
                    } else if (layoutType === 'freio') {
-                     name = index === 0 ? '65B' : '65A';
+                     name = index === 0 ? '1' : '2';
                    } else if (layoutType === 'pn_oficina') {
                      name = '1';
                    } else {
@@ -3525,9 +3525,9 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
                     { val: '31', label: 'L-31' },
                     { val: '27', label: 'L-27' }
                   ] : layoutType === 'freio' ? [
-                    { val: '128', label: 'L-02' },
+                    { val: '2', label: 'L-02' },
                     { val: '1', label: 'L-01' },
-                    { val: '2', label: 'L-128' }
+                    { val: '128', label: 'L-128' }
                   ] : layoutType === 'oficina' ? [
                     { val: '167', label: 'L-167' },
                     { val: '166', label: 'L-166' },
@@ -3585,9 +3585,9 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
                     { val: '31', label: 'L-31' },
                     { val: '27', label: 'L-27' }
                   ] : layoutType === 'freio' ? [
-                    { val: '128', label: 'L-02' },
+                    { val: '2', label: 'L-02' },
                     { val: '1', label: 'L-01' },
-                    { val: '2', label: 'L-128' }
+                    { val: '128', label: 'L-128' }
                   ] : layoutType === 'oficina' ? [
                     { val: '167', label: 'L-167' },
                     { val: '166', label: 'L-166' },
@@ -3646,7 +3646,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
                    if (layoutType === 'freio_02') {
                      name = index === 0 ? '02' : (index === 1 ? '01' : '128');
                    } else if (layoutType === 'freio') {
-                     name = index === 0 ? '65B' : '65A';
+                     name = index === 0 ? '1' : '2';
                    } else {
                      name = index === 0 ? '1' : '2';
                    }
