@@ -189,7 +189,7 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
                         <button 
                             title="Simular AMV 3D" 
                             onClick={() => setIsSimulationOpen(true)} 
-                            className="absolute top-4 left-4 h-10 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider rounded-full border border-indigo-400/30 flex items-center gap-2 z-[101] hover:scale-105 transition-all duration-300 shadow-[0_4px_15px_rgba(79,70,229,0.4)] animate-fade-in"
+                            className={`absolute ${systemId === 'watchSystem5' ? 'bottom-6 right-6' : 'top-4 left-4'} h-10 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider rounded-full border border-indigo-400/30 flex items-center gap-2 z-[101] hover:scale-105 transition-all duration-300 shadow-[0_4px_15px_rgba(79,70,229,0.4)] animate-fade-in`}
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
