@@ -2534,9 +2534,12 @@ function getRoutePosRot(
 
       // Calculate position X
       x = getFreioXForZ(tz);
-
       const nextX = getFreioXForZ(tz - 0.1);
       rotY = Math.atan2(nextX - x, -0.1);
+      
+      if (isOnBranch1 || isOnBranch2) {
+        ledColor = '#fbbf24';
+      }
 
       // ----------------------------------------------------
       // FACING POINT DERAILMENTS (North to South)
@@ -2591,9 +2594,12 @@ function getRoutePosRot(
       };
 
       x = getFreioXForZ(tz);
-
       const nextX = getFreioXForZ(tz + 0.1);
       rotY = Math.atan2(nextX - x, 0.1);
+      
+      if (isOnBranch1 || isOnBranch2) {
+        ledColor = '#fbbf24';
+      }
       
       // Talonamento / Falha no AMV 2 (65A, z = -2)
       if (tz >= (-2 - carIndex * 5.5) && tz <= 5) {
