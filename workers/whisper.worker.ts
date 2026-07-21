@@ -19,7 +19,14 @@ env.useBrowserCache = true;
 // de voz nunca completava — mesmo com o modelo Whisper já baixado.
 // Apontando para arquivos locais (bundlados em /public/ort e pré-cacheados
 // pelo Workbox via globPatterns 'wasm'), a engine ONNX carrega 100% offline.
-env.backends.onnx.wasm.wasmPaths = '/ort/';
+//
+// IMPORTANTE: precisa ser uma URL ABSOLUTA. Internamente o onnxruntime-web
+// usa `new URL(arquivo, wasmPaths)` para resolver cada asset, e o construtor
+// URL() exige que a base seja absoluta — um caminho relativo como '/ort/'
+// lança "Invalid URL" e trava o carregamento do modelo silenciosamente
+// (fica preso em "iniciando" para sempre). Por isso montamos a URL a partir
+// de self.location.origin, disponível dentro do Worker.
+env.backends.onnx.wasm.wasmPaths = `${self.location.origin}/ort/`;
 
 // Flag de debug — reduz console.logs em produção para menos jank mobile
 const DEBUG = false;
