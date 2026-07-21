@@ -223,6 +223,8 @@ const App: React.FC = () => {
                 showFeedback("ERRO DE REDE. VERIFIQUE A CONEXÃO.");
             } else if (error === 'timeout') {
                 showFeedback("TEMPO ESGOTADO. TENTE DE NOVO.");
+            } else if (error === 'worker-crash') {
+                showFeedback("ERRO AO PROCESSAR VOZ. TENTE NOVAMENTE.");
             } else {
                 showFeedback(`ERRO: ${error.toUpperCase()}`);
             }
