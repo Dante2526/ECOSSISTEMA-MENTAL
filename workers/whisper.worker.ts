@@ -11,6 +11,16 @@ env.allowLocalModels = false;
 env.allowRemoteModels = true;
 env.useBrowserCache = true;
 
+// CORREÇÃO (offline): por padrão, o onnxruntime-web (motor de inferência usado
+// pelo transformers.js) busca seus binários .wasm no CDN jsDelivr caso
+// `env.backends.onnx.wasm.wasmPaths` não seja definido. Esse domínio não tem
+// regra de cache no service worker (vite.config.ts só cacheia huggingface.co/
+// cdn-lfs.huggingface.co), então offline essa etapa falhava e o reconhecimento
+// de voz nunca completava — mesmo com o modelo Whisper já baixado.
+// Apontando para arquivos locais (bundlados em /public/ort e pré-cacheados
+// pelo Workbox via globPatterns 'wasm'), a engine ONNX carrega 100% offline.
+env.backends.onnx.wasm.wasmPaths = '/ort/';
+
 // Flag de debug — reduz console.logs em produção para menos jank mobile
 const DEBUG = false;
 

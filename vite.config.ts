@@ -60,6 +60,23 @@ export default defineConfig(({ mode }) => {
               },
             },
             {
+              // Cache de fallback do runtime ONNX (jsDelivr) — rede de segurança
+              // caso algum arquivo do onnxruntime-web não seja resolvido pelos
+              // arquivos locais em /public/ort (ver workers/whisper.worker.ts)
+              urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'onnx-runtime-cdn-cache',
+                expiration: {
+                  maxEntries: 20,
+                  maxAgeSeconds: 30 * 24 * 60 * 60, // 30 dias
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
+            {
               // Cache de imagens do i.ibb.co / i.ibb.co
               urlPattern: /^https:\/\/i\.ibb\.co\/.*/i,
               handler: 'CacheFirst',
