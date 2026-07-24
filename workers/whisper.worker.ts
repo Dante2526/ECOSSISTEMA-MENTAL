@@ -11,6 +11,10 @@ env.allowLocalModels = false;
 env.allowRemoteModels = true;
 env.useBrowserCache = true;
 
+// Define explicitamente o caminho do WASM via CDN para evitar que o Vite/Terser corrompa o arquivo no build de produção
+// Erro evitado: _OrtGetInputOutputMetadata is not a function
+env.backends.onnx.wasm.wasmPaths = `https://cdn.jsdelivr.net/npm/@huggingface/transformers@${env.version}/dist/`;
+
 // Flag de debug — reduz console.logs em produção para menos jank mobile
 const DEBUG = false;
 

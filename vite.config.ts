@@ -60,6 +60,21 @@ export default defineConfig(({ mode }) => {
               },
             },
             {
+              // Cache do WASM do ONNX Runtime (jsdelivr)
+              urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'onnx-wasm-cache',
+                expiration: {
+                  maxEntries: 10,
+                  maxAgeSeconds: 30 * 24 * 60 * 60, // 30 dias
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
+            {
               // Cache de imagens do i.ibb.co / i.ibb.co
               urlPattern: /^https:\/\/i\.ibb\.co\/.*/i,
               handler: 'CacheFirst',
