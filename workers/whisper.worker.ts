@@ -11,9 +11,22 @@ env.allowLocalModels = false;
 env.allowRemoteModels = true;
 env.useBrowserCache = true;
 
-// Define explicitamente o caminho do WASM via CDN para evitar que o Vite/Terser corrompa o arquivo no build de produção
-// Erro evitado: _OrtGetInputOutputMetadata is not a function
-env.backends.onnx.wasm.wasmPaths = `https://cdn.jsdelivr.net/npm/@huggingface/transformers@${env.version}/dist/`;
+// CORREÇÃO (offline): por padrão, o onnxruntime-web (motor de inferência usado
+// pelo transformers.js) busca seus binários .wasm no CDN jsDelivr caso
+// `env.backends.onnx.wasm.wasmPaths` não seja definido. Esse domínio não tem
+// regra de cache no service worker (vite.config.ts só cacheia huggingface.co/
+// cdn-lfs.huggingface.co), então offline essa etapa falhava e o reconhecimento
+// de voz nunca completava — mesmo com o modelo Whisper já baixado.
+// Apontando para arquivos locais (bundlados em /public/ort e pré-cacheados
+// pelo Workbox via globPatterns 'wasm'), a engine ONNX carrega 100% offline.
+//
+// IMPORTANTE: precisa ser uma URL ABSOLUTA. Internamente o onnxruntime-web
+// usa `new URL(arquivo, wasmPaths)` para resolver cada asset, e o construtor
+// URL() exige que a base seja absoluta — um caminho relativo como '/ort/'
+// lança "Invalid URL" e trava o carregamento do modelo silenciosamente
+// (fica preso em "iniciando" para sempre). Por isso montamos a URL a partir
+// de self.location.origin, disponível dentro do Worker.
+env.backends.onnx.wasm.wasmPaths = `${self.location.origin}/ort/`;
 
 // Flag de debug — reduz console.logs em produção para menos jank mobile
 const DEBUG = false;

@@ -60,13 +60,15 @@ export default defineConfig(({ mode }) => {
               },
             },
             {
-              // Cache do WASM do ONNX Runtime (jsdelivr)
+              // Cache de fallback do runtime ONNX (jsDelivr) — rede de segurança
+              // caso algum arquivo do onnxruntime-web não seja resolvido pelos
+              // arquivos locais em /public/ort (ver workers/whisper.worker.ts)
               urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/.*/i,
               handler: 'CacheFirst',
               options: {
-                cacheName: 'onnx-wasm-cache',
+                cacheName: 'onnx-runtime-cdn-cache',
                 expiration: {
-                  maxEntries: 10,
+                  maxEntries: 20,
                   maxAgeSeconds: 30 * 24 * 60 * 60, // 30 dias
                 },
                 cacheableResponse: {

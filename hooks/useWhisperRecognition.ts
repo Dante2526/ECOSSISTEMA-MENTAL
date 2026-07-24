@@ -158,6 +158,30 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult, shoul
             }
         };
 
+        // CORREÇÃO: sem isso, um erro fatal (ex: falha ao carregar um módulo
+        // dentro do worker) crasha a thread silenciosamente — o app fica
+        // preso em "PROCESSANDO..."/"INICIANDO..." para sempre, porque nenhuma
+        // mensagem ('RESULT'/'ERROR') nunca chega para resetar o estado.
+        workerRef.current.onerror = (event: ErrorEvent) => {
+            console.error("🔴 [Whisper Hook] Erro fatal no worker:", event.message, event);
+            if (processingTimeoutRef.current) {
+                clearTimeout(processingTimeoutRef.current);
+                processingTimeoutRef.current = null;
+            }
+            setIsProcessing(false);
+            setIsLoadingModel(false);
+            callbacksRef.current.onError?.('worker-crash');
+            callbacksRef.current.onEnd?.();
+        };
+
+        workerRef.current.onmessageerror = (event) => {
+            console.error("🔴 [Whisper Hook] Erro de (de)serialização de mensagem no worker:", event);
+            setIsProcessing(false);
+            setIsLoadingModel(false);
+            callbacksRef.current.onError?.('worker-crash');
+            callbacksRef.current.onEnd?.();
+        };
+
         return () => {
             debugLog("⚡ [Whisper Hook] Terminando worker.");
             workerRef.current?.terminate();
