@@ -244,10 +244,11 @@ export const MapModal: React.FC<MapModalProps> = React.memo(({
         y.set(clamped.y);
     };
 
+    if (!isOpen) return null;
+
     return (
         <div
-            className={`fixed inset-0 z-[9990] bg-black/95 flex flex-col md:flex-row overflow-hidden font-sans transition-opacity duration-300 ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-            style={{ display: isOpen ? 'flex' : 'none' }}
+            className="fixed inset-0 z-[9990] bg-black/95 flex flex-col md:flex-row overflow-hidden font-sans transition-opacity duration-300 opacity-100 pointer-events-auto"
         >
             {/* Map Area */}
             <div
@@ -274,7 +275,7 @@ export const MapModal: React.FC<MapModalProps> = React.memo(({
                     )}
                     <img
                         ref={imageRef}
-                        src="https://i.ibb.co/fzpVkfb1/Layout-1-page-0001.jpg"
+                        src="/images/Layout-1-page-0001.webp"
                         alt="Layout Map"
                         className={`max-w-none min-w-[1000px] min-h-[1000px] pointer-events-none select-none transition-opacity duration-300 ${isMapLoading ? 'opacity-0' : 'opacity-100'}`}
                         draggable={false}
@@ -320,7 +321,14 @@ export const MapModal: React.FC<MapModalProps> = React.memo(({
 
                                     {/* Main Orb */}
                                     <div className="relative w-12 h-12 md:w-16 md:h-16 rounded-full border-2 border-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.8)] bg-black overflow-hidden group-hover:scale-110 transition-transform duration-300 ease-out z-10">
-                                        <img src={system.iconUrl} alt={system.name} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
+                                        <img
+                                            src={system.iconUrl}
+                                            alt={system.name}
+                                            onError={(e) => {
+                                                (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="%231e1b4b"/><text x="32" y="40" font-size="24" font-family="sans-serif" font-weight="bold" fill="%23a855f7" text-anchor="middle">🛰️</text></svg>';
+                                            }}
+                                            className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
+                                        />
                                     </div>
 
                                     {/* Hover Tooltip */}

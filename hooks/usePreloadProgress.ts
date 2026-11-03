@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { OrbitalSystem } from '../types';
+import { whisperWorkerManager, WhisperWorkerMessage } from '../services/whisperWorkerManager';
 
 export interface PreloadProgress {
     totalItems: number;
@@ -39,8 +40,8 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
 
         // 2. Coletar todas as URLs que precisamos garantir cache
         const urlsToCache = new Set<string>();
-        urlsToCache.add("https://i.ibb.co/DPMyNGvd/MINHA-LOGO.png");
-        urlsToCache.add("https://i.ibb.co/fzpVkfb1/Layout-1-page-0001.jpg"); // Mapa
+        urlsToCache.add("/images/MINHA-LOGO.svg");
+        urlsToCache.add("/images/Layout-1-page-0001.webp"); // Mapa
 
         systems.forEach(system => {
             urlsToCache.add(system.iconUrl);
@@ -94,14 +95,15 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
         const preloadImageToCache = async (url: string) => {
             try {
                 if ('caches' in window) {
-                    const cache = await caches.open('ibb-images-cache');
+                    const cache = await caches.open('local-railway-assets-cache');
                     const cachedResponse = await cache.match(url);
                     if (cachedResponse) {
                         return; // Já está no cache
                     }
-                    // 'no-cors' permite buscar imagens de origens diferentes com segurança
-                    const response = await fetch(url, { mode: 'no-cors' });
-                    await cache.put(url, response);
+                    const response = await fetch(url);
+                    if (response.ok) {
+                        await cache.put(url, response);
+                    }
                 } else {
                     throw new Error('Cache API não suportado');
                 }
@@ -134,28 +136,25 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
             loadNextBatch();
         }, 500);
 
-        // 4. Pré-carregar Model Whisper (Xenova) via Worker para garantir cache 100%
+        // 4. Pré-carregar Model Whisper (Xenova) via gerenciador unificado
+        let unsubscribeWhisper: (() => void) | null = null;
+        let lastTickWeight = 0;
+
         const preloadWhisperModel = () => {
             if (localStorage.getItem(CACHE_FLAG) === 'true') return;
             
-            console.log("⚡ [PWA] Iniciando Worker para download da IA...");
+            console.log("⚡ [PWA] Conectando ao Worker compartilhado para download da IA...");
             
-            // Criamos um worker temporário apenas para o preload
-            const preloadWorker = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), {
-                type: 'module'
-            });
-
-            let lastTickWeight = 0;
-
-            preloadWorker.onmessage = (event) => {
-                const { type, progress, status } = event.data;
+            unsubscribeWhisper = whisperWorkerManager.subscribe((data: WhisperWorkerMessage) => {
+                const { type, progress } = data;
 
                 if (type === 'PRELOAD_PROGRESS') {
                     // progress vem de 0 a 100
-                    const currentWeight = (progress / 100) * WHISPER_WEIGHT;
+                    const currentProgress = typeof progress === 'number' ? progress : 0;
+                    const currentWeight = (currentProgress / 100) * WHISPER_WEIGHT;
                     const tickDiff = currentWeight - lastTickWeight;
                     
-                    if (tickDiff > 0.1 || progress === 100) {
+                    if (tickDiff > 0.1 || currentProgress === 100) {
                         tickProgress(tickDiff);
                         lastTickWeight = currentWeight;
                     }
@@ -163,20 +162,33 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
                     console.log("⚡ [PWA] Worker finalizou download da IA com sucesso.");
                     const remaining = WHISPER_WEIGHT - lastTickWeight;
                     if (remaining > 0) tickProgress(remaining);
-                    preloadWorker.terminate();
+                    if (unsubscribeWhisper) {
+                        unsubscribeWhisper();
+                        unsubscribeWhisper = null;
+                    }
                 } else if (type === 'PRELOAD_ERROR') {
-                    console.error("❌ [PWA] Worker falhou no download:", event.data.error);
+                    console.error("❌ [PWA] Falha no download do Whisper:", data.error);
                     // Pular peso para não travar a barra se falhar (ex: sem internet já no começo)
                     const remaining = WHISPER_WEIGHT - lastTickWeight;
                     if (remaining > 0) tickProgress(remaining);
-                    preloadWorker.terminate();
+                    if (unsubscribeWhisper) {
+                        unsubscribeWhisper();
+                        unsubscribeWhisper = null;
+                    }
                 }
-            };
+            });
 
-            preloadWorker.postMessage({ type: 'PRELOAD' });
+            whisperWorkerManager.preload();
         };
 
-        setTimeout(preloadWhisperModel, 1000);
+        const timerId = setTimeout(preloadWhisperModel, 1000);
+
+        return () => {
+            clearTimeout(timerId);
+            if (unsubscribeWhisper) {
+                unsubscribeWhisper();
+            }
+        };
 
     }, [systems]);
 
@@ -184,7 +196,7 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
     const silentPreloadAll = (systems: OrbitalSystem[]) => {
         // Usado para visitas subsequentes: apenas chuta as requisições em background
         // para o Service Worker pegar imagens novas se houverem, sem mexer na UI
-        const urlsToCache = new Set<string>(["https://i.ibb.co/DPMyNGvd/MINHA-LOGO.png", "https://i.ibb.co/fzpVkfb1/Layout-1-page-0001.jpg"]);
+        const urlsToCache = new Set<string>(["/images/MINHA-LOGO.svg", "/images/Layout-1-page-0001.webp"]);
         systems.forEach(system => {
             urlsToCache.add(system.iconUrl);
             system.modalUrls.forEach(url => urlsToCache.add(url));
@@ -194,14 +206,15 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
         const preloadImageToCache = async (url: string) => {
             try {
                 if ('caches' in window) {
-                    const cache = await caches.open('ibb-images-cache');
+                    const cache = await caches.open('local-railway-assets-cache');
                     const cachedResponse = await cache.match(url);
                     if (cachedResponse) return;
-                    const response = await fetch(url, { mode: 'no-cors' });
-                    await cache.put(url, response);
+                    const response = await fetch(url);
+                    if (response.ok) {
+                        await cache.put(url, response);
+                    }
                 }
             } catch (_) {
-                // Fallback silencioso
                 new Image().src = url;
             }
         };
@@ -216,17 +229,9 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
         };
         setTimeout(loadNextBatch, 2000);
 
-        // Preload do Whisper via Worker (apenas se não houver flag de sucesso)
+        // Preload silencioso do Whisper via Worker compartilhado (apenas se não houver flag de sucesso)
         if (localStorage.getItem('ecossistema_offline_ready_v2') !== 'true') {
-            const silentWorker = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), {
-                type: 'module'
-            });
-            silentWorker.onmessage = (e) => {
-                if (e.data.type === 'PRELOAD_DONE' || e.data.type === 'PRELOAD_ERROR') {
-                    silentWorker.terminate();
-                }
-            };
-            silentWorker.postMessage({ type: 'PRELOAD' });
+            whisperWorkerManager.preload();
         }
     };
 

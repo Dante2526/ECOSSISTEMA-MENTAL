@@ -24,10 +24,25 @@ export default defineConfig(({ mode }) => {
         includeAssets: ['favicon.svg'],
         manifest: false, // Usamos o manifest.json em public/
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,svg,wasm}'],
+          globPatterns: ['**/*.{js,mjs,css,html,ico,svg,wasm}'],
           globIgnores: [],
-          maximumFileSizeToCacheInBytes: 100000000, // 100MB para garantir cache do modelo Whisper
+          maximumFileSizeToCacheInBytes: 100000000, // 100MB para garantir cache do modelo Whisper e WASM
           runtimeCaching: [
+            {
+              // Cache 100% Offline para as imagens locais do pátio (/images/*) e binários ONNX (/ort/*)
+              urlPattern: /\/(images|ort)\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'local-railway-assets-cache',
+                expiration: {
+                  maxEntries: 150,
+                  maxAgeSeconds: 365 * 24 * 60 * 60, // 1 ano
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
             {
               // Cache de modelos da IA (Whisper) do HuggingFace - Metadados/Config
               // Suporta tanto Xenova (legado) quanto onnx-community (v3)

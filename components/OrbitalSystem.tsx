@@ -33,8 +33,8 @@ const MainOrb = memo(({ isListening, isProcessing, onVoiceClick }: { isListening
                 style={{ WebkitBackfaceVisibility: 'hidden', backfaceVisibility: 'hidden', transform: 'translateZ(0)' }}
             >
                 <img
-                    src="https://i.ibb.co/DPMyNGvd/MINHA-LOGO.png"
-                    onError={(e) => { e.currentTarget.src = 'https://placehold.co/200/ff8800/ffffff?text=KAIZEN%0ANAYLAN'; }}
+                    src="/images/MINHA-LOGO.svg"
+                    onError={(e) => { e.currentTarget.src = '/images/MINHA-LOGO.png'; }}
                     alt="KAIZEN POR: NAYLAN"
                     className="w-full h-full object-cover rounded-full pointer-events-none select-none transform-gpu"
                     draggable="false"
@@ -149,6 +149,9 @@ const SatelliteNode: React.FC<{
                 <img
                     src={system.iconUrl}
                     alt={system.name}
+                    onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="%231e1b4b"/><text x="32" y="40" font-size="24" font-family="sans-serif" font-weight="bold" fill="%23a855f7" text-anchor="middle">🛰️</text></svg>';
+                    }}
                     className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
                 />
                 <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>

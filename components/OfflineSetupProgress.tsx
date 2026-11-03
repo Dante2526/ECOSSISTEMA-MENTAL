@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { PreloadProgress } from '../hooks/usePreloadProgress';
+import { PreloadProgress, usePreloadProgress } from '../hooks/usePreloadProgress';
+import { OrbitalSystem } from '../types';
 
 interface OfflineSetupProgressProps {
-    progress: PreloadProgress;
+    systems?: OrbitalSystem[];
+    progress?: PreloadProgress;
 }
 
-export const OfflineSetupProgress: React.FC<OfflineSetupProgressProps> = React.memo(({ progress }) => {
+export const OfflineSetupProgress: React.FC<OfflineSetupProgressProps> = React.memo(({ systems = [], progress: externalProgress }) => {
+    const internalProgress = usePreloadProgress(systems);
+    const progress = externalProgress || internalProgress;
     const [isVisible, setIsVisible] = useState(false);
 
     useEffect(() => {

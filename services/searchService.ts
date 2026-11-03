@@ -146,7 +146,8 @@ export function applyPhoneticCorrections(transcript: string): string {
     corrected = corrected.replace(digitCompaction4, '$1$2$3$4');
 
     // 3. Inteligência de Troca (Swap) para a faixa 160/150
-    const invalid150s = ['150', '153', '154', '155', '156', '157', '158']; 
+    // IMPORTANTE: 151, 152, 158 e 159 são linhas REAIS do pátio! Apenas 150, 153, 154, 155, 156 e 157 são erros fonéticos da faixa 160.
+    const invalid150s = ['150', '153', '154', '155', '156', '157']; 
     invalid150s.forEach(num => {
         if (corrected.includes(num)) {
             const mappedNum = num.replace('15', '16');
@@ -188,13 +189,17 @@ export function applyPhoneticCorrections(transcript: string): string {
         corrected = '167';
     }
 
-    // Correções fonéticas de nomes
+    // Correções fonéticas de nomes e códigos especiais do TFPM
     corrected = corrected.replace(/\bpiau\b/g, 'pial');
     corrected = corrected.replace(/\bpiaui\b/g, 'pial');
     corrected = corrected.replace(/\btrangulo\b/g, 'triangulo');
+    corrected = corrected.replace(/\b2\s*(?:x|entre\s*o?\s*x|por)\s*5\b/gi, '2x5');
+    corrected = corrected.replace(/\bs\s+b\b/gi, 'sb');
+    corrected = corrected.replace(/\bl\s*[- ]\s*(\d+)/gi, '$1'); // "L-175" ou "L 175" -> "175"
+    corrected = corrected.replace(/\bele\s+(\d+)/gi, '$1');      // "ele 175" -> "175"
     corrected = corrected.replace(/\bmeia\b/g, '6'); // "Meia" freq. usado para 6 no Brasil
 
-    if (corrected === 'meia5p' || corrected === 'meia5' || corrected === 'neia5b') {
+    if (corrected === 'meia5p' || corrected === 'meia5' || corrected === 'neia5b' || corrected === '65p' || corrected === '65v') {
         corrected = '65b';
     }
 

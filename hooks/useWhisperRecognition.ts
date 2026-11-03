@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { whisperWorkerManager, WhisperWorkerMessage } from '../services/whisperWorkerManager';
 
 interface WhisperRecognitionOptions {
     onStart?: () => void;
@@ -10,19 +11,21 @@ interface WhisperRecognitionOptions {
 
 // --- Constantes de Performance ---
 const IS_MOBILE = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-const MAX_RECORDING_MS = IS_MOBILE ? 15000 : 12000;
-const BASE_THRESHOLD = 0.035;
-const AUTO_STOP_MS = IS_MOBILE ? 3500 : 2500;
-const CALIBRATION_FRAMES = IS_MOBILE ? 10 : 5;
-const MOBILE_GAIN = 3.5;   // Ajustado para 3.5 para equilíbrio ideal em mobile
-const DESKTOP_GAIN = 4.5;
+const MAX_RECORDING_MS = IS_MOBILE ? 12000 : 10000;
+const BASE_THRESHOLD = 0.028;     // Mais sensível para captar início de fala rápido
+const AUTO_STOP_MS = IS_MOBILE ? 1800 : 1400; // Resposta rápida pós-fala (1.4s a 1.8s de silêncio)
+const CALIBRATION_FRAMES = IS_MOBILE ? 6 : 4;
+const MOBILE_GAIN = 3.2;
+const DESKTOP_GAIN = 4.0;
 const BUFFER_SIZE = 2048;
+// Pre-roll de 4 frames (~0.5s a 16kHz) para nunca cortar a primeira sílaba ("TP", "P", "Um")
+const PRE_ROLL_SAMPLES = BUFFER_SIZE * 4;
 // Pré-aloca buffer máximo: 15s * 16kHz = 240.000 samples (960KB estático)
 const MAX_SAMPLES = 15 * 16000;
-const COMPRESSOR_THRESHOLD = -18; // dB — menos agressivo que -24
-const COMPRESSOR_RATIO = 6;       // Reduzido de 12:1 para 6:1 — áudio mais natural
-const PROCESSING_TIMEOUT_MS = 30000;
-const MIN_AUDIO_ENERGY = 0.01;
+const COMPRESSOR_THRESHOLD = -18;
+const COMPRESSOR_RATIO = 5;
+const PROCESSING_TIMEOUT_MS = 25000;
+const MIN_AUDIO_ENERGY = 0.008;
 
 const DEBUG = typeof process !== 'undefined' && process.env?.NODE_ENV === 'development';
 
@@ -71,7 +74,6 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult, shoul
     const [isLoadingModel, setIsLoadingModel] = useState(false);
     const [modelLoadProgress, setModelLoadProgress] = useState(0);
     
-    const workerRef = useRef<Worker | null>(null);
     // AudioContext persistente — reutilizado entre gravações
     const audioContextRef = useRef<AudioContext | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
@@ -88,6 +90,9 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult, shoul
     // Buffer pré-alocado para evitar GC thrashing
     const audioBufferRef = useRef<Float32Array>(new Float32Array(MAX_SAMPLES));
     const audioBufferOffsetRef = useRef(0);
+    // Buffer circular de Pre-Roll (guarda os últimos 4 frames antes do gatilho de voz)
+    // Garante que consoantes iniciais ("T", "P", "S", "D") nunca sejam cortadas
+    const preRollFramesRef = useRef<Float32Array[]>([]);
 
     const callbacksRef = useRef({ onStart, onEnd, onError, onResult });
     const processingTimeoutRef = useRef<number | null>(null);
@@ -98,15 +103,12 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult, shoul
         callbacksRef.current = { onStart, onEnd, onError, onResult };
     }, [onStart, onEnd, onError, onResult]);
 
-    // Inicializar Worker (sempre — é leve, ~1KB)
+    // Inscrever no singleton do Whisper Worker
     useEffect(() => {
-        debugLog("⚡ [Whisper Hook] Inicializando worker de voz...");
-        workerRef.current = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), {
-            type: 'module'
-        });
-
-        workerRef.current.onmessage = (event) => {
-            const { type, text, error, status, progress } = event.data;
+        debugLog("⚡ [Whisper Hook] Conectando ao gerenciador compartilhado de worker...");
+        
+        const unsubscribe = whisperWorkerManager.subscribe((data: WhisperWorkerMessage) => {
+            const { type, text, error, status, progress } = data;
 
             if (type === 'STATUS') {
                 if (status === 'loading') {
@@ -120,8 +122,8 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult, shoul
                 }
             } else if (type === 'PRELOAD_PROGRESS') {
                 setIsLoadingModel(true);
-                if (typeof event.data.progress === 'number') {
-                    setModelLoadProgress(Math.round(event.data.progress));
+                if (typeof progress === 'number') {
+                    setModelLoadProgress(Math.round(progress));
                 }
             } else if (type === 'PRELOAD_DONE') {
                 setIsLoadingModel(false);
@@ -130,7 +132,7 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult, shoul
                 console.log("✅ [Whisper Hook] Modelo pré-carregado com sucesso!");
             } else if (type === 'PRELOAD_ERROR') {
                 setIsLoadingModel(false);
-                console.error("❌ [Whisper Hook] Erro ao pré-carregar modelo:", error || event.data.error);
+                console.error("❌ [Whisper Hook] Erro ao pré-carregar modelo:", error);
             } else if (type === 'RESULT') {
                 if (processingTimeoutRef.current) {
                     clearTimeout(processingTimeoutRef.current);
@@ -153,46 +155,22 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult, shoul
                 setIsProcessing(false);
                 setIsLoadingModel(false);
                 console.error("⚡ [Whisper Hook] Erro no worker:", error);
-                callbacksRef.current.onError?.(error);
+                callbacksRef.current.onError?.(error || 'worker-error');
                 callbacksRef.current.onEnd?.();
             }
-        };
-
-        // CORREÇÃO: sem isso, um erro fatal (ex: falha ao carregar um módulo
-        // dentro do worker) crasha a thread silenciosamente — o app fica
-        // preso em "PROCESSANDO..."/"INICIANDO..." para sempre, porque nenhuma
-        // mensagem ('RESULT'/'ERROR') nunca chega para resetar o estado.
-        workerRef.current.onerror = (event: ErrorEvent) => {
-            console.error("🔴 [Whisper Hook] Erro fatal no worker:", event.message, event);
-            if (processingTimeoutRef.current) {
-                clearTimeout(processingTimeoutRef.current);
-                processingTimeoutRef.current = null;
-            }
-            setIsProcessing(false);
-            setIsLoadingModel(false);
-            callbacksRef.current.onError?.('worker-crash');
-            callbacksRef.current.onEnd?.();
-        };
-
-        workerRef.current.onmessageerror = (event) => {
-            console.error("🔴 [Whisper Hook] Erro de (de)serialização de mensagem no worker:", event);
-            setIsProcessing(false);
-            setIsLoadingModel(false);
-            callbacksRef.current.onError?.('worker-crash');
-            callbacksRef.current.onEnd?.();
-        };
+        });
 
         return () => {
-            debugLog("⚡ [Whisper Hook] Terminando worker.");
-            workerRef.current?.terminate();
+            debugLog("⚡ [Whisper Hook] Cancelando inscrição no worker compartilhado.");
+            unsubscribe();
         };
     }, []);
 
     // Pré-carregar modelo Whisper — APENAS se shouldPreload = true (offline)
     useEffect(() => {
-        if (shouldPreload && !modelPreloadedRef.current && workerRef.current) {
-            debugLog("⚡ [Whisper Hook] Solicitando pré-carregamento do modelo Whisper...");
-            workerRef.current.postMessage({ type: 'PRELOAD' });
+        if (shouldPreload && !modelPreloadedRef.current) {
+            debugLog("⚡ [Whisper Hook] Solicitando pré-carregamento compartilhado do modelo...");
+            whisperWorkerManager.preload();
         }
     }, [shouldPreload]);
 
@@ -285,10 +263,7 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult, shoul
             }, PROCESSING_TIMEOUT_MS);
 
             // Otimizado: Usar Transferable Objects para evitar cópia de dados na thread
-            workerRef.current?.postMessage({
-                audio: mergedArray,
-                language: 'portuguese'
-            }, [mergedArray.buffer]);
+            whisperWorkerManager.processAudio(mergedArray, 'portuguese');
         } else {
             if (!hasSpeechStartedRef.current) {
                 debugLog("⚡ [Whisper Hook] Nenhuma fala detectada durante a gravação.");
@@ -321,13 +296,20 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult, shoul
         smoothedRmsRef.current = (smoothedRmsRef.current * 0.7) + (rms * 0.3);
         framesAnalyzedRef.current++;
 
-        // Correção: Ignorar os 2 primeiros frames de estabilização física do hardware (evita "pop/click" inicial do microfone)
+        // Ignorar os 2 primeiros frames de estabilização física do hardware
         if (framesAnalyzedRef.current <= 2) {
             return;
         }
 
+        // Enquanto a fala ainda não disparou, mantém os últimos 4 frames (~0.5s) no buffer circular de Pre-Roll
+        if (!hasSpeechStartedRef.current) {
+            preRollFramesRef.current.push(audioData.slice());
+            if (preRollFramesRef.current.length > 4) {
+                preRollFramesRef.current.shift();
+            }
+        }
+
         if (framesAnalyzedRef.current < CALIBRATION_FRAMES + 2) {
-            // Correção: Limitar o noiseFloor a um teto realista para evitar calibrar um estalo isolado como ruído de fundo perpétuo
             const cappedRms = Math.min(smoothedRmsRef.current, 0.025);
             noiseFloorRef.current = Math.max(noiseFloorRef.current, cappedRms);
             return;
@@ -336,12 +318,24 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult, shoul
         energyVarianceRef.current = Math.abs(rms - smoothedRmsRef.current);
         
         // Threshold dinâmico
-        const dynamicThreshold = Math.max(BASE_THRESHOLD, noiseFloorRef.current * 1.8);
+        const dynamicThreshold = Math.max(BASE_THRESHOLD, noiseFloorRef.current * 1.7);
 
         if (!hasSpeechStartedRef.current) {
-            if (smoothedRmsRef.current > dynamicThreshold && energyVarianceRef.current > (dynamicThreshold * 0.3)) {
+            if (smoothedRmsRef.current > dynamicThreshold && energyVarianceRef.current > (dynamicThreshold * 0.25)) {
                 hasSpeechStartedRef.current = true;
-                debugLog(`🎤 [Whisper Hook] Voz detectada! RMS: ${smoothedRmsRef.current.toFixed(4)} | Threshold: ${dynamicThreshold.toFixed(4)}`);
+                debugLog(`🎤 [Whisper Hook] Voz detectada! Injetando ${preRollFramesRef.current.length} frames de pre-roll.`);
+                
+                // Prepend dos frames de pre-roll para não cortar o ataque da primeira sílaba
+                for (const preFrame of preRollFramesRef.current) {
+                    const offset = audioBufferOffsetRef.current;
+                    const spaceLeft = MAX_SAMPLES - offset;
+                    const copyLen = Math.min(preFrame.length, spaceLeft);
+                    if (copyLen > 0) {
+                        audioBufferRef.current.set(preFrame.subarray(0, copyLen), offset);
+                        audioBufferOffsetRef.current = offset + copyLen;
+                    }
+                }
+                preRollFramesRef.current = [];
             }
         }
 
@@ -527,6 +521,7 @@ registerProcessor('audio-capture-processor', AudioCaptureProcessor);
         energyVarianceRef.current = 0;
         startTimeRef.current = Date.now();
         audioBufferOffsetRef.current = 0;
+        preRollFramesRef.current = [];
 
         try {
             debugLog("⚡ [Whisper Hook] Iniciando captura de áudio...");
@@ -570,15 +565,15 @@ registerProcessor('audio-capture-processor', AudioCaptureProcessor);
             
             const source = audioContext.createMediaStreamSource(stream);
             
-            // Cadeia de Filtros (Passa-Banda: 300Hz a 3500Hz)
+            // Cadeia de Filtros (Passa-Banda: 85Hz a 7200Hz — preserva fundamentais da voz e consoantes sibilantes S/T/P/C)
             const hpFilter = audioContext.createBiquadFilter();
             hpFilter.type = 'highpass';
-            hpFilter.frequency.value = 300;
+            hpFilter.frequency.value = 85;
             hpFilter.Q.value = 0.7;
 
             const lpFilter = audioContext.createBiquadFilter();
             lpFilter.type = 'lowpass';
-            lpFilter.frequency.value = 3500;
+            lpFilter.frequency.value = 7200;
             lpFilter.Q.value = 0.7;
             
             // Pré-amplificador (Ganho Adaptativo — REDUZIDO para mobile)

@@ -39,8 +39,12 @@ export function useGeolocation() {
                 // console.log(`📡 GPS Quente: Accuracy=${data.accuracy}m`);
             },
             (err) => {
-                console.error("📡 GPS Watch Error:", err);
-                setError("Erro no monitoramento contínuo.");
+                console.warn(`📡 GPS Watch Warning [code ${err.code}]: ${err.message || 'Sinal ou permissão indisponível'}`);
+                setError(err.code === 1 ? "Permissão de GPS negada." : "Monitoramento de GPS indisponível.");
+                // Se a permissão foi negada (código 1), para de observar para não spammar erros
+                if (err.code === 1) {
+                    stopWatching();
+                }
             },
             {
                 enableHighAccuracy: highAccuracy,

@@ -251,16 +251,21 @@ export const RailwayMapModal: React.FC<RailwayMapModalProps> = ({
         ctx.restore();
     }, [systems, userLocation, activeTourSystemId]);
 
-    // Animation loop
+    const requestRedraw = useCallback(() => {
+        if (animRef.current) cancelAnimationFrame(animRef.current);
+        animRef.current = requestAnimationFrame(() => {
+            draw();
+        });
+    }, [draw]);
+
+    // Redraw on dependencies change or modal opening
     useEffect(() => {
         if (!isOpen) return;
-        const loop = () => {
-            draw();
-            animRef.current = requestAnimationFrame(loop);
+        requestRedraw();
+        return () => {
+            if (animRef.current) cancelAnimationFrame(animRef.current);
         };
-        animRef.current = requestAnimationFrame(loop);
-        return () => cancelAnimationFrame(animRef.current);
-    }, [isOpen, draw]);
+    }, [isOpen, requestRedraw, systems, userLocation, activeTourSystemId]);
 
     // Resize canvas to fit container
     useEffect(() => {
@@ -270,31 +275,38 @@ export const RailwayMapModal: React.FC<RailwayMapModalProps> = ({
         const resize = () => {
             canvas.width = canvas.offsetWidth;
             canvas.height = canvas.offsetHeight;
+            requestRedraw();
         };
         resize();
         window.addEventListener('resize', resize);
         return () => window.removeEventListener('resize', resize);
-    }, [isOpen]);
+    }, [isOpen, requestRedraw]);
 
     // Open/close animation
     useEffect(() => {
         if (isOpen) {
             setIsRendered(true);
-            requestAnimationFrame(() => requestAnimationFrame(() => setIsVisible(true)));
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    setIsVisible(true);
+                    requestRedraw();
+                });
+            });
         } else {
             setIsVisible(false);
             const t = setTimeout(() => setIsRendered(false), 300);
             return () => clearTimeout(t);
         }
-    }, [isOpen]);
+    }, [isOpen, requestRedraw]);
 
     // Center/fit (reset zoom on initial open)
     useEffect(() => {
         if (isOpen) {
             scaleRef.current = 1;
             offsetRef.current = { x: 0, y: 0 };
+            requestRedraw();
         }
-    }, [isOpen]);
+    }, [isOpen, requestRedraw]);
 
     // Mouse / touch pan
     const onPointerDown = (e: React.PointerEvent) => {
@@ -308,6 +320,7 @@ export const RailwayMapModal: React.FC<RailwayMapModalProps> = ({
         const dy = e.clientY - lastPointerRef.current.y;
         offsetRef.current = { x: offsetRef.current.x + dx, y: offsetRef.current.y + dy };
         lastPointerRef.current = { x: e.clientX, y: e.clientY };
+        requestRedraw();
     };
     const onPointerUp = () => { isDraggingRef.current = false; };
 
@@ -316,6 +329,7 @@ export const RailwayMapModal: React.FC<RailwayMapModalProps> = ({
         e.preventDefault();
         const factor = e.deltaY < 0 ? 1.12 : 0.88;
         scaleRef.current = Math.max(0.5, Math.min(10, scaleRef.current * factor));
+        requestRedraw();
     };
 
     if (!isRendered) return null;
@@ -338,7 +352,7 @@ export const RailwayMapModal: React.FC<RailwayMapModalProps> = ({
                 </div>
                 <div className="flex items-center gap-3">
                     <button
-                        onClick={() => { scaleRef.current = 1; offsetRef.current = { x: 0, y: 0 }; }}
+                        onClick={() => { scaleRef.current = 1; offsetRef.current = { x: 0, y: 0 }; requestRedraw(); }}
                         className="text-xs text-gray-400 hover:text-white px-3 py-1.5 rounded-md border border-white/10 hover:border-white/30 transition-all"
                     >
                         Centralizar

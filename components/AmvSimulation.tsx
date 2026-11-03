@@ -320,9 +320,10 @@ function getReclassificacaoTrack2X(z: number) {
   return -5.0 + 2.5 * (3 * u ** 2 - 2 * u ** 3);
 }
 
-function Sleepers({ layoutType }: { layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'pn_oficina' | 'carga_geral_02' | 'patio_oficina' | 'default' | 'pn_oficina' | 'carga_geral_02' | 'patio_oficina' | 'default' }) {
-  const sleepers = [];
-  const tw = 1.9; // Sleeper width, leaves a visible 'entrevia' gap between parallel tracks
+function Sleepers({ layoutType }: { layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'pn_oficina' | 'carga_geral_02' | 'patio_oficina' | 'default' }) {
+  const elements = useMemo(() => {
+    const sleepers: React.ReactNode[] = [];
+    const tw = 1.9; // Sleeper width, leaves a visible 'entrevia' gap between parallel tracks
   
   if (layoutType === 'freio') {
     for (let z = 55; z > 18; z -= 0.6) {
@@ -438,8 +439,10 @@ function Sleepers({ layoutType }: { layoutType: 'freio' | 'freio_02' | 'oficina'
       sleepers.push(<Box key={`b-${z}`} args={[tw, 0.1, 0.25]} position={[branchCx, -0.15, z]} rotation={[0, Math.atan(dxdz), 0]} castShadow receiveShadow><meshStandardMaterial color="#3f3f46" roughness={0.9} /></Box>);
     }
   }
+  return sleepers;
+}, [layoutType]);
   
-  return <group>{sleepers}</group>;
+  return <group>{elements}</group>;
 }
 
 function LedFlow({ layoutType, direction, amvs, spawnLine, routeColor }: { layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'pn_oficina' | 'carga_geral_02' | 'patio_oficina' | 'default' | 'pn_oficina' | 'carga_geral_02' | 'patio_oficina' | 'default', direction: Direction, amvs: SwitchState[], spawnLine: SpawnLine, routeColor?: string }) {
@@ -506,9 +509,10 @@ function LedFlow({ layoutType, direction, amvs, spawnLine, routeColor }: { layou
   );
 }
 
-function CurveBranch({ layoutType }: { layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'pn_oficina' | 'carga_geral_02' | 'patio_oficina' | 'default' | 'pn_oficina' | 'carga_geral_02' | 'patio_oficina' | 'default' }) {
-  const segments = 25;
-  const rails = [];
+function CurveBranch({ layoutType }: { layoutType: 'freio' | 'freio_02' | 'oficina' | 'reclassificacao' | 'pn_oficina' | 'carga_geral_02' | 'patio_oficina' | 'default' }) {
+  const elements = useMemo(() => {
+    const segments = 25;
+    const rails: React.ReactNode[] = [];
   
   if (layoutType === 'freio') {
     // -----------------------------------------------------
@@ -845,8 +849,10 @@ function CurveBranch({ layoutType }: { layoutType: 'freio' | 'freio_02' | 'ofici
       rails.push(<RailSegment key={`R-${i}`} start={[xCenter1 + 0.8, 0, z1]} end={[xCenter2 + 0.8, 0, z2]} />);
     }
   }
+  return rails;
+}, [layoutType]);
   
-  return <group>{rails}</group>;
+  return <group>{elements}</group>;
 }
 
 function FrogInfo({ z, x }: { z: number, x: number }) {

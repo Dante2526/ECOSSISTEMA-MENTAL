@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
-import AmvSimulation from './AmvSimulation';
+
+const AmvSimulation = lazy(() => import('./AmvSimulation'));
 
 interface ImageModalProps {
     isOpen: boolean;
@@ -214,12 +215,19 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
                     )}
 
                     {isSimulationOpen && (
-                        <AmvSimulation
-                            systemId={systemId}
-                            systemName={systemName}
-                            onClose={() => setIsSimulationOpen(false)}
-                            inlineMode={true}
-                        />
+                        <Suspense fallback={
+                            <div className="absolute inset-0 z-[110] flex flex-col items-center justify-center bg-black/95 text-white gap-3">
+                                <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
+                                <span className="text-sm font-semibold text-indigo-300">Carregando Simulação 3D...</span>
+                            </div>
+                        }>
+                            <AmvSimulation
+                                systemId={systemId}
+                                systemName={systemName}
+                                onClose={() => setIsSimulationOpen(false)}
+                                inlineMode={true}
+                            />
+                        </Suspense>
                     )}
                 </div>
             </div>

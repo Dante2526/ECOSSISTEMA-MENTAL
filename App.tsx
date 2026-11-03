@@ -19,7 +19,6 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
 import { OfflineSetupProgress } from './components/OfflineSetupProgress';
 import { FromToModal } from './components/FromToModal';
 import { useGeolocation } from './hooks/useGeolocation';
-import { usePreloadProgress } from './hooks/usePreloadProgress';
 import { RailwayMapModal } from './components/RailwayMapModal';
 
 const App: React.FC = () => {
@@ -64,15 +63,22 @@ const App: React.FC = () => {
     });
 
     const [systems, setSystems] = useState<OrbitalSystemType[]>(() => {
+        const normalizeImageUrl = (url: string) => {
+            if (url && url.includes('ibb.co')) {
+                const parts = url.split('/');
+                const filename = parts[parts.length - 1];
+                return `/images/${filename}`;
+            }
+            return url;
+        };
+
         try {
-            const DATA_VERSION = '2.1'; // Incrementado para garantir compatibilidade com GPS
+            const DATA_VERSION = '2.3'; // Atualizado com todas as 35 imagens extraídas do PDF Kaizen
             const storedVersion = localStorage.getItem('orbitalDataVersion');
 
             if (storedVersion !== DATA_VERSION) {
                 console.log("Versão de dados antiga detectada. Atualizando para", DATA_VERSION);
                 localStorage.setItem('orbitalDataVersion', DATA_VERSION);
-                localStorage.removeItem('orbitalSystems');
-                return initialSystems;
             }
 
             const storedSystems = localStorage.getItem('orbitalSystems');
@@ -80,6 +86,19 @@ const App: React.FC = () => {
             
             // Validação extra: se não for array, reseta
             if (!Array.isArray(parsed)) throw new Error("Dados de sistemas corrompidos");
+
+            // Migra qualquer URL antiga do ibb.co para o caminho local /images/ preservando coordenadas
+            parsed.forEach((s: OrbitalSystemType) => {
+                const defaultSys = initialSystems.find(init => init.id === s.id);
+                s.iconUrl = normalizeImageUrl(s.iconUrl) || defaultSys?.iconUrl || '';
+                const migratedModals = (s.modalUrls || []).map(normalizeImageUrl);
+                if (defaultSys && defaultSys.modalUrls.length > migratedModals.length) {
+                    s.modalUrls = defaultSys.modalUrls;
+                } else {
+                    s.modalUrls = migratedModals;
+                }
+            });
+
             return parsed;
         } catch (error) {
             console.error("Falha ao carregar sistemas do localStorage", error);
@@ -175,8 +194,6 @@ const App: React.FC = () => {
             console.error("Falha ao salvar no localStorage", error);
         }
     }, [systems, tours]);
-
-    const offlineProgress = usePreloadProgress(systems);
 
     useEffect(() => {
         setSearchCache(buildSearchCache(systems));
@@ -501,12 +518,25 @@ const App: React.FC = () => {
         window.speechSynthesis.speak(utterance);
     }, []);
 
-    const { getStablePosition, findNearestSystem, isLocating: isLocatingGPS, startWatching, lastLocation } = useGeolocation();
+    const { getStablePosition, findNearestSystem, isLocating: isLocatingGPS, startWatching, stopWatching, lastLocation } = useGeolocation();
 
-    // Inicia o monitoramento contínuo logo no início para garantir que o GPS esteja "Quente"
+    // Monitoramento contínuo de GPS sob demanda (Apenas quando Tour estiver ativo ou RailwayMap estiver aberto)
     useEffect(() => {
-        startWatching();
-    }, [startWatching]);
+        const shouldWatch = (isAdmin && !!activeTour) || isRailwayMapOpen;
+        if (shouldWatch) {
+            startWatching();
+        } else {
+            stopWatching();
+        }
+    }, [isAdmin, activeTour, isRailwayMapOpen, startWatching, stopWatching]);
+
+    const handleCloseRailwayMap = useCallback(() => {
+        setIsRailwayMapOpen(false);
+    }, []);
+
+    const handleOpenRailwayMap = useCallback(() => {
+        setIsRailwayMapOpen(true);
+    }, []);
 
     const [currentTargetId, setCurrentTargetId] = useState<string | null>(null);
     const [distanceToTarget, setDistanceToTarget] = useState<number | null>(null);
@@ -654,7 +684,7 @@ const App: React.FC = () => {
     return (
         <div className="relative w-screen h-screen overflow-hidden font-sans cursor-grab touch-none transition-colors duration-500 bg-[radial-gradient(ellipse_at_center,_#1a0b2e_0%,_#000000_100%)]">
 
-            <OfflineSetupProgress progress={offlineProgress} />
+            <OfflineSetupProgress systems={systems} />
             <ParallaxBackground />
 
             <TourDeckModal
@@ -672,7 +702,7 @@ const App: React.FC = () => {
                 systems={systems}
                 userLocation={lastLocation}
                 activeTourSystemId={currentTargetId}
-                onClose={() => setIsRailwayMapOpen(false)}
+                onClose={handleCloseRailwayMap}
             />
 
             <div className="relative z-10 flex items-center justify-center w-full h-full min-h-screen">
@@ -721,7 +751,7 @@ const App: React.FC = () => {
                     onSave={handleSaveSystem}
                     onDelete={handleDeleteSystem}
                     onClose={handleCloseEditingSystem}
-                    onOpenMap={() => setIsRailwayMapOpen(true)}
+                    onOpenMap={handleOpenRailwayMap}
                 />
             )}
 
