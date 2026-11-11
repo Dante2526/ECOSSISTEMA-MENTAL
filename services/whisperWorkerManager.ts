@@ -21,22 +21,35 @@ class WhisperWorkerManager {
     private listeners = new Set<MessageListener>();
     private preloaded = false;
     private preloading = false;
+    private processing = false;
 
-    private getWorker(): Worker {
+    private getWorker(): Worker | null {
+        if (typeof window === 'undefined' || typeof Worker === 'undefined') {
+            return null;
+        }
+
         if (!this.worker) {
-            console.log("⚡ [WhisperManager] Criando instância única do Whisper Worker...");
-            this.worker = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), {
-                type: 'module'
-            });
+            try {
+                this.worker = new Worker(new URL('../workers/whisper.worker.ts', import.meta.url), {
+                    type: 'module'
+                });
+            } catch (err) {
+                console.warn("⚠️ [WhisperManager] Não foi possível criar o Web Worker:", err);
+                this.worker = null;
+                return null;
+            }
 
             this.worker.onmessage = (event: MessageEvent<WhisperWorkerMessage>) => {
                 const data = event.data;
+                if (!data) return;
 
                 if (data.type === 'PRELOAD_DONE') {
                     this.preloaded = true;
                     this.preloading = false;
                 } else if (data.type === 'PRELOAD_ERROR') {
                     this.preloading = false;
+                } else if (data.type === 'RESULT' || data.type === 'ERROR') {
+                    this.processing = false;
                 }
 
                 // Notificar todos os ouvintes inscritos
@@ -44,36 +57,54 @@ class WhisperWorkerManager {
                     try {
                         listener(data);
                     } catch (err) {
-                        console.error("❌ [WhisperManager] Erro no listener do worker:", err);
+                        console.warn("⚠️ [WhisperManager] Erro no listener do worker:", err);
                     }
                 });
             };
 
             this.worker.onerror = (event: ErrorEvent) => {
-                console.error("🔴 [WhisperManager] Erro fatal no worker:", event.message);
+                event?.preventDefault?.();
+                const wasProcessing = this.processing;
                 this.preloading = false;
-                const errorData: WhisperWorkerMessage = {
-                    type: 'ERROR',
-                    error: 'worker-crash'
-                };
+                this.processing = false;
+
+                // Descarta a instância defeituosa/reclamada pelo SO para permitir recriação futura
+                try {
+                    this.worker?.terminate();
+                } catch (_) {}
+                this.worker = null;
+
+                const reason = event?.message || 'worker-terminated';
+                console.warn("⚠️ [WhisperManager] Worker encerrado ou indisponível:", reason);
+
+                const responseData: WhisperWorkerMessage = wasProcessing
+                    ? { type: 'ERROR', error: 'worker-crash' }
+                    : { type: 'PRELOAD_ERROR', error: reason };
+
                 this.listeners.forEach(listener => {
                     try {
-                        listener(errorData);
+                        listener(responseData);
                     } catch (_) {}
                 });
             };
 
             this.worker.onmessageerror = (event) => {
-                console.error("🔴 [WhisperManager] Erro de mensagem no worker:", event);
-                const errorData: WhisperWorkerMessage = {
-                    type: 'ERROR',
-                    error: 'worker-serialization-error'
-                };
-                this.listeners.forEach(listener => {
-                    try {
-                        listener(errorData);
-                    } catch (_) {}
-                });
+                const wasProcessing = this.processing;
+                this.preloading = false;
+                this.processing = false;
+                console.warn("⚠️ [WhisperManager] Erro de serialização no worker:", event);
+
+                if (wasProcessing) {
+                    const errorData: WhisperWorkerMessage = {
+                        type: 'ERROR',
+                        error: 'worker-serialization-error'
+                    };
+                    this.listeners.forEach(listener => {
+                        try {
+                            listener(errorData);
+                        } catch (_) {}
+                    });
+                }
             };
         }
 
@@ -86,8 +117,6 @@ class WhisperWorkerManager {
      */
     public subscribe(listener: MessageListener): () => void {
         this.listeners.add(listener);
-        // Garante que o worker foi inicializado
-        this.getWorker();
 
         // Se já estava pré-carregado no momento da inscrição, notifica o novo ouvinte
         if (this.preloaded) {
@@ -107,16 +136,24 @@ class WhisperWorkerManager {
     public preload(): void {
         if (this.preloaded || this.preloading) {
             if (this.preloaded) {
-                // Notificar ouvintes que já está pronto
                 this.listeners.forEach(l => l({ type: 'PRELOAD_DONE' }));
             }
             return;
         }
 
-        this.preloading = true;
         const worker = this.getWorker();
-        console.log("⚡ [WhisperManager] Solicitando PRELOAD do modelo...");
-        worker.postMessage({ type: 'PRELOAD' });
+        if (!worker) {
+            this.listeners.forEach(l => l({ type: 'PRELOAD_ERROR', error: 'worker-unavailable' }));
+            return;
+        }
+
+        this.preloading = true;
+        try {
+            worker.postMessage({ type: 'PRELOAD' });
+        } catch (err) {
+            this.preloading = false;
+            console.warn("⚠️ [WhisperManager] Falha ao enviar PRELOAD ao worker:", err);
+        }
     }
 
     /**
@@ -125,10 +162,22 @@ class WhisperWorkerManager {
      */
     public processAudio(audio: Float32Array, language: string = 'portuguese'): void {
         const worker = this.getWorker();
-        worker.postMessage({
-            audio,
-            language
-        }, [audio.buffer]);
+        if (!worker) {
+            this.listeners.forEach(l => l({ type: 'ERROR', error: 'worker-unavailable' }));
+            return;
+        }
+
+        this.processing = true;
+        try {
+            worker.postMessage({
+                audio,
+                language
+            }, [audio.buffer]);
+        } catch (err) {
+            this.processing = false;
+            console.warn("⚠️ [WhisperManager] Falha ao enviar áudio para o worker:", err);
+            this.listeners.forEach(l => l({ type: 'ERROR', error: 'worker-post-failed' }));
+        }
     }
 
     public isPreloaded(): boolean {

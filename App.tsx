@@ -73,7 +73,7 @@ const App: React.FC = () => {
         };
 
         try {
-            const DATA_VERSION = '2.3'; // Atualizado com todas as 35 imagens extraídas do PDF Kaizen
+            const DATA_VERSION = '2.4'; // Atualizado com nome LINHAS ABAIXO DO GALPÃO DA OFICINA
             const storedVersion = localStorage.getItem('orbitalDataVersion');
 
             if (storedVersion !== DATA_VERSION) {
@@ -87,9 +87,12 @@ const App: React.FC = () => {
             // Validação extra: se não for array, reseta
             if (!Array.isArray(parsed)) throw new Error("Dados de sistemas corrompidos");
 
-            // Migra qualquer URL antiga do ibb.co para o caminho local /images/ preservando coordenadas
+            // Migra qualquer URL antiga do ibb.co para o caminho local /images/ preservando coordenadas e nomes atualizados
             parsed.forEach((s: OrbitalSystemType) => {
                 const defaultSys = initialSystems.find(init => init.id === s.id);
+                if (defaultSys) {
+                    s.name = defaultSys.name;
+                }
                 s.iconUrl = normalizeImageUrl(s.iconUrl) || defaultSys?.iconUrl || '';
                 const migratedModals = (s.modalUrls || []).map(normalizeImageUrl);
                 if (defaultSys && defaultSys.modalUrls.length > migratedModals.length) {
@@ -119,7 +122,7 @@ const App: React.FC = () => {
                 { systemId: 'watchSystem33' }, // LINHAS SENTIDO OFICINA
                 { systemId: 'watchSystem18' }, // RECLASSIFICAÇÃO E OFICINA
                 { systemId: 'watchSystem4' }, // POR BAIXO DO GALPÃO DA OFICINA
-                { systemId: 'watchSystem14' }, // LINHAS ABAIXO DO GALPÃO DO PIAL
+                { systemId: 'watchSystem14' }, // LINHAS ABAIXO DO GALPÃO DA OFICINA
             ],
         },
         {
@@ -677,9 +680,13 @@ const App: React.FC = () => {
     }, [searchCache, startTour, showFeedback]);
 
     const handleOpenSystemImages = useCallback((urls: string[]) => {
+        if (urls.length > 0) {
+            const matchedSystem = systems.find(s => s.modalUrls.includes(urls[0]));
+            if (matchedSystem) setActiveSystem(matchedSystem);
+        }
         setModalImages(urls);
         setIsModalOpen(true);
-    }, []);
+    }, [systems]);
 
     return (
         <div className="relative w-screen h-screen overflow-hidden font-sans cursor-grab touch-none transition-colors duration-500 bg-[radial-gradient(ellipse_at_center,_#1a0b2e_0%,_#000000_100%)]">

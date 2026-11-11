@@ -1,24 +1,10 @@
-import { 
-    env, 
-    AutoTokenizer, 
-    AutoProcessor, 
-    AutoModelForSpeechSeq2Seq, 
-    AutomaticSpeechRecognitionPipeline 
+import {
+    env,
+    AutoTokenizer,
+    AutoProcessor,
+    AutoModelForSpeechSeq2Seq,
+    AutomaticSpeechRecognitionPipeline
 } from '@huggingface/transformers';
-
-// Configuração para uso do cache do navegador (Cache API)
-env.allowLocalModels = false;
-env.allowRemoteModels = true;
-env.useBrowserCache = true;
-
-// Define explicitamente o caminho do WASM via CDN (cacheado pelo Service Worker em CacheFirst)
-// Isso evita o erro do Vite no modo dev ("Failed to load url /ort/*.mjs?import - file is in /public")
-// e evita que o Terser corrompa o arquivo no build de produção.
-env.backends.onnx.wasm.wasmPaths = `https://cdn.jsdelivr.net/npm/@huggingface/transformers@${env.version}/dist/`;
-// IMPORTANTE: Em ambientes sem headers COOP/COEP (SharedArrayBuffer), numThreads = 1
-// evita travamentos e warnings no iOS/Android e garante máxima estabilidade WASM SIMD.
-env.backends.onnx.wasm.numThreads = 1;
-env.backends.onnx.wasm.simd = true;
 
 // Flag de debug — reduz console.logs em produção para menos jank mobile
 const DEBUG = false;
@@ -33,51 +19,46 @@ const RAILWAY_PROMPT = "Linha 65B, 01, 02, 128, 151, 152, 158, 159, 160, 161, 16
 
 class WhisperWorker {
     static instance: any = null;
-    static isWarmedUp = false;
+    static isConfigured = false;
 
     static async getInstance(progress_callback: any = null) {
         if (this.instance === null) {
-            console.log("⚡ [Whisper Worker] Construindo Pipeline ASR Offline...");
+            debugLog("⚡ [Whisper Worker] Construindo Pipeline ASR Offline...");
             try {
+                if (!this.isConfigured) {
+                    this.isConfigured = true;
+                    env.allowLocalModels = false;
+                    env.allowRemoteModels = true;
+                    env.useBrowserCache = true;
+                    if (env.backends?.onnx?.wasm) {
+                        env.backends.onnx.wasm.wasmPaths = `https://cdn.jsdelivr.net/npm/@huggingface/transformers@${env.version}/dist/`;
+                        env.backends.onnx.wasm.numThreads = 1;
+                        env.backends.onnx.wasm.simd = true;
+                    }
+                }
+
                 const modelName = 'onnx-community/whisper-tiny';
-                
+
                 const tokenizer = await AutoTokenizer.from_pretrained(modelName, { progress_callback });
                 const processor = await AutoProcessor.from_pretrained(modelName, { progress_callback });
-                
-                // dtype 'q8' (INT8) é obrigatório e ideal para WASM SIMD offline
-                const model = await AutoModelForSpeechSeq2Seq.from_pretrained(modelName, { 
+
+                // dtype 'q8' (INT8) é ideal para WASM SIMD offline com baixo consumo de RAM
+                const model = await AutoModelForSpeechSeq2Seq.from_pretrained(modelName, {
                     dtype: 'q8',
                     device: 'wasm',
-                    progress_callback 
+                    progress_callback
                 });
 
-                this.instance = new AutomaticSpeechRecognitionPipeline({ 
-                    tokenizer, 
-                    processor, 
+                this.instance = new AutomaticSpeechRecognitionPipeline({
+                    tokenizer,
+                    processor,
                     model,
                     task: 'transcribe'
                 } as any);
-                
-                // Warm-up silencioso (0.5s) para pré-compilar shaders/grafos WASM ONNX
-                // Elimina a demora na primeira vez que o operador aperta o microfone
-                if (!this.isWarmedUp) {
-                    this.isWarmedUp = true;
-                    try {
-                        const dummyAudio = new Float32Array(8000); // 0.5s a 16kHz
-                        await this.instance(dummyAudio, {
-                            language: 'portuguese',
-                            task: 'transcribe',
-                            max_new_tokens: 2,
-                            do_sample: false,
-                            num_beams: 1,
-                        });
-                        console.log("🔥 [Whisper Worker] Warm-up do motor neural concluído!");
-                    } catch (_) {}
-                }
 
-                console.log("✅ [Whisper Worker] Pipeline 100% pronto para uso offline!");
+                debugLog("✅ [Whisper Worker] Pipeline pronto para uso offline!");
             } catch (err) {
-                console.error("🔴 [Whisper Worker] ERRO FATAL AO CARREGAR:", err);
+                console.warn("⚠️ [Whisper Worker] Falha ao carregar pipeline ASR:", err);
                 throw err;
             }
         }
@@ -126,7 +107,6 @@ function isRepetitionLoop(text: string): boolean {
 const MAX_TRANSCRIPT_LENGTH = 55;
 
 // Palavras que indicam alucinação de frase coloquial de filmes/legendas do Whisper
-// ATENÇÃO: NÃO incluir "estou", "onde", "qual", "minha", "aqui" pois fazem parte do comando legítimo "Onde estou?" / "Qual linha?"
 const PORTUGUESE_HALLUCINATION_WORDS = [
     'você pode', 'voce pode', 'quando', 'porque',
     'fazer', 'feito', 'temos', 'queria',
@@ -142,11 +122,6 @@ function isNaturalLanguageSentence(text: string): boolean {
     return PORTUGUESE_HALLUCINATION_WORDS.some(word => lower.includes(word));
 }
 
-/**
- * Normaliza o pico de volume do áudio para 0.90 antes de alimentar a rede neural.
- * Garante que mesmo se o operador falar longe do microfone ou em ambiente com vento/ruído,
- * a assinatura espectral chegue com amplitude perfeita ao Whisper.
- */
 function normalizeAudioPeak(audio: Float32Array): Float32Array {
     let maxAbs = 0;
     for (let i = 0; i < audio.length; i++) {
@@ -155,7 +130,7 @@ function normalizeAudioPeak(audio: Float32Array): Float32Array {
     }
     if (maxAbs > 0.01 && maxAbs < 0.85) {
         const scale = 0.90 / maxAbs;
-        const cappedScale = Math.min(scale, 5.0); // Evita explodir ruído de fundo puro
+        const cappedScale = Math.min(scale, 5.0);
         for (let i = 0; i < audio.length; i++) {
             audio[i] = Math.max(-1, Math.min(1, audio[i] * cappedScale));
         }
@@ -164,21 +139,21 @@ function normalizeAudioPeak(audio: Float32Array): Float32Array {
 }
 
 self.onmessage = async (event) => {
-    const { type, audio, language } = event.data;
+    const { type, audio, language } = event.data || {};
 
     if (type === 'PRELOAD') {
         try {
             await WhisperWorker.getInstance((progress: any) => {
-                self.postMessage({ 
-                    type: 'PRELOAD_PROGRESS', 
-                    file: progress.file,
-                    progress: progress.progress || 100,
-                    status: progress.status
+                self.postMessage({
+                    type: 'PRELOAD_PROGRESS',
+                    file: progress?.file,
+                    progress: progress?.progress || 100,
+                    status: progress?.status
                 });
             });
             self.postMessage({ type: 'PRELOAD_DONE' });
         } catch (error: any) {
-            self.postMessage({ type: 'PRELOAD_ERROR', error: error.message });
+            self.postMessage({ type: 'PRELOAD_ERROR', error: error?.message || 'preload-failed' });
         }
         return;
     }
@@ -202,7 +177,7 @@ self.onmessage = async (event) => {
 
     try {
         const transcriber = await WhisperWorker.getInstance((progress: any) => {
-            if (progress.status === 'progress') {
+            if (progress?.status === 'progress') {
                 self.postMessage({ type: 'STATUS', status: 'loading', progress: progress.progress });
             }
         });
@@ -213,7 +188,7 @@ self.onmessage = async (event) => {
         const normalizedAudio = normalizeAudioPeak(audio);
 
         const startTime = performance.now();
-        
+
         // Geração via Pipeline (ASR) otimizada para comandos curtos ferroviários
         const output = await transcriber(normalizedAudio, {
             language: language || 'portuguese',
@@ -233,27 +208,26 @@ self.onmessage = async (event) => {
 
         const transcript = (output?.text || '').trim();
         const duration = ((performance.now() - startTime) / 1000).toFixed(2);
-        
+
         debugLog(`✅ [Whisper Worker] Resultado bruto (${duration}s): "${transcript}"`);
 
         const isHallucination = HALLUCINATION_PATTERNS.some(pattern => pattern.test(transcript));
         const isLoop = isRepetitionLoop(transcript);
         const isTooLong = transcript.length > MAX_TRANSCRIPT_LENGTH;
         const isNaturalLanguage = isNaturalLanguageSentence(transcript);
-        
+
         if (isHallucination || isLoop || isTooLong || isNaturalLanguage || transcript.length < 1) {
-            console.warn(`⚠️ [Whisper Worker] Alucinação filtrada: "${transcript.substring(0, 60)}"`);
+            debugLog(`⚠️ [Whisper Worker] Alucinação filtrada: "${transcript.substring(0, 60)}"`);
             self.postMessage({ type: 'RESULT', text: '' });
         } else {
-            console.log(`✅ [Whisper Worker] Transcrição Offline: "${transcript}" (${duration}s)`);
+            debugLog(`✅ [Whisper Worker] Transcrição Offline: "${transcript}" (${duration}s)`);
             self.postMessage({ type: 'RESULT', text: transcript });
         }
 
         if (output) output.text = null;
 
     } catch (error: any) {
-        console.error("❌ [Whisper Worker] Erro:", error);
-        self.postMessage({ type: 'ERROR', error: error.message });
+        console.warn("⚠️ [Whisper Worker] Erro na transcrição:", error);
+        self.postMessage({ type: 'ERROR', error: error?.message || 'transcription-error' });
     }
 };
-

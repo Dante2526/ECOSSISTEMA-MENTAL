@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
-
-const AmvSimulation = lazy(() => import('./AmvSimulation'));
+import AmvSimulation from './AmvSimulation';
 
 interface ImageModalProps {
     isOpen: boolean;
@@ -26,7 +25,6 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
             setCurrentIndex(0);
             setIsLoading(true);
             setIsSimulationOpen(false);
-            // Small delay to allow DOM to render before applying opacity 1
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
                     setIsVisible(true);
@@ -34,12 +32,11 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
             });
         } else {
             setIsVisible(false);
-            const timer = setTimeout(() => setIsRendered(false), 300); // match transition duration
+            const timer = setTimeout(() => setIsRendered(false), 300);
             return () => clearTimeout(timer);
         }
     }, [isOpen]);
 
-    // Smart Prefetching: When the current image changes, start loading the NEXT image in the background.
     useEffect(() => {
         if (!isOpen || imageUrls.length <= 1) return;
 
@@ -77,7 +74,6 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
         }
     }, [imageUrls.length, currentIndex, checkCache]);
 
-    // Efeito para tratar imagens que já estão no cache (evita spinner travado)
     useEffect(() => {
         if (!isOpen) return;
         
@@ -115,11 +111,19 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
                         from { opacity: 0; }
                         to { opacity: 1; }
                     }
+                    @keyframes modal3dIn {
+                        from { opacity: 0; transform: scale3d(0.96, 0.96, 1) translateY(8px); }
+                        to { opacity: 1; transform: scale3d(1, 1, 1) translateY(0); }
+                    }
                     .animate-fade-in {
                         animation: fadeIn 0.3s ease-in-out forwards;
                     }
                     .animate-fade-in-delayed {
                         animation: fadeIn 0.3s 0.3s ease-in-out both;
+                    }
+                    .animate-modal-3d {
+                        animation: modal3dIn 0.24s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+                        will-change: transform, opacity;
                     }
                 `}
             </style>
@@ -128,13 +132,12 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
                 onClick={onClose}
             ></div>
 
-            {/* Container fixo cobrindo a tela toda, com pointer-events-none no fundo */}
             <div
                 className={`fixed inset-0 z-[9999] flex items-center justify-center transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
                 onClick={onClose}
             >
                 <div
-                    className={`relative flex items-center justify-center bg-black rounded-lg border border-white/20 shadow-[0_0_50px_rgba(255,255,255,0.1)] overflow-hidden transition-all duration-500 ${isSimulationOpen ? 'w-[95vw] h-[90vh]' : ''}`}
+                    className="relative flex items-center justify-center bg-black rounded-lg border border-white/20 shadow-[0_0_50px_rgba(255,255,255,0.1)] overflow-hidden"
                     onClick={(e) => e.stopPropagation()}
                 >
                     {/* Imagem fantasma invisível que define as dimensões reais do container */}
@@ -186,17 +189,13 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
                         ✕
                     </button>
 
-                    {systemId && systemId !== 'watchSystem8' && (
+                    {systemId && (
                         <button 
                             title="Simular AMV 3D" 
                             onClick={() => setIsSimulationOpen(true)} 
-                            className={`absolute ${systemId === 'watchSystem5' ? 'bottom-6 right-6' : 'top-4 left-4'} h-10 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider rounded-full border border-indigo-400/30 flex items-center gap-2 z-[101] hover:scale-105 transition-all duration-300 shadow-[0_4px_15px_rgba(79,70,229,0.4)] animate-fade-in`}
+                            className={`absolute ${systemId === 'watchSystem5' ? 'bottom-6 right-6' : 'top-4 left-4'} w-10 h-10 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-black text-xs uppercase tracking-wider rounded-full border border-indigo-400/40 grid place-items-center z-[101] hover:scale-105 transition-all duration-200 shadow-[0_4px_15px_rgba(79,70,229,0.5)] animate-fade-in`}
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            Simular AMV 3D
+                            3D
                         </button>
                     )}
 
@@ -213,24 +212,35 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
                             </div>
                         </>
                     )}
-
-                    {isSimulationOpen && (
-                        <Suspense fallback={
-                            <div className="absolute inset-0 z-[110] flex flex-col items-center justify-center bg-black/95 text-white gap-3">
-                                <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
-                                <span className="text-sm font-semibold text-indigo-300">Carregando Simulação 3D...</span>
-                            </div>
-                        }>
-                            <AmvSimulation
-                                systemId={systemId}
-                                systemName={systemName}
-                                onClose={() => setIsSimulationOpen(false)}
-                                inlineMode={true}
-                            />
-                        </Suspense>
-                    )}
                 </div>
+
+                {isSimulationOpen && (
+                    <div
+                        className="fixed inset-0 z-[10010] flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+                        onClick={(e) => { e.stopPropagation(); setIsSimulationOpen(false); }}
+                    >
+                        <div
+                            className="relative w-[96vw] h-[92vh] rounded-2xl overflow-hidden border border-white/15 shadow-2xl bg-[#0a0a0c] animate-modal-3d"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <Suspense fallback={
+                                <div className="absolute inset-0 z-[110] flex flex-col items-center justify-center bg-[#0a0a0c] text-white gap-3">
+                                    <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
+                                    <span className="text-xs font-semibold text-indigo-300">Preparando Simulação 3D...</span>
+                                </div>
+                            }>
+                                <AmvSimulation
+                                    systemId={systemId}
+                                    systemName={systemName}
+                                    onClose={() => setIsSimulationOpen(false)}
+                                    inlineMode={true}
+                                />
+                            </Suspense>
+                        </div>
+                    </div>
+                )}
             </div>
         </>
     );
 });
+

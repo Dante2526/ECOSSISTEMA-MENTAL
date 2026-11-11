@@ -15,6 +15,10 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
       host: '0.0.0.0',
+      hmr: false,
+    },
+    worker: {
+      format: 'es',
     },
     plugins: [
       tailwindcss(),
@@ -24,13 +28,13 @@ export default defineConfig(({ mode }) => {
         includeAssets: ['favicon.svg'],
         manifest: false, // Usamos o manifest.json em public/
         workbox: {
-          globPatterns: ['**/*.{js,mjs,css,html,ico,svg,wasm}'],
+          globPatterns: ['**/*.{js,mjs,css,html,ico,svg,wasm,woff}'],
           globIgnores: [],
           maximumFileSizeToCacheInBytes: 100000000, // 100MB para garantir cache do modelo Whisper e WASM
           runtimeCaching: [
             {
-              // Cache 100% Offline para as imagens locais do pátio (/images/*) e binários ONNX (/ort/*)
-              urlPattern: /\/(images|ort)\/.*/i,
+              // Cache 100% Offline para as imagens locais do pátio (/images/*), binários ONNX (/ort/*) e fontes 3D (/fonts/*)
+              urlPattern: /\/(images|ort|fonts)\/.*/i,
               handler: 'CacheFirst',
               options: {
                 cacheName: 'local-railway-assets-cache',

@@ -73,6 +73,24 @@ export const useVoiceRecognition = ({ onStart, onEnd, onError, onResult }: Voice
         }
     }, []);
 
+    // --- Implementação Offline (Whisper AI) ---
+    // Pré-carrega automaticamente apenas quando offline para economizar RAM durante uso 3D
+    const whisper = useWhisperRecognition({
+        onStart: () => callbacksRef.current.onStart?.(),
+        onEnd: () => callbacksRef.current.onEnd?.(),
+        onError: (e) => callbacksRef.current.onError?.(e),
+        onResult: (t) => callbacksRef.current.onResult?.(t),
+        shouldPreload: !isOnline
+    });
+
+    // Refs para funções de start/stop do Whisper (disponíveis em todo o hook)
+    const whisperStartRef = useRef(whisper.start);
+    const whisperStopRef = useRef(whisper.stop);
+    useEffect(() => {
+        whisperStartRef.current = whisper.start;
+        whisperStopRef.current = whisper.stop;
+    }, [whisper.start, whisper.stop]);
+
     // --- Implementação Online (Web Speech API) ---
     const [isListeningOnline, setIsListeningOnline] = useState(false);
     const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -80,6 +98,7 @@ export const useVoiceRecognition = ({ onStart, onEnd, onError, onResult }: Voice
     const gotResultRef = useRef(false); // Rastreio se recebemos resultado antes do onend
     const onlineTimeoutRef = useRef<number | null>(null);
     const networkRetryPendingRef = useRef(false); // Para fallback automático online→offline
+    const isStartingOrActiveRef = useRef(false); // Trava síncrona contra execuções concorrentes
 
     useEffect(() => {
         callbacksRef.current = { onStart, onEnd, onError, onResult };
@@ -100,6 +119,7 @@ export const useVoiceRecognition = ({ onStart, onEnd, onError, onResult }: Voice
         recognition.interimResults = false;
 
         recognition.onstart = () => {
+            isStartingOrActiveRef.current = true;
             gotResultRef.current = false;
             networkRetryPendingRef.current = false;
             setIsListeningOnline(true);
@@ -115,17 +135,18 @@ export const useVoiceRecognition = ({ onStart, onEnd, onError, onResult }: Voice
         };
 
         recognition.onend = () => {
+            isStartingOrActiveRef.current = false;
             if (onlineTimeoutRef.current) {
                 clearTimeout(onlineTimeoutRef.current);
                 onlineTimeoutRef.current = null;
             }
             setIsListeningOnline(false);
 
-            // Se não recebemos resultado antes do onend, pode ser um encerramento inesperado
+            // Se não recebemos resultado antes do onend, pode ser um encerramento sem fala
             if (!gotResultRef.current) {
-                // Se houve erro de rede, o fallback será tratado pelo onerror
+                // Se houve fallback de erro de rede ou not-allowed, evita o onEnd reportar 'no-speech'
                 if (!networkRetryPendingRef.current) {
-                    console.warn("⚠️ [Voz Online] Encerrado sem resultado (no-speech ou rede caiu).");
+                    console.warn("⚠️ [Voz Online] Encerrado sem resultado (no-speech).");
                     callbacksRef.current.onError?.('no-speech');
                 }
             }
@@ -133,25 +154,28 @@ export const useVoiceRecognition = ({ onStart, onEnd, onError, onResult }: Voice
         };
 
         recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+            isStartingOrActiveRef.current = false;
             if (onlineTimeoutRef.current) {
                 clearTimeout(onlineTimeoutRef.current);
                 onlineTimeoutRef.current = null;
             }
             setIsListeningOnline(false);
-            console.error("❌ [Voz Online] Erro:", event.error);
 
-            // 'no-speech' e 'aborted' são erros "normais", não precisam de alarme
+            // 'no-speech' e 'aborted' são eventos normais, sem spam de console
             if (event.error === 'no-speech' || event.error === 'aborted') {
                 callbacksRef.current.onError?.('no-speech');
             } else if (event.error === 'not-allowed') {
-                callbacksRef.current.onError?.('not-allowed');
+                // Web Speech API online pode falhar com not-allowed em iframes ou restrição do Google.
+                // Dispara fallback suave para o Whisper local (que usa getUserMedia padrão).
+                console.warn("⚠️ [Voz Online] Web Speech API retornou 'not-allowed' — acionando fallback local com Whisper...");
+                networkRetryPendingRef.current = true;
+                whisperStartRef.current();
             } else if (event.error === 'network') {
                 console.warn("⚠️ [Voz Online] Erro de rede — tentando fallback para Whisper...");
-                // Marcar que vamos fazer fallback: evita o onEnd reportar 'no-speech'
                 networkRetryPendingRef.current = true;
-                // Dispara fallback para Whisper automaticamente
                 callbacksRef.current.onError?.('network-fallback');
             } else {
+                console.warn("⚠️ [Voz Online] Aviso:", event.error);
                 callbacksRef.current.onError?.(event.error);
             }
         };
@@ -175,71 +199,66 @@ export const useVoiceRecognition = ({ onStart, onEnd, onError, onResult }: Voice
         };
     }, []); // Criar uma única vez, não recriar ao mudar online/offline
 
-    // Se ficar offline enquanto está escutando, parar
+    // Se ficar offline enquanto está escutando online, parar
     useEffect(() => {
         if (!isOnline && isListeningOnline && recognitionRef.current) {
             console.log("⚡ [Voz Online] Ficou offline, parando reconhecimento...");
+            isStartingOrActiveRef.current = false;
             try { recognitionRef.current.stop(); } catch (_) {}
         }
     }, [isOnline, isListeningOnline]);
 
     const startOnline = useCallback(() => {
-        if (recognitionRef.current && !isListeningOnline) {
-            try { 
-                recognitionRef.current.start(); 
-            } catch (e: any) {
-                console.error("❌ [Voz Online] Erro ao iniciar:", e.message);
-                // Se der erro ao iniciar, pode ser que já está rodando
-                // Tentar parar e reiniciar
-                try {
-                    recognitionRef.current.stop();
-                    setTimeout(() => {
-                        try { recognitionRef.current?.start(); } catch (_) {}
-                    }, 200);
-                } catch (_) {}
-            }
+        if (!recognitionRef.current) return;
+
+        // Se já está ativo ou iniciando, previne chamadas duplicadas (elimina 'already started')
+        if (isStartingOrActiveRef.current) {
+            console.log("ℹ️ [Voz Online] Reconhecimento já ativo ou iniciando.");
+            return;
         }
-    }, [isListeningOnline]);
+
+        isStartingOrActiveRef.current = true;
+        try { 
+            recognitionRef.current.start(); 
+        } catch (e: any) {
+            if (e.name === 'InvalidStateError' || e.message?.includes('already started')) {
+                console.warn("⚠️ [Voz Online] Reconhecimento já em andamento.");
+                return;
+            }
+            console.warn("⚠️ [Voz Online] Falha ao iniciar Web Speech API, acionando Whisper:", e.message || e);
+            isStartingOrActiveRef.current = false;
+            setIsListeningOnline(false);
+            whisperStartRef.current();
+        }
+    }, []);
 
     const stopOnline = useCallback(() => {
-        if (recognitionRef.current && isListeningOnline) {
+        isStartingOrActiveRef.current = false;
+        setIsListeningOnline(false);
+        if (onlineTimeoutRef.current) {
+            clearTimeout(onlineTimeoutRef.current);
+            onlineTimeoutRef.current = null;
+        }
+        if (recognitionRef.current) {
             try { recognitionRef.current.stop(); } catch (_) {}
         }
-    }, [isListeningOnline]);
-
-    // --- Implementação Offline (Whisper AI) ---
-    // LAZY: Só pré-carregar Whisper quando offline
-    const whisper = useWhisperRecognition({
-        onStart: () => callbacksRef.current.onStart?.(),
-        onEnd: () => callbacksRef.current.onEnd?.(),
-        onError: (e) => callbacksRef.current.onError?.(e),
-        onResult: (t) => callbacksRef.current.onResult?.(t),
-        shouldPreload: true  // Pré-carrega sempre em background para garantir que o modelo esteja cacheado antes de ficar offline
-    });
-
-    // Refs para funções de start/stop do Whisper (evita recriar callbacks)
-    const whisperStartRef = useRef(whisper.start);
-    const whisperStopRef = useRef(whisper.stop);
-    useEffect(() => {
-        whisperStartRef.current = whisper.start;
-        whisperStopRef.current = whisper.stop;
-    }, [whisper.start, whisper.stop]);
+    }, []);
 
     // Verificar se Web Speech API está disponível
     const hasWebSpeechAPI = typeof window !== 'undefined' && 
         !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 
     // --- Proxy / Router ---
-    // Se online E tem Web Speech API: usar Google, senão: usar Whisper
+    // Se online E tem Web Speech API: usar Google com fallback transparente para Whisper
     const useOnlineMode = isOnline && hasWebSpeechAPI;
-    const isListening = useOnlineMode ? isListeningOnline : whisper.isListening;
-    const isProcessing = !useOnlineMode && whisper.isProcessing;
-    const isLoadingModel = !useOnlineMode && whisper.isLoadingModel;
+    const isListening = isListeningOnline || whisper.isListening;
+    const isProcessing = whisper.isProcessing;
+    const isLoadingModel = whisper.isLoadingModel;
     const modelLoadProgress = whisper.modelLoadProgress;
 
     const start = useCallback(() => {
         if (useOnlineMode) {
-            console.log("🎤 Voz: Modo ONLINE (Web Speech)");
+            console.log("🎤 Voz: Modo ONLINE (Web Speech com fallback Whisper)");
             startOnline();
         } else {
             console.log("🎤 Voz: Modo OFFLINE (Whisper AI)");
@@ -248,24 +267,22 @@ export const useVoiceRecognition = ({ onStart, onEnd, onError, onResult }: Voice
     }, [useOnlineMode, startOnline]);
 
     const stop = useCallback(() => {
-        if (useOnlineMode) {
+        if (isStartingOrActiveRef.current || isListeningOnline) {
             stopOnline();
-        } else {
+        }
+        if (whisper.isListening) {
             whisperStopRef.current();
         }
-    }, [useOnlineMode, stopOnline]);
+    }, [isListeningOnline, stopOnline, whisper.isListening]);
 
     // --- Fallback automático: online → offline em erro de rede ---
     const handleNetworkFallback = useCallback(() => {
         console.log("🔄 [Voz] Fallback automático: tentando Whisper após falha de rede...");
-        // Pequeno delay para dar tempo do onend do reconhecimento online terminar
         setTimeout(() => {
             whisperStartRef.current();
-        }, 300);
+        }, 200);
     }, []);
 
-    // Expor handleNetworkFallback via callback no onError do App
-    // O App pode chamar isso quando receber 'network-fallback'
     return { 
         isListening, 
         isProcessing,

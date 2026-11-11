@@ -107,7 +107,7 @@ export const orbitalSystemsData: OrbitalSystem[] = [
   },
   {
     id: "watchSystem14",
-    name: "LINHAS ABAIXO DO GALPÃO DO PIAL",
+    name: "LINHAS ABAIXO DO GALPÃO DA OFICINA",
     iconUrl: "/images/OFICINA-CENTRAL-03.png",
     modalUrls: ["/images/OFICINA-CENTRAL-03.png"],
     satellites: [{ name: "166" }, { name: "165" }, { name: "164" }, { name: "163" }, { name: "162" }, { name: "161" }, { name: "160" }, { name: "173" }, { name: "5KM", style: "neon-yellow" }],

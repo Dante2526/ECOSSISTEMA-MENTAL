@@ -167,7 +167,7 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
                         unsubscribeWhisper = null;
                     }
                 } else if (type === 'PRELOAD_ERROR') {
-                    console.error("❌ [PWA] Falha no download do Whisper:", data.error);
+                    console.warn("⚠️ [PWA] Aviso no download do Whisper:", data.error);
                     // Pular peso para não travar a barra se falhar (ex: sem internet já no começo)
                     const remaining = WHISPER_WEIGHT - lastTickWeight;
                     if (remaining > 0) tickProgress(remaining);

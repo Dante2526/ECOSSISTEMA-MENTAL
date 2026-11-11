@@ -132,7 +132,7 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult, shoul
                 console.log("✅ [Whisper Hook] Modelo pré-carregado com sucesso!");
             } else if (type === 'PRELOAD_ERROR') {
                 setIsLoadingModel(false);
-                console.error("❌ [Whisper Hook] Erro ao pré-carregar modelo:", error);
+                console.warn("⚠️ [Whisper Hook] Aviso ao pré-carregar modelo:", error);
             } else if (type === 'RESULT') {
                 if (processingTimeoutRef.current) {
                     clearTimeout(processingTimeoutRef.current);
@@ -154,7 +154,7 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult, shoul
                 }
                 setIsProcessing(false);
                 setIsLoadingModel(false);
-                console.error("⚡ [Whisper Hook] Erro no worker:", error);
+                console.warn("⚡ [Whisper Hook] Aviso no worker:", error);
                 callbacksRef.current.onError?.(error || 'worker-error');
                 callbacksRef.current.onEnd?.();
             }

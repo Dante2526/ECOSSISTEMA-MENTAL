@@ -216,6 +216,7 @@ interface OrbitalSystemProps {
     isEditing: boolean;
     onOpenQuickSearch: () => void;
     onOpenTours: () => void;
+    onOpenLocomotive?: () => void;
     showLabels?: boolean;
 }
 
@@ -234,6 +235,7 @@ const OrbitalSystemComponent: React.ForwardRefRenderFunction<OrbitalSystemRef, O
     isEditing,
     onOpenQuickSearch,
     onOpenTours,
+    onOpenLocomotive,
     showLabels = false,
 }, ref) => {
     const [highlightedSystems, setHighlightedSystems] = useState<Set<string>>(new Set());
@@ -811,19 +813,34 @@ const OrbitalSystemComponent: React.ForwardRefRenderFunction<OrbitalSystemRef, O
                     </button>
                 )}
                 {!isFocused && (
-                    <button
-                        title="Iniciar Tour Guiado"
-                        onClick={onOpenTours}
-                        className="group relative w-12 h-12 rounded-full bg-black/60 border border-yellow-500 flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:bg-yellow-500/20"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span className={`absolute right-14 whitespace-nowrap bg-black/80 px-2 py-1 rounded text-xs font-bold border border-yellow-500/50 transition-all duration-1000 ${showLabels ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-                            TOUR
-                        </span>
-                    </button>
+                    <>
+                        <button
+                            title="Locomotiva"
+                            type="button"
+                            onClick={onOpenLocomotive}
+                            className="hidden group relative w-12 h-12 rounded-full bg-black/60 border border-orange-500 items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:bg-orange-500/20"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 15V9a2 2 0 012-2h7V5h3v2h2a2 2 0 012 2v6M2 15h20M5 15v2a1 1 0 001 1h12a1 1 0 001-1v-2M7 18a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm5.5 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm5.5 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM7 10h4v3H7v-3z" />
+                            </svg>
+                            <span className={`absolute right-14 whitespace-nowrap bg-black/80 px-2 py-1 rounded text-xs font-bold border border-orange-500/50 transition-all duration-1000 ${showLabels ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                                LOCOMOTIVA
+                            </span>
+                        </button>
+                        <button
+                            title="Iniciar Tour Guiado"
+                            onClick={onOpenTours}
+                            className="group relative w-12 h-12 rounded-full bg-black/60 border border-yellow-500 flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:bg-yellow-500/20"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span className={`absolute right-14 whitespace-nowrap bg-black/80 px-2 py-1 rounded text-xs font-bold border border-yellow-500/50 transition-all duration-1000 ${showLabels ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                                TOUR
+                            </span>
+                        </button>
+                    </>
                 )}
                 <button
                     title="Busca Rápida (Ctrl+K)"
