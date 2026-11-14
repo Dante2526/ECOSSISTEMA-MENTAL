@@ -229,10 +229,10 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
         };
         setTimeout(loadNextBatch, 2000);
 
-        // Preload silencioso do Whisper via Worker compartilhado (apenas se não houver flag de sucesso)
-        if (localStorage.getItem('ecossistema_offline_ready_v2') !== 'true') {
+        // Inicializa silenciosamente o modelo Whisper do cache local para a memória RAM em background
+        setTimeout(() => {
             whisperWorkerManager.preload();
-        }
+        }, 1200);
     };
 
 

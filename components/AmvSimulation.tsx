@@ -14,11 +14,90 @@ import {
 type Direction = 'NORTE_SUL' | 'SUL_NORTE';
 type SwitchState = 'NORMAL' | 'REVERSO' | 'FALHA';
 type CameraMode = 'ISOMETRIC' | 'TOP' | 'POV';
-type SpawnLine = '128' | '1' | '2' | '166' | '167' | '152' | '105A' | '106A' | '107A' | '109' | '122' | '121' | '109A' | '159' | '173' | '22A' | '23A' | '24A' | '201A' | '32' | '28' | '31' | '27' | 'P13A' | 'TP3A' | 'TP2A' | 'TP01' | 'TP05' | 'TP04' | 'TP3B' | 'TP2B' | '158' | '160' | '161' | '162' | '163' | '164' | '165';
-type LayoutType = 'freio' | 'freio_02' | 'oficina' | 'oficina_central' | 'abaixo_oficina' | 'reclassificacao' | 'reclassificacao_02' | 'pn_oficina' | 'carga_geral_02' | 'patio_oficina' | 'passageiro_01' | 'passageiro_02' | 'default';
+type SpawnLine = '128' | '1' | '2' | '166' | '167' | '152' | '105A' | '106A' | '107A' | '109' | '122' | '121' | '109A' | '183' | '184' | '159' | '173' | '22A' | '23A' | '24A' | '201A' | '32' | '28' | '31' | '27' | 'P13A' | 'TP3A' | 'TP2A' | 'TP01' | 'TP05' | 'TP04' | 'TP3B' | 'TP2B' | '158' | '160' | '161' | '162' | '163' | '164' | '165';
+type LayoutType = 'freio' | 'freio_02' | 'oficina' | 'oficina_central' | 'abaixo_oficina' | 'reclassificacao' | 'reclassificacao_02' | 'triangulo_oficina' | 'pn_oficina' | 'carga_geral_02' | 'patio_oficina' | 'passageiro_01' | 'passageiro_02' | 'default';
 
 // Sintetizador de Buzina Pneumática de Locomotiva (1 único toque encorpado)
 let sharedHornAudioCtx: AudioContext | null = null;
+
+function scheduleHornBlast(ctx: AudioContext) {
+  // Lookahead de 25ms garante que todas as rampas exponenciais e osciladores iniciem no futuro
+  const now = ctx.currentTime;
+  const blastStart = now + 0.025;
+  const duration = 0.72;
+  const blastEnd = blastStart + duration;
+
+  // Frequências reais da buzina ferroviária Nathan K5LA (D#4, F#4, G#4, B4, D#5) + sub-harmônico grave do compressor
+  const chimeFreqs = [155.56, 311.13, 369.99, 415.30, 493.88, 622.25];
+  const chimeGains = [0.15, 0.25, 0.21, 0.19, 0.23, 0.17];
+
+  const masterGain = ctx.createGain();
+  // Ancora o ganho no tempo atual antes da rampa exponencial para evitar falha de envelope no Chrome mobile
+  masterGain.gain.setValueAtTime(0.0001, now);
+  masterGain.gain.setValueAtTime(0.0001, blastStart);
+  masterGain.gain.linearRampToValueAtTime(0.44, blastStart + 0.055);
+  masterGain.gain.setValueAtTime(0.44, blastEnd - 0.09);
+  masterGain.gain.exponentialRampToValueAtTime(0.0001, blastEnd + 0.26);
+
+  // Filtro passa-baixa para timbre metálico de corneta ferroviária
+  const brassFilter = ctx.createBiquadFilter();
+  brassFilter.type = 'lowpass';
+  brassFilter.frequency.setValueAtTime(1400, now);
+  brassFilter.frequency.setValueAtTime(1400, blastStart);
+  brassFilter.frequency.linearRampToValueAtTime(1950, blastStart + 0.08);
+  brassFilter.frequency.setValueAtTime(1850, blastEnd - 0.08);
+  brassFilter.frequency.linearRampToValueAtTime(950, blastEnd + 0.24);
+  brassFilter.Q.setValueAtTime(2.2, now);
+
+  brassFilter.connect(masterGain);
+  masterGain.connect(ctx.destination);
+
+  const voiceGains: GainNode[] = [];
+
+  chimeFreqs.forEach((freq, idx) => {
+    const oscSaw = ctx.createOscillator();
+    const oscTri = ctx.createOscillator();
+    const voiceGain = ctx.createGain();
+    voiceGains.push(voiceGain);
+
+    oscSaw.type = 'sawtooth';
+    oscTri.type = 'triangle';
+
+    // Leve variação de pressão de ar no ataque (pitch bend sutil)
+    const detuneCents = (idx % 2 === 0 ? 1 : -1) * (2.5 + idx * 0.8);
+    oscSaw.detune.setValueAtTime(detuneCents, now);
+    oscTri.detune.setValueAtTime(-detuneCents * 0.7, now);
+
+    oscSaw.frequency.setValueAtTime(freq * 0.985, now);
+    oscSaw.frequency.setValueAtTime(freq * 0.985, blastStart);
+    oscSaw.frequency.exponentialRampToValueAtTime(freq, blastStart + 0.045);
+    oscSaw.frequency.setValueAtTime(freq, blastEnd - 0.05);
+    oscSaw.frequency.exponentialRampToValueAtTime(freq * 0.975, blastEnd + 0.24);
+
+    oscTri.frequency.setValueAtTime(freq, now);
+
+    voiceGain.gain.setValueAtTime(chimeGains[idx], now);
+
+    oscSaw.connect(voiceGain);
+    oscTri.connect(voiceGain);
+    voiceGain.connect(brassFilter);
+
+    oscSaw.start(blastStart);
+    oscTri.start(blastStart);
+    oscSaw.stop(blastEnd + 0.28);
+    oscTri.stop(blastEnd + 0.28);
+  });
+
+  // Limpa os nós de áudio após o término para evitar acúmulo de conexões no AudioContext
+  window.setTimeout(() => {
+    try {
+      voiceGains.forEach(vg => vg.disconnect());
+      brassFilter.disconnect();
+      masterGain.disconnect();
+    } catch (_) {}
+  }, Math.ceil((duration + 0.38) * 1000));
+}
+
 export function playLocomotiveHorn() {
   try {
     const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -27,76 +106,34 @@ export function playLocomotiveHorn() {
       sharedHornAudioCtx = new AudioCtx();
     }
     const ctx = sharedHornAudioCtx;
-    if (ctx.state === 'suspended') {
-      ctx.resume();
-    }
 
-    const now = ctx.currentTime;
-    // Frequências reais da buzina ferroviária Nathan K5LA (D#4, F#4, G#4, B4, D#5) + sub-harmônico grave do compressor
-    const chimeFreqs = [155.56, 311.13, 369.99, 415.30, 493.88, 622.25];
-    const chimeGains = [0.14, 0.24, 0.20, 0.18, 0.22, 0.16];
+    // Desbloqueia imediatamente o canal de hardware em navegadores mobile dentro do evento de clique
+    try {
+      const unlockBuffer = ctx.createBuffer(1, 1, 22050);
+      const unlockSource = ctx.createBufferSource();
+      unlockSource.buffer = unlockBuffer;
+      unlockSource.connect(ctx.destination);
+      unlockSource.start(0);
+    } catch (_) {}
 
-    // Somente 1 toque contínuo de partida da locomotiva
-    const blasts = [
-      { start: 0.0, duration: 0.72 },
-    ];
-
-    blasts.forEach(({ start, duration }) => {
-      const blastStart = now + start;
-      const blastEnd = blastStart + duration;
-
-      const masterGain = ctx.createGain();
-      masterGain.gain.setValueAtTime(0.0001, blastStart);
-      // Ataque pneumático progressivo da válvula de ar
-      masterGain.gain.exponentialRampToValueAtTime(0.42, blastStart + 0.055);
-      masterGain.gain.setValueAtTime(0.42, blastEnd - 0.09);
-      // Queda de pressão de ar realista com reverberação natural
-      masterGain.gain.exponentialRampToValueAtTime(0.0001, blastEnd + 0.26);
-
-      // Filtro passa-baixa para timbre metálico de corneta ferroviária
-      const brassFilter = ctx.createBiquadFilter();
-      brassFilter.type = 'lowpass';
-      brassFilter.frequency.setValueAtTime(1400, blastStart);
-      brassFilter.frequency.linearRampToValueAtTime(1950, blastStart + 0.08);
-      brassFilter.frequency.setValueAtTime(1850, blastEnd - 0.08);
-      brassFilter.frequency.linearRampToValueAtTime(950, blastEnd + 0.24);
-      brassFilter.Q.setValueAtTime(2.2, blastStart);
-
-      brassFilter.connect(masterGain);
-      masterGain.connect(ctx.destination);
-
-      chimeFreqs.forEach((freq, idx) => {
-        const oscSaw = ctx.createOscillator();
-        const oscTri = ctx.createOscillator();
-        const voiceGain = ctx.createGain();
-
-        oscSaw.type = 'sawtooth';
-        oscTri.type = 'triangle';
-
-        // Leve variação de pressão de ar no ataque (pitch bend sutil)
-        const detuneCents = (idx % 2 === 0 ? 1 : -1) * (2.5 + idx * 0.8);
-        oscSaw.detune.setValueAtTime(detuneCents, blastStart);
-        oscTri.detune.setValueAtTime(-detuneCents * 0.7, blastStart);
-
-        oscSaw.frequency.setValueAtTime(freq * 0.985, blastStart);
-        oscSaw.frequency.exponentialRampToValueAtTime(freq, blastStart + 0.045);
-        oscSaw.frequency.setValueAtTime(freq, blastEnd - 0.05);
-        oscSaw.frequency.exponentialRampToValueAtTime(freq * 0.975, blastEnd + 0.24);
-
-        oscTri.frequency.setValueAtTime(freq, blastStart);
-
-        voiceGain.gain.setValueAtTime(chimeGains[idx], blastStart);
-
-        oscSaw.connect(voiceGain);
-        oscTri.connect(voiceGain);
-        voiceGain.connect(brassFilter);
-
-        oscSaw.start(blastStart);
-        oscTri.start(blastStart);
-        oscSaw.stop(blastEnd + 0.28);
-        oscTri.stop(blastEnd + 0.28);
+    if (ctx.state !== 'running') {
+      let triggered = false;
+      const runOnce = () => {
+        if (triggered) return;
+        triggered = true;
+        scheduleHornBlast(ctx);
+      };
+      ctx.resume().then(runOnce).catch(() => {
+        try {
+          sharedHornAudioCtx = new AudioCtx();
+          sharedHornAudioCtx.resume().then(() => scheduleHornBlast(sharedHornAudioCtx!)).catch(() => {});
+        } catch (_) {}
       });
-    });
+      // Fallback caso a Promise do resume atrase mas o contexto já tenha acordado
+      window.setTimeout(runOnce, 60);
+    } else {
+      scheduleHornBlast(ctx);
+    }
   } catch (e) {
     // Ignora caso o navegador bloqueie áudio sem interação prévia
   }
@@ -1311,11 +1348,11 @@ function getReclassificacao02LeftTrunk109X(z: number) {
   return -3.8 - 4.2 * (w * w);
 }
 
-function getReclassificacao02UpperBranch122X(z: number) {
+function getReclassificacao02UpperBranch121X(z: number) {
   if (z >= -15) return 0;
-  if (z <= -32) return -1.9;
-  const u = (-15 - z) / 17;
-  return -1.9 * (3 * u * u - 2 * u * u * u);
+  if (z <= -40) return 3.8;
+  const u = (-15 - z) / 25;
+  return 3.8 * (3 * u * u - 2 * u * u * u);
 }
 
 
@@ -1504,6 +1541,25 @@ function getPassageiro02CrossoverX(z: number) {
   const u = (25 - z) / 35;
   const s3 = 3 * u * u - 2 * u * u * u;
   return 2.8 - 4.0 * (0.65 * u + 0.35 * s3);
+}
+
+// ---------------------------------------------------------
+// PATHING & VEHICLE COORDINATE MATH FOR TRIÂNGULO DA OFICINA (watchSystem16)
+// Single track approaching AMV 1 at z=16, splitting into L-183 (left wye leg) and L-184 (right wye leg • 5KM)
+// ---------------------------------------------------------
+function getTrianguloOficinaTrack183X(z: number) {
+  if (z >= -4) return 0;
+  if (z <= -55) return -8.5;
+  const u = (-4 - z) / 51;
+  return -8.5 * (0.25 * u + 0.75 * u * u);
+}
+
+function getTrianguloOficinaTrack184X(z: number) {
+  if (z >= 16) return 0;
+  if (z <= -55) return 20.0;
+  const u = (16 - z) / 71;
+  // At z = 11 (5m blade heel), u = 5/71 => x = +0.394m, so left blade heel is at -0.406m (zero kink!)
+  return 4.5 * u + 15.5 * u * u;
 }
 
 function Sleepers({ layoutType }: { layoutType: LayoutType }) {
@@ -1827,11 +1883,30 @@ function Sleepers({ layoutType }: { layoutType: LayoutType }) {
           add(xCross, z, tw, rotCross);
         }
 
-        // 4. Ramo superior AMV 3 para L-122 (de z=-15 até z=-55 alinhando em x=-1.9)
+        // 4. Ramo superior à direita no AMV 3 para L-121 (de z=-15 até z=-55 alinhando em x=+3.8)
         if (z <= -15) {
-          const xUpper = getReclassificacao02UpperBranch122X(z);
-          const rotUpper = Math.atan2(getReclassificacao02UpperBranch122X(z - 0.5) - getReclassificacao02UpperBranch122X(z + 0.5), -1.0);
+          const xUpper = getReclassificacao02UpperBranch121X(z);
+          const rotUpper = Math.atan2(getReclassificacao02UpperBranch121X(z - 0.5) - getReclassificacao02UpperBranch121X(z + 0.5), -1.0);
           add(xUpper, z, tw, rotUpper);
+        }
+      }
+    } else if (layoutType === 'triangulo_oficina') {
+      for (let z = 55; z >= -55; z -= 0.6) {
+        // 1. Tronco de entrada e Ramo Esquerdo do Triângulo (L-183)
+        const x183 = getTrianguloOficinaTrack183X(z);
+        const rot183 = Math.atan2(getTrianguloOficinaTrack183X(z - 0.5) - getTrianguloOficinaTrack183X(z + 0.5), -1.0);
+        // Dormentes longos na região da máquina de chave direita do AMV 1 (z = 16..11)
+        if (z <= 17 && z >= 11) {
+          add(0.45, z, tw + 0.9, 0);
+        } else {
+          add(x183, z, tw, rot183);
+        }
+
+        // 2. Ramo Direito do Triângulo (L-184 • 5KM) divergindo a partir de z = 16
+        if (z <= 16) {
+          const x184 = getTrianguloOficinaTrack184X(z);
+          const rot184 = Math.atan2(getTrianguloOficinaTrack184X(z - 0.5) - getTrianguloOficinaTrack184X(z + 0.5), -1.0);
+          add(x184, z, tw, rot184);
         }
       }
     } else {
@@ -2779,14 +2854,14 @@ function CurveBranch({ layoutType }: { layoutType: LayoutType }) {
   } else if (layoutType === 'reclassificacao_02') {
     const segs = 28;
 
-    // 1. Linha Central L-109A -> L-121 (x = 0, de z=55 até z=-55)
-    // Trilho esquerdo (-0.8): tem lacuna de 5m apenas no AMV 1 [17..12] e no AMV 3 [-15..-20]
-    rails.push(<RailSegment key="r02-121-L1" start={[-0.8, 0, 55]} end={[-0.8, 0, 17]} />);
-    rails.push(<RailSegment key="r02-121-L2" start={[-0.8, 0, 12]} end={[-0.8, 0, -15]} />);
-    rails.push(<RailSegment key="r02-121-L3" start={[-0.8, 0, -20]} end={[-0.8, 0, -55]} />);
+    // 1. Linha Central L-109A -> L-122 (x = 0, de z=55 até z=-55)
+    // Trilho esquerdo (-0.8): tem lacuna de 5m apenas no AMV 1 [17..12]; no AMV 3 é trilho de encosto contínuo!
+    rails.push(<RailSegment key="r02-122-L1" start={[-0.8, 0, 55]} end={[-0.8, 0, 17]} />);
+    rails.push(<RailSegment key="r02-122-L2" start={[-0.8, 0, 12]} end={[-0.8, 0, -55]} />);
 
-    // Trilho direito (+0.8): 100% contínuo de z=55 até z=-55 (como na foto real!)
-    rails.push(<RailSegment key="r02-121-R" start={[0.8, 0, 55]} end={[0.8, 0, -55]} />);
+    // Trilho direito (+0.8): contínuo até o AMV 3 (z=-15), com lacuna de 5m [-15..-20] para a agulha direita do AMV 3
+    rails.push(<RailSegment key="r02-122-R1" start={[0.8, 0, 55]} end={[0.8, 0, -15]} />);
+    rails.push(<RailSegment key="r02-122-R2" start={[0.8, 0, -20]} end={[0.8, 0, -55]} />);
 
     // 2. Travessão diagonal AMV 1 (z=17) -> AMV 2 (z=-8) conectando L-109A à L-109
     for (let i = 0; i < segs; i++) {
@@ -2819,22 +2894,57 @@ function CurveBranch({ layoutType }: { layoutType: LayoutType }) {
     rails.push(<RailSegment key="r02-109-R-pre" start={[-3.8 + 0.8, 0, 4]} end={[-3.8 + 0.8, 0, -3]} />);
     rails.push(<RailSegment key="r02-109-R-str" start={[-3.8 + 0.8, 0, -8]} end={[-3.8 + 0.8, 0, -55]} />);
 
-    // 4. Ramo Superior do AMV 3 para L-122 (z=-15 desviando à esquerda para x=-1.9 em z=-32..z=-55)
+    // 4. Ramo Superior à Direita do AMV 3 para L-121 (z=-15 desviando à direita para x=+3.8 em z=-40..z=-55)
     for (let i = 0; i < segs; i++) {
       const u1 = i / segs;
       const u2 = (i + 1) / segs;
-      // Trilho esquerdo de encosto começa na ponta do AMV 3 (z=-15)
-      const z1_L = -15 - 17 * u1;
-      const z2_L = -15 - 17 * u2;
-      rails.push(<RailSegment key={`r02-up122-cL-${i}`} start={[getReclassificacao02UpperBranch122X(z1_L) - 0.8, 0, z1_L]} end={[getReclassificacao02UpperBranch122X(z2_L) - 0.8, 0, z2_L]} />);
+      // Trilho esquerdo começa no calcanhar da agulha esquerda do AMV 3 (z=-20)
+      const z1_L = -20 - 20 * u1;
+      const z2_L = -20 - 20 * u2;
+      rails.push(<RailSegment key={`r02-up121-cL-${i}`} start={[getReclassificacao02UpperBranch121X(z1_L) - 0.8, 0, z1_L]} end={[getReclassificacao02UpperBranch121X(z2_L) - 0.8, 0, z2_L]} />);
 
-      // Trilho direito começa no calcanhar da agulha direita do AMV 3 (z=-20)
-      const z1_R = -20 - 12 * u1;
-      const z2_R = -20 - 12 * u2;
-      rails.push(<RailSegment key={`r02-up122-cR-${i}`} start={[getReclassificacao02UpperBranch122X(z1_R) + 0.8, 0, z1_R]} end={[getReclassificacao02UpperBranch122X(z2_R) + 0.8, 0, z2_R]} />);
+      // Trilho direito de encosto começa na ponta do AMV 3 (z=-15)
+      const z1_R = -15 - 25 * u1;
+      const z2_R = -15 - 25 * u2;
+      rails.push(<RailSegment key={`r02-up121-cR-${i}`} start={[getReclassificacao02UpperBranch121X(z1_R) + 0.8, 0, z1_R]} end={[getReclassificacao02UpperBranch121X(z2_R) + 0.8, 0, z2_R]} />);
     }
-    rails.push(<RailSegment key="r02-up122-L-str" start={[-1.9 - 0.8, 0, -32]} end={[-1.9 - 0.8, 0, -55]} />);
-    rails.push(<RailSegment key="r02-up122-R-str" start={[-1.9 + 0.8, 0, -32]} end={[-1.9 + 0.8, 0, -55]} />);
+    rails.push(<RailSegment key="r02-up121-L-str" start={[3.8 - 0.8, 0, -40]} end={[3.8 - 0.8, 0, -55]} />);
+    rails.push(<RailSegment key="r02-up121-R-str" start={[3.8 + 0.8, 0, -40]} end={[3.8 + 0.8, 0, -55]} />);
+  } else if (layoutType === 'triangulo_oficina') {
+    const segs183 = 32;
+    const segs184 = 38;
+
+    // 1. Linha de aproximação e Reta no AMV 1 -> L-183 (x = 0 de z = 55 até z = -4)
+    // Trilho esquerdo (-0.8): 100% contínuo de z = 55 até z = -4 (encosto esquerdo contínuo da agulha esquerda!)
+    rails.push(<RailSegment key="tri-183-L-str" start={[-0.8, 0, 55]} end={[-0.8, 0, -4]} />);
+    // Trilho direito (+0.8): tem lacuna exata de 5m [16..11] para a agulha direita do AMV 1
+    rails.push(<RailSegment key="tri-183-R-pre" start={[0.8, 0, 55]} end={[0.8, 0, 16]} />);
+    rails.push(<RailSegment key="tri-183-R-post" start={[0.8, 0, 11]} end={[0.8, 0, -4]} />);
+
+    // Curva suave da L-183 para a esquerda do Triângulo (de z = -4 até z = -55)
+    for (let i = 0; i < segs183; i++) {
+      const u1 = i / segs183;
+      const u2 = (i + 1) / segs183;
+      const z1 = -4 - 51 * u1;
+      const z2 = -4 - 51 * u2;
+      rails.push(<RailSegment key={`tri-183-cL-${i}`} start={[getTrianguloOficinaTrack183X(z1) - 0.8, 0, z1]} end={[getTrianguloOficinaTrack183X(z2) - 0.8, 0, z2]} />);
+      rails.push(<RailSegment key={`tri-183-cR-${i}`} start={[getTrianguloOficinaTrack183X(z1) + 0.8, 0, z1]} end={[getTrianguloOficinaTrack183X(z2) + 0.8, 0, z2]} />);
+    }
+
+    // 2. Ramo Direito do Triângulo (L-184 • 5KM) divergindo à direita no AMV 1 (z = 16 até z = -55)
+    for (let i = 0; i < segs184; i++) {
+      const u1 = i / segs184;
+      const u2 = (i + 1) / segs184;
+      // Trilho esquerdo começa exatamente no calcanhar da agulha esquerda em z = 11 (x = -0.406)
+      const z1_L = 11 - 66 * u1;
+      const z2_L = 11 - 66 * u2;
+      rails.push(<RailSegment key={`tri-184-cL-${i}`} start={[getTrianguloOficinaTrack184X(z1_L) - 0.8, 0, z1_L]} end={[getTrianguloOficinaTrack184X(z2_L) - 0.8, 0, z2_L]} />);
+
+      // Trilho direito (encosto direito no AMV 1) começa na ponta em z = 16 (x = +0.8)
+      const z1_R = 16 - 71 * u1;
+      const z2_R = 16 - 71 * u2;
+      rails.push(<RailSegment key={`tri-184-cR-${i}`} start={[getTrianguloOficinaTrack184X(z1_R) + 0.8, 0, z1_R]} end={[getTrianguloOficinaTrack184X(z2_R) + 0.8, 0, z2_R]} />);
+    }
   } else {
     // Siding double AMV rails
     rails.push(<RailSegment key="right-straight" start={[0.8, 0, 5]} end={[0.8, 0, 0]} />);
@@ -4184,6 +4294,94 @@ function getSafetyStatus(layoutType: LayoutType, direction: Direction, amvs: Swi
     }
   }
 
+  if (layoutType === 'triangulo_oficina') {
+    if (direction === 'NORTE_SUL') {
+      if (amv1 === 'FALHA') {
+        return {
+          status: 'PERIGO CRÍTICO (FALHA AMV 1)',
+          bg: 'bg-red-500/10 border-red-500/20',
+          color: 'text-red-500',
+          icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />,
+          desc: 'Agulha entreaberta no AMV 1 do Triângulo da Oficina! Descarrilamento iminente.'
+        };
+      }
+
+      if (destLine === '184') {
+        if (amv1 !== 'REVERSO') {
+          return {
+            status: 'ROTA INCORRETA',
+            bg: 'bg-orange-500/10 border-orange-500/30',
+            color: 'text-orange-400',
+            icon: <MapIcon className="w-8 h-8 text-orange-400" />,
+            desc: 'Destino incorreto! Coloque o AMV 1 em Reversa para entrar na curva à direita da Linha L-184 (5KM).'
+          };
+        }
+        return {
+          status: 'ROTA SEGURA (L-184 • 5KM/H)',
+          bg: 'bg-emerald-500/10 border-emerald-500/20',
+          color: 'text-emerald-500',
+          icon: <ShieldCheck className="w-8 h-8 text-emerald-500" />,
+          desc: 'AMV 1 em Reversa. Rota alinhada para o ramo direito do Triângulo da Oficina (L-184). Limite de velocidade: 5 KM/h.'
+        };
+      }
+
+      // destLine === '183'
+      if (amv1 === 'REVERSO') {
+        return {
+          status: 'ROTA INCORRETA',
+          bg: 'bg-orange-500/10 border-orange-500/30',
+          color: 'text-orange-400',
+          icon: <MapIcon className="w-8 h-8 text-orange-400" />,
+          desc: 'Destino incorreto! O AMV 1 desviará o trem à direita para a L-184 (5KM) ao invés de seguir para a L-183.'
+        };
+      }
+      return {
+        status: 'ROTA SEGURA (LINHA L-183)',
+        bg: 'bg-emerald-500/10 border-emerald-500/20',
+        color: 'text-emerald-500',
+        icon: <ShieldCheck className="w-8 h-8 text-emerald-500" />,
+        desc: 'AMV 1 alinhado na Reta (bandeirola verde). Via livre para o ramo esquerdo do Triângulo da Oficina (L-183).'
+      };
+    } else {
+      // SUL_NORTE (Saindo dos ramos L-183 ou L-184 do Triângulo)
+      if (spawnLine === '184') {
+        if (amv1 !== 'REVERSO') {
+          return {
+            status: 'PERIGO CRÍTICO (TALONAMENTO AMV 1)',
+            bg: 'bg-red-500/10 border-red-500/20',
+            color: 'text-red-500',
+            icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />,
+            desc: 'Trem saindo da Linha L-184 (5KM) talonará o AMV 1 se não estiver em Reversa!'
+          };
+        }
+        return {
+          status: 'ROTA SEGURA (SAÍDA L-184 • 5KM/H)',
+          bg: 'bg-emerald-500/10 border-emerald-500/20',
+          color: 'text-emerald-500',
+          icon: <ShieldCheck className="w-8 h-8 text-emerald-500" />,
+          desc: 'Saída da Linha L-184 (5KM) alinhada em Reversa com segurança.'
+        };
+      } else {
+        if (amv1 !== 'NORMAL') {
+          return {
+            status: 'PERIGO CRÍTICO (TALONAMENTO AMV 1)',
+            bg: 'bg-red-500/10 border-red-500/20',
+            color: 'text-red-500',
+            icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />,
+            desc: 'Trem saindo da Linha L-183 talonará o AMV 1 se não estiver em Reta (Normal)!'
+          };
+        }
+        return {
+          status: 'ROTA SEGURA (SAÍDA L-183)',
+          bg: 'bg-emerald-500/10 border-emerald-500/20',
+          color: 'text-emerald-500',
+          icon: <ShieldCheck className="w-8 h-8 text-emerald-500" />,
+          desc: 'Saída da Linha L-183 alinhada na Reta com segurança.'
+        };
+      }
+    }
+  }
+
   if (layoutType === 'oficina') {
     const amv3 = amvs[2] || 'NORMAL';
     if (direction === 'NORTE_SUL') {
@@ -4284,16 +4482,16 @@ function getSafetyStatus(layoutType: LayoutType, direction: Direction, amvs: Swi
         return { status: 'ROTA INCORRETA', bg: 'bg-orange-500/10 border-orange-500/30', color: 'text-orange-400', icon: <MapIcon className="w-8 h-8 text-orange-400" />, desc: `Destino incorreto! O AMV 1 desviará o trem para a L-109 ao invés de seguir para L-${destLine}.` };
       }
 
-      if (amv3 === 'FALHA') return { status: 'PERIGO CRÍTICO (FALHA AMV 3)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Agulha entreaberta no AMV 3 (121/122)! Descarrilamento iminente.' };
+      if (amv3 === 'FALHA') return { status: 'PERIGO CRÍTICO (FALHA AMV 3)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Agulha entreaberta no AMV 3 (122/121)! Descarrilamento iminente.' };
 
-      if (destLine === '122') {
-        if (amv3 !== 'REVERSO') return { status: 'ROTA INCORRETA', bg: 'bg-orange-500/10 border-orange-500/30', color: 'text-orange-400', icon: <MapIcon className="w-8 h-8 text-orange-400" />, desc: 'Destino incorreto! Coloque o AMV 3 (121/122) em Reversa para acessar a Linha L-122.' };
-        return { status: 'ROTA SEGURA (LINHA L-122)', bg: 'bg-emerald-500/10 border-emerald-500/20', color: 'text-emerald-500', icon: <ShieldCheck className="w-8 h-8 text-emerald-500" />, desc: 'AMV 1 na Reta e AMV 3 em Reversa. Rota alinhada da L-109A para a Linha L-122.' };
+      if (destLine === '121') {
+        if (amv3 !== 'REVERSO') return { status: 'ROTA INCORRETA', bg: 'bg-orange-500/10 border-orange-500/30', color: 'text-orange-400', icon: <MapIcon className="w-8 h-8 text-orange-400" />, desc: 'Destino incorreto! Coloque o AMV 3 (122/121) em Reversa para desviar à direita para a Linha L-121.' };
+        return { status: 'ROTA SEGURA (LINHA L-121)', bg: 'bg-emerald-500/10 border-emerald-500/20', color: 'text-emerald-500', icon: <ShieldCheck className="w-8 h-8 text-emerald-500" />, desc: 'AMV 1 na Reta e AMV 3 em Reversa. Rota alinhada da L-109A para a Linha L-121 à direita.' };
       }
 
-      // destLine === '121' or '109A'
-      if (amv3 === 'REVERSO') return { status: 'ROTA INCORRETA', bg: 'bg-orange-500/10 border-orange-500/30', color: 'text-orange-400', icon: <MapIcon className="w-8 h-8 text-orange-400" />, desc: 'Destino incorreto! O AMV 3 desviará o trem à esquerda para a L-122 ao invés de seguir reto na L-121.' };
-      return { status: 'ROTA SEGURA (LINHA L-121)', bg: 'bg-emerald-500/10 border-emerald-500/20', color: 'text-emerald-500', icon: <ShieldCheck className="w-8 h-8 text-emerald-500" />, desc: 'AMVs 1 e 3 alinhados na Reta. Rota direta da L-109A para a Linha L-121.' };
+      // destLine === '122' or '109A'
+      if (amv3 === 'REVERSO') return { status: 'ROTA INCORRETA', bg: 'bg-orange-500/10 border-orange-500/30', color: 'text-orange-400', icon: <MapIcon className="w-8 h-8 text-orange-400" />, desc: 'Destino incorreto! O AMV 3 desviará o trem à direita para a L-121 ao invés de seguir reto na L-122.' };
+      return { status: 'ROTA SEGURA (LINHA L-122)', bg: 'bg-emerald-500/10 border-emerald-500/20', color: 'text-emerald-500', icon: <ShieldCheck className="w-8 h-8 text-emerald-500" />, desc: 'AMVs 1 e 3 alinhados na Reta. Rota direta da L-109A para a Linha L-122.' };
     } else {
       // SUL_NORTE (Saindo de L-109, L-122 ou L-121 rumo à L-109A)
       if (spawnLine === '109') {
@@ -4303,19 +4501,19 @@ function getSafetyStatus(layoutType: LayoutType, direction: Direction, amvs: Swi
         if (amv1 !== 'REVERSO') return { status: 'PERIGO: BATER CONTRA A CHAVE (AMV 1)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Trem saindo pelo travessão da L-109 baterá contra a chave no AMV 1 se não estiver em Reversa!' };
         return { status: 'ROTA SEGURA (SAÍDA L-109 ➔ L-109A)', bg: 'bg-emerald-500/10 border-emerald-500/20', color: 'text-emerald-500', icon: <ShieldCheck className="w-8 h-8 text-emerald-500" />, desc: 'Saída da Linha L-109 pelo travessão (AMVs 2 e 1 em Reversa) alinhada para a L-109A.' };
       }
-      if (spawnLine === '122') {
-        if (amv3 === 'FALHA') return { status: 'PERIGO CRÍTICO (FALHA AMV 3)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Agulha entreaberta no AMV 3 (121/122)!' };
-        if (amv3 !== 'REVERSO') return { status: 'PERIGO: BATER CONTRA A CHAVE (AMV 3)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Trem saindo da L-122 baterá contra a chave no AMV 3 se não estiver em Reversa!' };
+      if (spawnLine === '121') {
+        if (amv3 === 'FALHA') return { status: 'PERIGO CRÍTICO (FALHA AMV 3)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Agulha entreaberta no AMV 3 (122/121)!' };
+        if (amv3 !== 'REVERSO') return { status: 'PERIGO: BATER CONTRA A CHAVE (AMV 3)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Trem saindo da L-121 baterá contra a chave no AMV 3 se não estiver em Reversa!' };
         if (amv1 === 'FALHA') return { status: 'PERIGO CRÍTICO (FALHA AMV 1)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Agulha entreaberta no AMV 1 (109A/109)!' };
-        if (amv1 !== 'NORMAL') return { status: 'PERIGO: BATER CONTRA A CHAVE (AMV 1)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Trem saindo da L-122 baterá contra a chave no AMV 1 se não estiver na Reta!' };
-        return { status: 'ROTA SEGURA (SAÍDA L-122 ➔ L-109A)', bg: 'bg-emerald-500/10 border-emerald-500/20', color: 'text-emerald-500', icon: <ShieldCheck className="w-8 h-8 text-emerald-500" />, desc: 'AMV 3 em Reversa e AMV 1 na Reta. Saída da Linha L-122 alinhada para a L-109A.' };
+        if (amv1 !== 'NORMAL') return { status: 'PERIGO: BATER CONTRA A CHAVE (AMV 1)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Trem saindo da L-121 baterá contra a chave no AMV 1 se não estiver na Reta!' };
+        return { status: 'ROTA SEGURA (SAÍDA L-121 ➔ L-109A)', bg: 'bg-emerald-500/10 border-emerald-500/20', color: 'text-emerald-500', icon: <ShieldCheck className="w-8 h-8 text-emerald-500" />, desc: 'AMV 3 em Reversa e AMV 1 na Reta. Saída da Linha L-121 alinhada para a L-109A.' };
       }
-      // spawnLine === '121' or '109A'
-      if (amv3 === 'FALHA') return { status: 'PERIGO CRÍTICO (FALHA AMV 3)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Agulha entreaberta no AMV 3 (121/122)!' };
-      if (amv3 !== 'NORMAL') return { status: 'PERIGO: BATER CONTRA A CHAVE (AMV 3)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Trem saindo da L-121 baterá contra a chave no AMV 3 se não estiver na Reta!' };
+      // spawnLine === '122' or '109A'
+      if (amv3 === 'FALHA') return { status: 'PERIGO CRÍTICO (FALHA AMV 3)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Agulha entreaberta no AMV 3 (122/121)!' };
+      if (amv3 !== 'NORMAL') return { status: 'PERIGO: BATER CONTRA A CHAVE (AMV 3)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Trem saindo da L-122 baterá contra a chave no AMV 3 se não estiver na Reta!' };
       if (amv1 === 'FALHA') return { status: 'PERIGO CRÍTICO (FALHA AMV 1)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Agulha entreaberta no AMV 1 (109A/109)!' };
-      if (amv1 !== 'NORMAL') return { status: 'PERIGO: BATER CONTRA A CHAVE (AMV 1)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Trem saindo da L-121 baterá contra a chave no AMV 1 se não estiver na Reta!' };
-      return { status: 'ROTA SEGURA (SAÍDA L-121 ➔ L-109A)', bg: 'bg-emerald-500/10 border-emerald-500/20', color: 'text-emerald-500', icon: <ShieldCheck className="w-8 h-8 text-emerald-500" />, desc: 'AMVs 3 e 1 na Reta. Saída direta da Linha L-121 para a L-109A.' };
+      if (amv1 !== 'NORMAL') return { status: 'PERIGO: BATER CONTRA A CHAVE (AMV 1)', bg: 'bg-red-500/10 border-red-500/20', color: 'text-red-500', icon: <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />, desc: 'Trem saindo da L-122 baterá contra a chave no AMV 1 se não estiver na Reta!' };
+      return { status: 'ROTA SEGURA (SAÍDA L-122 ➔ L-109A)', bg: 'bg-emerald-500/10 border-emerald-500/20', color: 'text-emerald-500', icon: <ShieldCheck className="w-8 h-8 text-emerald-500" />, desc: 'AMVs 3 e 1 na Reta. Saída direta da Linha L-122 para a L-109A.' };
     }
   }
 
@@ -5503,6 +5701,77 @@ function getRoutePosRot(
         }
       }
     }
+  } else if (layoutType === 'triangulo_oficina') {
+    // ------------------ TRIÂNGULO DA OFICINA (1 AMV em z = 16: Reta L-183 / Reversa L-184 5KM) ------------------
+    const bogieHalfSpan = carIndex === 0 ? 1.52 : 1.35;
+    const alignOnCurve = (curveFn: (zVal: number) => number, zCenter: number, dirSign: number) => {
+      const zFront = zCenter + dirSign * bogieHalfSpan;
+      const zRear = zCenter - dirSign * bogieHalfSpan;
+      const xFront = curveFn(zFront);
+      const xRear = curveFn(zRear);
+      return {
+        cx: 0.5 * (xFront + xRear),
+        cRotY: Math.atan2(xFront - xRear, zFront - zRear)
+      };
+    };
+
+    if (direction === 'NORTE_SUL') {
+      if (amv1 === 'FALHA' && tz <= (16 + carIndex * 5.2) && tz >= -10) {
+        const clampZ = 15 + carIndex * 5.2;
+        if (tz <= clampZ + 2) ledColor = '#ef4444';
+        tz = Math.max(tz, clampZ);
+        if (tz === clampZ) { x = 0.45; y = -0.1; rotX = 0.1; rotY -= 0.25; rotZ = -0.25; }
+      } else if (amv1 === 'REVERSO') {
+        if (tz <= (16 + carIndex * 5.2)) ledColor = '#fbbf24';
+        const { cx, cRotY } = alignOnCurve(getTrianguloOficinaTrack184X, tz, -1);
+        x = cx;
+        rotY = cRotY;
+      } else {
+        // amv1 === 'NORMAL' -> L-183 (reta até z=-4, depois curva suave à esquerda)
+        const { cx, cRotY } = alignOnCurve(getTrianguloOficinaTrack183X, tz, -1);
+        x = cx;
+        rotY = cRotY;
+      }
+    } else {
+      // SUL_NORTE (Vindo de L-183 ou L-184 rumo a z = 50)
+      const startedOn184 = spawnLine === '184';
+      let isDerailed = false;
+
+      if (startedOn184) {
+        if (amv1 === 'FALHA' || amv1 !== 'REVERSO') {
+          const clampZ = 10 - carIndex * 5.2;
+          if (tz >= clampZ - 2) ledColor = '#ef4444';
+          if (tz >= clampZ) {
+            tz = clampZ;
+            isDerailed = true;
+          }
+        } else if (tz <= 16) {
+          ledColor = '#fbbf24';
+        }
+        const { cx, cRotY } = alignOnCurve(getTrianguloOficinaTrack184X, tz, 1);
+        x = cx;
+        rotY = cRotY;
+        if (isDerailed) {
+          x -= 0.45; y = -0.1; rotX = -0.1; rotY += 0.25; rotZ = 0.25;
+        }
+      } else {
+        // Started on L-183
+        if (amv1 === 'FALHA' || amv1 !== 'NORMAL') {
+          const clampZ = 10 - carIndex * 5.2;
+          if (tz >= clampZ - 2) ledColor = '#ef4444';
+          if (tz >= clampZ) {
+            tz = clampZ;
+            isDerailed = true;
+          }
+        }
+        const { cx, cRotY } = alignOnCurve(getTrianguloOficinaTrack183X, tz, 1);
+        x = cx;
+        rotY = cRotY;
+        if (isDerailed) {
+          x += 0.45; y = -0.1; rotX = -0.1; rotY -= 0.25; rotZ = -0.25;
+        }
+      }
+    }
   } else if (layoutType === 'oficina') {
     // ------------------ 3 AMVs LAYOUT (oficina: L-167, L-166, L-165, 152 Reta) ------------------
     const amv3 = amvs[2] || 'NORMAL';
@@ -5709,8 +5978,8 @@ function getRoutePosRot(
         if (tz <= (-15 + carIndex * 5.5)) ledColor = '#fbbf24';
         if (tz >= -15) x = 0;
         else {
-          x = getReclassificacao02UpperBranch122X(tz);
-          const nextX = getReclassificacao02UpperBranch122X(tz - 0.1);
+          x = getReclassificacao02UpperBranch121X(tz);
+          const nextX = getReclassificacao02UpperBranch121X(tz - 0.1);
           rotY = Math.atan2(nextX - x, -0.1);
         }
       } else {
@@ -5726,7 +5995,7 @@ function getRoutePosRot(
         } else if (amv2 === 'REVERSO') {
           if (amv1 !== 'REVERSO') maxZ = Math.min(maxZ, 16 - carIndex * 5.5);
         }
-      } else if (spawnLine === '122') {
+      } else if (spawnLine === '121') {
         if (amv3 !== 'REVERSO') maxZ = Math.min(maxZ, -16 - carIndex * 5.5);
         if (amv1 !== 'NORMAL') maxZ = Math.min(maxZ, 16 - carIndex * 5.5);
       } else {
@@ -5753,10 +6022,10 @@ function getRoutePosRot(
         } else {
           x = 0;
         }
-      } else if (spawnLine === '122') {
+      } else if (spawnLine === '121') {
         if (tz <= -15) {
-          x = getReclassificacao02UpperBranch122X(tz);
-          const nextX = getReclassificacao02UpperBranch122X(tz + 0.1);
+          x = getReclassificacao02UpperBranch121X(tz);
+          const nextX = getReclassificacao02UpperBranch121X(tz + 0.1);
           rotY = Math.atan2(nextX - x, 0.1);
         } else {
           x = 0;
@@ -7921,18 +8190,18 @@ function Reclassificacao02AmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv
     return { left: -0.5, right: 0.8 };
   };
 
-  // AMV 3 (z = -15, x = 0): Desvio superior (Reta L-121 / Reversa à esquerda para L-122)
+  // AMV 3 (z = -15, x = 0): Desvio superior à direita (Reta L-122 / Reversa à direita para L-121)
   const getTips3 = () => {
     const a3 = amvs[2] || 'NORMAL';
     if (a3 === 'FALHA') return { left: -0.65, right: 0.65 };
-    if (a3 === 'REVERSO') return { left: -0.5, right: 0.8 };
-    return { left: -0.8, right: 0.5 };
+    if (a3 === 'REVERSO') return { left: -0.8, right: 0.5 };
+    return { left: -0.5, right: 0.8 };
   };
 
   // Coordenadas exatas dos calcanhares (hinges) das 3 agulhas de 5m conectadas perfeitamente aos trilhos (±0.405):
   const amv1RightHingeX = getReclassificacao02Crossover109X(12) + 0.8;
   const amv2LeftHingeX = (getReclassificacao02Crossover109X(-3) - (-3.8)) - 0.8;
-  const amv3RightHingeX = getReclassificacao02UpperBranch122X(-20) + 0.8;
+  const amv3LeftHingeX = getReclassificacao02UpperBranch121X(-20) - 0.8;
 
   return (
     <group>
@@ -7942,7 +8211,7 @@ function Reclassificacao02AmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv
       {/* ========================================================= */}
       {/* 1. GALPÃO INDUSTRIAL AO FUNDO (z = -50) COMO NA FOTO      */}
       {/* ========================================================= */}
-      <group position={[-1.9, 0, -50]}>
+      <group position={[0, 0, -50]}>
         {/* Estrutura principal cinza-clara com baias abertas no térreo */}
         <mesh position={[0, 3.4, 0]} castShadow receiveShadow>
           <boxGeometry args={[14.5, 6.8, 5.4]} />
@@ -7958,10 +8227,10 @@ function Reclassificacao02AmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv
           <boxGeometry args={[15.0, 0.75, 5.8]} />
           <meshStandardMaterial color="#d6b598" roughness={0.6} />
         </mesh>
-        {/* 3 Baias escuras de acesso alinhadas às 3 linhas: L-109 (x=-3.8), L-122 (x=-1.9), L-121 (x=0) */}
-        {[-1.9, 0, 1.9].map((bx, idx) => (
+        {/* 3 Baias escuras de acesso alinhadas às 3 linhas: L-109 (x=-3.8), L-122 (x=0), L-121 (x=+3.8) */}
+        {[-3.8, 0, 3.8].map((bx, idx) => (
           <mesh key={`rec2-bay-${idx}`} position={[bx, 2.1, 2.72]}>
-            <boxGeometry args={[1.55, 4.2, 0.08]} />
+            <boxGeometry args={[1.65, 4.2, 0.08]} />
             <meshStandardMaterial color="#090d16" roughness={0.85} />
           </mesh>
         ))}
@@ -7972,18 +8241,18 @@ function Reclassificacao02AmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv
       {/*    NA LATERAL DIREITA (COMO NA FOTO)                      */}
       {/* ========================================================= */}
       {/* Estrada interna asfaltada à direita da L-121 */}
-      <mesh position={[6.2, 0.01, -4]} rotation={[-Math.PI / 2, 0, -0.05]} receiveShadow>
+      <mesh position={[8.2, 0.01, -4]} rotation={[-Math.PI / 2, 0, -0.05]} receiveShadow>
         <planeGeometry args={[4.4, 85]} />
         <meshStandardMaterial color="#64748b" roughness={0.85} />
       </mesh>
       {/* Meio-fio branco ao longo da estrada */}
-      <mesh position={[4.0, 0.06, -4]} rotation={[0, -0.05, 0]}>
+      <mesh position={[6.0, 0.06, -4]} rotation={[0, -0.05, 0]}>
         <boxGeometry args={[0.16, 0.12, 85]} />
         <meshStandardMaterial color="#f1f5f9" roughness={0.7} />
       </mesh>
 
-      {/* Reboque / Rampa metálica amarela estacionada à direita (z = -8, x = 2.9) visível na foto */}
-      <group position={[2.9, 0.05, -8]} rotation={[0, 0.25, 0]}>
+      {/* Reboque / Rampa metálica amarela estacionada à direita (z = -8, x = 3.2) visível na foto */}
+      <group position={[3.2, 0.05, -8]} rotation={[0, 0.25, 0]}>
         <mesh position={[0, 0.36, 0]} castShadow receiveShadow>
           <boxGeometry args={[1.65, 0.52, 2.5]} />
           <meshStandardMaterial color="#eab308" metalness={0.4} roughness={0.4} />
@@ -8004,7 +8273,7 @@ function Reclassificacao02AmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv
 
       {/* Postes metálicos e de concreto na lateral direita */}
       {[-32, -16, 0, 16].map((pz, idx) => (
-        <group key={`pole-r-${idx}`} position={[3.5, 0, pz]}>
+        <group key={`pole-r-${idx}`} position={[5.6, 0, pz]}>
           <mesh position={[0, 3.8, 0]} castShadow>
             <cylinderGeometry args={[0.09, 0.13, 7.6, 10]} />
             <meshStandardMaterial color="#94a3b8" metalness={0.5} roughness={0.5} />
@@ -8046,7 +8315,7 @@ function Reclassificacao02AmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv
       {/* ========================================================= */}
       {/* 4. OS 3 AMVs INTERATIVOS COM PONTAS DE LANÇA AJUSTADAS    */}
       {/* ========================================================= */}
-      {/* AMV 1 (z = 17, x = 0: Reta L-109A -> L-121 / Reversa à esquerda pelo travessão para L-109) */}
+      {/* AMV 1 (z = 17, x = 0: Reta L-109A -> L-122 / Reversa à esquerda pelo travessão para L-109) */}
       <group
         position={[0, 0, 17]}
         onClick={(e) => { e.stopPropagation(); onSelectAmv(0); onToggleAmv(0); }}
@@ -8080,30 +8349,298 @@ function Reclassificacao02AmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv
       </group>
       <FrogInfo x={-3.0} z={3.0} />
 
-      {/* AMV 3 (z = -15, x = 0: Desvio superior — Reta L-121 / Reversa à esquerda para L-122) */}
+      {/* AMV 3 (z = -15, x = 0: Desvio superior à direita — Reta L-122 / Reversa à direita para L-121) */}
       <group
         position={[0, 0, -15]}
         onClick={(e) => { e.stopPropagation(); onSelectAmv(2); onToggleAmv(2); }}
         onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'pointer'; }}
         onPointerOut={(e) => { e.stopPropagation(); document.body.style.cursor = 'auto'; }}
       >
-        <AnimatedPoint amvIndex={2} hinge={[-0.8, 0, -5]} tipTargetX={getTips3().left} tipZ={0} />
-        <AnimatedPoint amvIndex={2} hinge={[amv3RightHingeX, 0, -5]} tipTargetX={getTips3().right} tipZ={0} />
+        <AnimatedPoint amvIndex={2} hinge={[amv3LeftHingeX, 0, -5]} tipTargetX={getTips3().left} tipZ={0} />
+        <AnimatedPoint amvIndex={2} hinge={[0.8, 0, -5]} tipTargetX={getTips3().right} tipZ={0} />
         <TieBar amvIndex={2} getLeftTipX={() => getTips3().left} getRightTipX={() => getTips3().right} tipZ={0} />
         <SwitchMachine getLeftTipX={() => getTips3().left} tipZ={0} isLeftSide={false} isReverse={(amvs[2] || 'NORMAL') !== 'NORMAL'} />
         <Text position={[3.0, 0.1, 0]} rotation={[-Math.PI / 2, 0, Math.PI / 2]} fontSize={1.05} color={selectedAmv === 2 ? "#818cf8" : "#64748b"}>
-          AMV 3 (121/122)
+          AMV 3 (122/121)
         </Text>
       </group>
-      <FrogInfo x={-0.8} z={-25.5} />
+      <FrogInfo x={0.8} z={-26.0} />
 
       {/* ========================================================= */}
       {/* 5. PLACAS DE IDENTIFICAÇÃO DAS LINHAS (L-109A, 109, 122, 121) */}
       {/* ========================================================= */}
       <TrackLinePlate label="L-109A" x={0} z={30} />
       <TrackLinePlate label="L-109" x={-3.8} z={-38} />
-      <TrackLinePlate label="L-122" x={-1.9} z={-38} />
-      <TrackLinePlate label="L-121" x={0} z={-38} />
+      <TrackLinePlate label="L-122" x={0} z={-38} />
+      <TrackLinePlate label="L-121" x={3.8} z={-38} />
+    </group>
+  );
+}
+
+function TrianguloOficinaAmvScene({ amvs, selectedAmv, onSelectAmv, onToggleAmv }: any) {
+  // AMV 1 (z = 16, x = 0): Reta L-183 (ramo esquerdo do triângulo) / Reversa à direita para L-184 (5KM)
+  const getTips1 = () => {
+    if (amvs[0] === 'FALHA') return { left: -0.65, right: 0.65 };
+    if (amvs[0] === 'REVERSO') return { left: -0.8, right: 0.5 };
+    return { left: -0.5, right: 0.8 };
+  };
+
+  // Calcanhar exato da agulha esquerda de 5m em z = 11 (-0.406m):
+  const amv1LeftHingeX = getTrianguloOficinaTrack184X(11) - 0.8;
+
+  const rot183 = Math.atan2(getTrianguloOficinaTrack183X(-17.5) - getTrianguloOficinaTrack183X(-18.5), 1.0);
+  const rot184 = Math.atan2(getTrianguloOficinaTrack184X(-17.5) - getTrianguloOficinaTrack184X(-18.5), 1.0);
+
+  // Árvores e vegetação densa ao redor do Triângulo da Oficina (laterais esquerda/direita e cunha central entre L-183 e L-184)
+  const forestTrees = useMemo(() => {
+    const crowns = [
+      { main: '#15803d', sec: '#16a34a', top: '#22c55e' },
+      { main: '#166534', sec: '#15803d', top: '#4ade80' },
+      { main: '#14532d', sec: '#166534', top: '#16a34a' },
+    ];
+    const list: { id: string; x: number; z: number; scale: number; rotY: number; crown: typeof crowns[0] }[] = [];
+
+    // 1. Mata fechada na margem esquerda (acompanhando a entrada e a curva da L-183)
+    const leftZ = [44, 36, 28, 20, 12, 4, -4, -12, -20, -28, -36, -44, -51];
+    leftZ.forEach((z, idx) => {
+      const baseTrackX = getTrianguloOficinaTrack183X(z);
+      const offset1 = -5.4 - (idx % 3) * 0.8;
+      list.push({
+        id: `tri-L1-${idx}`,
+        x: baseTrackX + offset1,
+        z,
+        scale: 1.05 + (idx % 3) * 0.14,
+        rotY: idx * 1.3,
+        crown: crowns[idx % crowns.length],
+      });
+      if (idx % 2 === 0) {
+        list.push({
+          id: `tri-L2-${idx}`,
+          x: baseTrackX + offset1 - 3.4,
+          z: z - 2.5,
+          scale: 1.2 + (idx % 2) * 0.15,
+          rotY: idx * 2.1,
+          crown: crowns[(idx + 1) % crowns.length],
+        });
+      }
+    });
+
+    // 2. Mata fechada na margem direita (acompanhando a entrada e a curva interna da L-184)
+    const rightZ = [42, 34, 26, 18, 10, 2, -6, -14, -22, -30, -38, -46];
+    rightZ.forEach((z, idx) => {
+      const baseTrackX = getTrianguloOficinaTrack184X(z);
+      const offset1 = 4.9 + (idx % 3) * 0.75;
+      list.push({
+        id: `tri-R1-${idx}`,
+        x: baseTrackX + offset1,
+        z,
+        scale: 1.05 + (idx % 3) * 0.14,
+        rotY: idx * 1.7,
+        crown: crowns[(idx + 1) % crowns.length],
+      });
+      if (idx % 2 === 1) {
+        list.push({
+          id: `tri-R2-${idx}`,
+          x: baseTrackX + offset1 + 3.2,
+          z: z - 2.0,
+          scale: 1.18 + (idx % 2) * 0.15,
+          rotY: idx * 0.9,
+          crown: crowns[(idx + 2) % crowns.length],
+        });
+      }
+    });
+
+    // 3. Mata central no miolo do Triângulo (entre L-183 à esquerda e L-184 à direita, de z = -30 até z = -54)
+    const wedgeCoords: [number, number, number][] = [
+      [1.2, -31, 0.92],
+      [-0.4, -36, 1.02],
+      [2.8, -36, 1.05],
+      [-1.8, -42, 1.12],
+      [1.6, -42, 1.16],
+      [5.2, -42, 1.10],
+      [-3.0, -48, 1.18],
+      [0.6, -48, 1.24],
+      [4.4, -48, 1.20],
+      [8.2, -48, 1.15],
+      [-1.5, -53, 1.25],
+      [3.0, -53, 1.28],
+      [7.5, -53, 1.22],
+    ];
+    wedgeCoords.forEach(([wx, wz, wScale], idx) => {
+      list.push({
+        id: `tri-W-${idx}`,
+        x: wx,
+        z: wz,
+        scale: wScale,
+        rotY: idx * 1.4,
+        crown: crowns[idx % crowns.length],
+      });
+    });
+
+    return list;
+  }, []);
+
+  return (
+    <group>
+      <Sleepers layoutType="triangulo_oficina" />
+      <CurveBranch layoutType="triangulo_oficina" />
+
+      {/* ========================================================= */}
+      {/* 1. VALA DE DRENAGEM COM ÁGUA E LAMA À ESQUERDA DO LASTRO  */}
+      {/*    (Fiel ao primeiro plano esquerdo da foto real)         */}
+      {/* ========================================================= */}
+      <group position={[-2.75, -0.21, 18]}>
+        {/* Leito barrento escuro da vala lateral */}
+        <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+          <planeGeometry args={[1.65, 58]} />
+          <meshStandardMaterial color="#3e2723" roughness={0.9} />
+        </mesh>
+        {/* Lâmina d'água espelhada acumulada na vala de drenagem */}
+        <mesh position={[0.05, 0.012, 2]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[1.15, 52]} />
+          <meshStandardMaterial
+            color="#4b3621"
+            emissive="#1e293b"
+            emissiveIntensity={0.18}
+            roughness={0.12}
+            metalness={0.65}
+            transparent
+            opacity={0.82}
+          />
+        </mesh>
+      </group>
+
+      {/* ========================================================= */}
+      {/* 2. POSTE DE ILUMINAÇÃO À ESQUERDA DA L-183 (COM LUZ ATIVA) */}
+      {/* ========================================================= */}
+      <group position={[-2.35, 0, -15]}>
+        {/* Coluna de concreto do poste */}
+        <mesh position={[0, 3.8, 0]} castShadow>
+          <cylinderGeometry args={[0.09, 0.14, 7.6, 10]} />
+          <meshStandardMaterial color="#94a3b8" metalness={0.35} roughness={0.65} />
+        </mesh>
+        {/* Cruzeta superior metálica */}
+        <mesh position={[0, 7.3, 0]}>
+          <boxGeometry args={[0.95, 0.12, 0.12]} />
+          <meshStandardMaterial color="#475569" metalness={0.6} roughness={0.4} />
+        </mesh>
+        {/* Braço curvo da luminária voltado para a linha L-183 */}
+        <mesh position={[0.42, 7.42, 0]} rotation={[0, 0, -0.25]}>
+          <cylinderGeometry args={[0.03, 0.035, 0.9, 8]} />
+          <meshStandardMaterial color="#334155" metalness={0.7} roughness={0.35} />
+        </mesh>
+        {/* Carcaça do refletor / luminária industrial LED */}
+        <group position={[0.78, 7.48, 0]} rotation={[0.15, 0, -0.35]}>
+          <mesh castShadow>
+            <boxGeometry args={[0.46, 0.12, 0.32]} />
+            <meshStandardMaterial color="#1e293b" metalness={0.75} roughness={0.3} />
+          </mesh>
+          {/* Lente emissiva acesa */}
+          <mesh position={[0, -0.065, 0]}>
+            <boxGeometry args={[0.40, 0.025, 0.26]} />
+            <meshStandardMaterial
+              color="#fef08a"
+              emissive="#facc15"
+              emissiveIntensity={3.5}
+              roughness={0.1}
+            />
+          </mesh>
+          {/* Halo luminoso ao redor da lâmpada */}
+          <mesh position={[0, -0.12, 0]}>
+            <sphereGeometry args={[0.34, 14, 14]} />
+            <meshBasicMaterial color="#fef08a" transparent opacity={0.35} depthWrite={false} />
+          </mesh>
+          {/* Feixe cônico suave de luz projetado sobre a via */}
+          <mesh position={[0.25, -2.6, 0]} rotation={[0, 0, 0.12]}>
+            <coneGeometry args={[2.1, 5.2, 16, 1, true]} />
+            <meshBasicMaterial
+              color="#fef08a"
+              transparent
+              opacity={0.11}
+              side={THREE.DoubleSide}
+              depthWrite={false}
+            />
+          </mesh>
+        </group>
+        {/* Luz real iluminando os trilhos e dormentes abaixo do poste */}
+        <pointLight
+          position={[0.85, 7.2, 0]}
+          intensity={4.2}
+          distance={24}
+          decay={1.5}
+          color="#fde047"
+        />
+      </group>
+
+      {/* ========================================================= */}
+      {/* 3. VEGETAÇÃO DENSA LATERAL E NO MIOLO DO TRIÂNGULO        */}
+      {/* ========================================================= */}
+      {forestTrees.map((tr) => (
+        <group
+          key={tr.id}
+          position={[tr.x, -0.22, tr.z]}
+          rotation={[0, tr.rotY, 0]}
+          scale={[tr.scale, tr.scale, tr.scale]}
+        >
+          <mesh position={[0, 1.05, 0]} castShadow receiveShadow>
+            <cylinderGeometry args={[0.18, 0.32, 2.1, 7]} />
+            <meshStandardMaterial color="#4a3525" roughness={0.9} />
+          </mesh>
+          <mesh position={[0, 2.65, 0]} scale={[1.45, 1.15, 1.45]} castShadow receiveShadow>
+            <dodecahedronGeometry args={[1.05, 1]} />
+            <meshStandardMaterial color={tr.crown.main} roughness={0.78} />
+          </mesh>
+          <mesh position={[-0.65, 2.35, 0.35]} scale={[1.1, 0.95, 1.1]} castShadow>
+            <dodecahedronGeometry args={[0.85, 1]} />
+            <meshStandardMaterial color={tr.crown.sec} roughness={0.78} />
+          </mesh>
+          <mesh position={[0.65, 2.4, -0.3]} scale={[1.1, 0.95, 1.1]} castShadow>
+            <dodecahedronGeometry args={[0.82, 1]} />
+            <meshStandardMaterial color={tr.crown.sec} roughness={0.78} />
+          </mesh>
+          <mesh position={[0, 3.45, 0]} scale={[1.15, 0.95, 1.15]} castShadow>
+            <dodecahedronGeometry args={[0.78, 1]} />
+            <meshStandardMaterial color={tr.crown.top} roughness={0.75} />
+          </mesh>
+        </group>
+      ))}
+
+      {/* ========================================================= */}
+      {/* 4. AMV 1 INTERATIVO DO TRIÂNGULO DA OFICINA (z = 16)      */}
+      {/*    Com máquina de chave e bandeirola na direita           */}
+      {/* ========================================================= */}
+      <group
+        position={[0, 0, 16]}
+        onClick={(e) => { e.stopPropagation(); onSelectAmv(0); onToggleAmv(0); }}
+        onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'pointer'; }}
+        onPointerOut={(e) => { e.stopPropagation(); document.body.style.cursor = 'auto'; }}
+      >
+        <AnimatedPoint amvIndex={0} hinge={[amv1LeftHingeX, 0, -5]} tipTargetX={getTips1().left} tipZ={0} />
+        <AnimatedPoint amvIndex={0} hinge={[0.8, 0, -5]} tipTargetX={getTips1().right} tipZ={0} />
+        <TieBar amvIndex={0} getLeftTipX={() => getTips1().left} getRightTipX={() => getTips1().right} tipZ={0} />
+        <SwitchMachine getLeftTipX={() => getTips1().left} tipZ={0} isLeftSide={false} isReverse={amvs[0] !== 'NORMAL'} />
+        <Text position={[3.3, 0.1, 0]} rotation={[-Math.PI / 2, 0, Math.PI / 2]} fontSize={1.15} color={selectedAmv === 0 ? "#818cf8" : "#64748b"}>
+          AMV 1 (183/184)
+        </Text>
+      </group>
+      <FrogInfo x={0.8} z={0.0} />
+
+      {/* ========================================================= */}
+      {/* 5. PLACAS DAS LINHAS DO TRIÂNGULO (L-183 E L-184 • 5KM)   */}
+      {/* ========================================================= */}
+      <TrackLinePlate
+        label="L-183"
+        x={getTrianguloOficinaTrack183X(-18)}
+        z={-18}
+        rotY={rot183}
+      />
+      <TrackLinePlate
+        label="L-184"
+        badge="5KM"
+        x={getTrianguloOficinaTrack184X(-18)}
+        z={-18}
+        rotY={rot184}
+      />
     </group>
   );
 }
@@ -8209,7 +8746,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
     };
   }, []);
 
-  const baseLayout = systemName?.includes('PIAL X OFICINA') ? 'patio_oficina' : (systemId === 'watchSystem14' || systemName?.includes('ABAIXO DO GALPÃO')) ? 'abaixo_oficina' : (systemId === 'watchSystem12' || systemName?.includes('CIMA DO GALPÃO') || systemName?.includes('OFICINA CENTRAL')) ? 'oficina_central' : (systemId === 'watchSystem13' || systemName?.includes('PASSAGEIRO 02')) ? 'passageiro_02' : (systemId === 'watchSystem11' || systemName?.includes('PASSAGEIRO 01')) ? 'passageiro_01' : (systemId === 'watchSystem15' || systemName?.includes('RECLASSIFICAÇÃO 02')) ? 'reclassificacao_02' : systemId === 'watchSystem9' ? 'pn_oficina' : systemId === 'watchSystem8' ? 'carga_geral_02' : systemId === 'watchSystem7' ? 'reclassificacao' : systemId === 'watchSystem4' ? 'oficina' : (systemId === 'watchSystem5' || systemId === 'watchSystem3') ? 'freio' : 'default';
+  const baseLayout = systemName?.includes('PIAL X OFICINA') ? 'patio_oficina' : (systemId === 'watchSystem14' || systemName?.includes('ABAIXO DO GALPÃO')) ? 'abaixo_oficina' : (systemId === 'watchSystem12' || systemName?.includes('CIMA DO GALPÃO') || systemName?.includes('OFICINA CENTRAL')) ? 'oficina_central' : (systemId === 'watchSystem13' || systemName?.includes('PASSAGEIRO 02')) ? 'passageiro_02' : (systemId === 'watchSystem11' || systemName?.includes('PASSAGEIRO 01')) ? 'passageiro_01' : (systemId === 'watchSystem16' || systemName?.includes('TRIÂNGULO DA OFICINA')) ? 'triangulo_oficina' : (systemId === 'watchSystem15' || systemName?.includes('RECLASSIFICAÇÃO 02')) ? 'reclassificacao_02' : systemId === 'watchSystem9' ? 'pn_oficina' : systemId === 'watchSystem8' ? 'carga_geral_02' : systemId === 'watchSystem7' ? 'reclassificacao' : systemId === 'watchSystem4' ? 'oficina' : (systemId === 'watchSystem5' || systemId === 'watchSystem3') ? 'freio' : 'default';
   const layoutType = baseLayout as LayoutType;
 
   useEffect(() => {
@@ -8237,8 +8774,13 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
       return;
     } else if (layoutType === 'reclassificacao_02') {
       if (amv1 === 'REVERSO') expectedLine = '109';
-      else if (amv3 === 'REVERSO') expectedLine = '122';
-      else expectedLine = '121';
+      else if (amv3 === 'REVERSO') expectedLine = '121';
+      else expectedLine = '122';
+      setSpawnLine(expectedLine);
+      setDestLine(expectedLine);
+      return;
+    } else if (layoutType === 'triangulo_oficina') {
+      expectedLine = amv1 === 'REVERSO' ? '184' : '183';
       setSpawnLine(expectedLine);
       setDestLine(expectedLine);
       return;
@@ -8306,8 +8848,11 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
       setSpawnLine('162');
       setDestLine('162');
     } else if (layoutType === 'reclassificacao_02') {
-      setSpawnLine('121');
-      setDestLine('121');
+      setSpawnLine('122');
+      setDestLine('122');
+    } else if (layoutType === 'triangulo_oficina') {
+      setSpawnLine('183');
+      setDestLine('183');
     } else if (layoutType === 'passageiro_02') {
       setSpawnLine('TP3B');
       setDestLine('TP3B');
@@ -8350,7 +8895,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
     const anySpecific = mentionsAmv1 || mentionsAmv2 || mentionsAmv3 || mentionsAmv4 || mentionsAmv5 || mentionsAmv6;
 
     const h0 = amvs[0] === 'FALHA' || ((isDanger || isWarning) && (mentionsAmv1 || !anySpecific));
-    const h1 = amvs[1] === 'FALHA' || ((isDanger || isWarning) && (mentionsAmv2 || (!anySpecific && layoutType !== 'pn_oficina')));
+    const h1 = amvs[1] === 'FALHA' || ((isDanger || isWarning) && (mentionsAmv2 || (!anySpecific && layoutType !== 'pn_oficina' && layoutType !== 'triangulo_oficina')));
     const h2 = amvs[2] === 'FALHA' || ((isDanger || isWarning) && (mentionsAmv3 || (!anySpecific && (layoutType === 'freio_02' || layoutType === 'patio_oficina' || layoutType === 'oficina' || layoutType === 'oficina_central' || layoutType === 'abaixo_oficina' || layoutType === 'passageiro_02' || layoutType === 'reclassificacao_02'))));
     const h3 = (amvs[3] || 'NORMAL') === 'FALHA' || ((isDanger || isWarning) && (mentionsAmv4 || (!anySpecific && (layoutType === 'oficina_central' || layoutType === 'abaixo_oficina' || layoutType === 'passageiro_02'))));
     const h4 = (amvs[4] || 'NORMAL') === 'FALHA' || ((isDanger || isWarning) && (mentionsAmv5 || (!anySpecific && layoutType === 'abaixo_oficina')));
@@ -8676,7 +9221,9 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
 
                     <ContactShadows position={[0, -0.2, 0]} opacity={nightMode ? 0.45 : 0.75} scale={100} blur={2} frames={1} resolution={256} />
 
-                    {layoutType === 'oficina_central' ? (
+                    {layoutType === 'triangulo_oficina' ? (
+                      <TrianguloOficinaAmvScene amvs={amvs} selectedAmv={selectedAmv} onSelectAmv={setSelectedAmv} onToggleAmv={handleToggleAmv} />
+                    ) : layoutType === 'oficina_central' ? (
                       <OficinaCentralAmvScene amvs={amvs} selectedAmv={selectedAmv} onSelectAmv={setSelectedAmv} onToggleAmv={handleToggleAmv} />
                     ) : layoutType === 'abaixo_oficina' ? (
                       <AbaixoOficinaAmvScene amvs={amvs} selectedAmv={selectedAmv} onSelectAmv={setSelectedAmv} onToggleAmv={handleToggleAmv} />
@@ -8764,7 +9311,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
                         </>
                       ) : (
                         <>
-                          {(layoutType === 'abaixo_oficina' ? [0, 1, 2, 3, 4, 5] : (layoutType === 'oficina_central' || layoutType === 'passageiro_02') ? [0, 1, 2, 3] : (layoutType === 'patio_oficina' || layoutType === 'oficina' || layoutType === 'reclassificacao_02') ? [0, 1, 2] : layoutType === 'pn_oficina' ? [0] : [0, 1]).map((idx) => (
+                          {(layoutType === 'abaixo_oficina' ? [0, 1, 2, 3, 4, 5] : (layoutType === 'oficina_central' || layoutType === 'passageiro_02') ? [0, 1, 2, 3] : (layoutType === 'patio_oficina' || layoutType === 'oficina' || layoutType === 'reclassificacao_02') ? [0, 1, 2] : (layoutType === 'pn_oficina' || layoutType === 'triangulo_oficina') ? [0] : [0, 1]).map((idx) => (
                             <div
                               key={idx}
                               className={`flex flex-col items-center bg-[#0a0a0c]/80 border ${selectedAmv === idx ? 'border-indigo-500/50 shadow-[0_0_10px_rgba(99,102,241,0.2)]' : 'border-white/5'} px-2.5 py-1.5 rounded-xl cursor-pointer hover:border-indigo-500/30 transition-all`}
@@ -8891,13 +9438,13 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
 
             {/* SELECTION DOTS */}
             <div className="flex gap-1.5 mb-1.5">
-               {(layoutType === 'abaixo_oficina' ? [0, 1, 2, 3, 4, 5] : (layoutType === 'oficina_central' || layoutType === 'passageiro_02') ? [0, 1, 2, 3] : (layoutType === 'freio_02' || layoutType === 'patio_oficina' || layoutType === 'oficina' || layoutType === 'reclassificacao_02') ? [0, 1, 2] : layoutType === 'pn_oficina' ? [0] : [0, 1]).map(index => {
+               {(layoutType === 'abaixo_oficina' ? [0, 1, 2, 3, 4, 5] : (layoutType === 'oficina_central' || layoutType === 'passageiro_02') ? [0, 1, 2, 3] : (layoutType === 'freio_02' || layoutType === 'patio_oficina' || layoutType === 'oficina' || layoutType === 'reclassificacao_02') ? [0, 1, 2] : (layoutType === 'pn_oficina' || layoutType === 'triangulo_oficina') ? [0] : [0, 1]).map(index => {
                    let name = '';
                    if (layoutType === 'freio_02') {
                      name = index === 0 ? '02' : (index === 1 ? '01' : '128');
                    } else if (layoutType === 'freio') {
                      name = index === 0 ? '1' : '2';
-                   } else if (layoutType === 'pn_oficina') {
+                   } else if (layoutType === 'pn_oficina' || layoutType === 'triangulo_oficina') {
                      name = '1';
                    } else if (layoutType === 'passageiro_02') {
                      name = index === 0 ? 'TP-2B' : index === 1 ? 'TP-3B' : index === 2 ? 'TP-04' : 'TP-05';
@@ -8990,7 +9537,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
          </div>
 
          {/* SECTION: Spawn Origin */}
-         {direction === 'SUL_NORTE' && (layoutType === 'oficina_central' || layoutType === 'abaixo_oficina' || layoutType === 'passageiro_02' || layoutType === 'passageiro_01' || layoutType === 'patio_oficina' || layoutType === 'freio' || layoutType === 'oficina' || layoutType === 'reclassificacao' || layoutType === 'reclassificacao_02' || layoutType === 'pn_oficina') && (
+         {direction === 'SUL_NORTE' && (layoutType === 'triangulo_oficina' || layoutType === 'oficina_central' || layoutType === 'abaixo_oficina' || layoutType === 'passageiro_02' || layoutType === 'passageiro_01' || layoutType === 'patio_oficina' || layoutType === 'freio' || layoutType === 'oficina' || layoutType === 'reclassificacao' || layoutType === 'reclassificacao_02' || layoutType === 'pn_oficina') && (
             <div className="bg-[#18181c] border border-white/5 rounded-[16px] p-3 flex flex-col shadow-2xl shrink-0">
                <div className="flex justify-between items-center mb-1.5 gap-2">
                  <div>
@@ -9020,6 +9567,9 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
                     { val: '161', label: '161' },
                     { val: '160', label: '160' },
                     { val: '173', label: '173' }
+                  ] : layoutType === 'triangulo_oficina' ? [
+                    { val: '183', label: 'L-183' },
+                    { val: '184', label: 'L-184 (5KM)' }
                   ] : layoutType === 'reclassificacao_02' ? [
                     { val: '109', label: 'L-109' },
                     { val: '122', label: 'L-122' },
@@ -9081,7 +9631,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
          )}
          
          {/* SECTION: Destination */}
-         {direction === 'NORTE_SUL' && (layoutType === 'oficina_central' || layoutType === 'abaixo_oficina' || layoutType === 'passageiro_02' || layoutType === 'passageiro_01' || layoutType === 'patio_oficina' || layoutType === 'freio' || layoutType === 'oficina' || layoutType === 'reclassificacao' || layoutType === 'reclassificacao_02' || layoutType === 'pn_oficina') && (
+         {direction === 'NORTE_SUL' && (layoutType === 'triangulo_oficina' || layoutType === 'oficina_central' || layoutType === 'abaixo_oficina' || layoutType === 'passageiro_02' || layoutType === 'passageiro_01' || layoutType === 'patio_oficina' || layoutType === 'freio' || layoutType === 'oficina' || layoutType === 'reclassificacao' || layoutType === 'reclassificacao_02' || layoutType === 'pn_oficina') && (
             <div className="bg-[#18181c] border border-white/5 rounded-[16px] p-3 flex flex-col shadow-2xl shrink-0">
                <div className="flex justify-between items-center mb-1.5 gap-2">
                  <div>
@@ -9111,6 +9661,9 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
                     { val: '161', label: '161' },
                     { val: '160', label: '160' },
                     { val: '173', label: '173' }
+                  ] : layoutType === 'triangulo_oficina' ? [
+                    { val: '183', label: 'L-183' },
+                    { val: '184', label: 'L-184 (5KM)' }
                   ] : layoutType === 'reclassificacao_02' ? [
                     { val: '109', label: 'L-109' },
                     { val: '122', label: 'L-122' },
@@ -9157,7 +9710,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
                   ]).map(s => (
                      <button 
                        key={s.val}
-                       onClick={() => { setDestLine(s.val as SpawnLine); if (layoutType === 'oficina_central' || layoutType === 'abaixo_oficina' || layoutType === 'passageiro_02' || layoutType === 'reclassificacao_02') { setSpawnLine(s.val as SpawnLine); setIsMoving(false); setResetKey(prev => prev + 1); } setIsAutoLineSelection(false); }}
+                       onClick={() => { setDestLine(s.val as SpawnLine); if (layoutType === 'triangulo_oficina' || layoutType === 'oficina_central' || layoutType === 'abaixo_oficina' || layoutType === 'passageiro_02' || layoutType === 'reclassificacao_02') { setSpawnLine(s.val as SpawnLine); setIsMoving(false); setResetKey(prev => prev + 1); } setIsAutoLineSelection(false); }}
                        className={`flex-1 min-w-[30px] py-1.5 rounded-[8px] text-[8px] font-bold transition-all uppercase tracking-wider relative ${
                          destLine === s.val 
                            ? 'bg-orange-500 text-white shadow-md'
@@ -9298,7 +9851,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
              <div className="overflow-hidden flex flex-col gap-2.5">
                  {/* AMV Selection Mobile */}
                  <div className="flex gap-1.5">
-               {(layoutType === 'abaixo_oficina' ? [0, 1, 2, 3, 4, 5] : (layoutType === 'oficina_central' || layoutType === 'passageiro_02') ? [0, 1, 2, 3] : (layoutType === 'freio_02' || layoutType === 'patio_oficina' || layoutType === 'oficina' || layoutType === 'reclassificacao_02') ? [0, 1, 2] : layoutType === 'pn_oficina' ? [0] : [0, 1]).map(index => {
+               {(layoutType === 'abaixo_oficina' ? [0, 1, 2, 3, 4, 5] : (layoutType === 'oficina_central' || layoutType === 'passageiro_02') ? [0, 1, 2, 3] : (layoutType === 'freio_02' || layoutType === 'patio_oficina' || layoutType === 'oficina' || layoutType === 'reclassificacao_02') ? [0, 1, 2] : (layoutType === 'pn_oficina' || layoutType === 'triangulo_oficina') ? [0] : [0, 1]).map(index => {
                    let name = '';
                    if (layoutType === 'freio_02') {
                      name = index === 0 ? '02' : (index === 1 ? '01' : '128');
@@ -9449,7 +10002,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
           </div>
 
           {/* Spawn Origin Mobile */}
-          {direction === 'SUL_NORTE' && (layoutType === 'oficina_central' || layoutType === 'abaixo_oficina' || layoutType === 'reclassificacao_02' || layoutType === 'passageiro_02' || layoutType === 'passageiro_01' || layoutType === 'patio_oficina' || layoutType === 'freio' || layoutType === 'oficina' || layoutType === 'reclassificacao') && (
+          {direction === 'SUL_NORTE' && (layoutType === 'triangulo_oficina' || layoutType === 'pn_oficina' || layoutType === 'oficina_central' || layoutType === 'abaixo_oficina' || layoutType === 'reclassificacao_02' || layoutType === 'passageiro_02' || layoutType === 'passageiro_01' || layoutType === 'patio_oficina' || layoutType === 'freio' || layoutType === 'oficina' || layoutType === 'reclassificacao') && (
              <div className="bg-[#18181c] border border-white/5 rounded-2xl p-2.5 shrink-0 flex flex-col gap-1">
                  <div className="flex justify-between items-center mb-1.5 px-1">
                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Linha de Origem</span>
@@ -9470,6 +10023,12 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
                     { val: '161', label: '161' },
                     { val: '160', label: '160' },
                     { val: '173', label: '173' }
+                  ] : layoutType === 'triangulo_oficina' ? [
+                    { val: '183', label: 'L-183' },
+                    { val: '184', label: 'L-184 (5KM)' }
+                  ] : layoutType === 'pn_oficina' ? [
+                    { val: '159', label: 'L-159' },
+                    { val: '173', label: 'L-173' }
                   ] : layoutType === 'reclassificacao_02' ? [
                     { val: '109', label: 'L-109' },
                     { val: '122', label: 'L-122' },
@@ -9529,7 +10088,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
           )}
 
           {/* Spawn Dest Mobile */}
-          {direction === 'NORTE_SUL' && (layoutType === 'oficina_central' || layoutType === 'abaixo_oficina' || layoutType === 'reclassificacao_02' || layoutType === 'passageiro_02' || layoutType === 'passageiro_01' || layoutType === 'patio_oficina' || layoutType === 'freio' || layoutType === 'oficina' || layoutType === 'reclassificacao') && (
+          {direction === 'NORTE_SUL' && (layoutType === 'triangulo_oficina' || layoutType === 'pn_oficina' || layoutType === 'oficina_central' || layoutType === 'abaixo_oficina' || layoutType === 'reclassificacao_02' || layoutType === 'passageiro_02' || layoutType === 'passageiro_01' || layoutType === 'patio_oficina' || layoutType === 'freio' || layoutType === 'oficina' || layoutType === 'reclassificacao') && (
              <div className="bg-[#18181c] border border-white/5 rounded-2xl p-2.5 shrink-0 flex flex-col gap-1">
                  <div className="flex justify-between items-center mb-1.5 px-1">
                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Linha de Destino</span>
@@ -9550,6 +10109,12 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
                     { val: '161', label: '161' },
                     { val: '160', label: '160' },
                     { val: '173', label: '173' }
+                  ] : layoutType === 'triangulo_oficina' ? [
+                    { val: '183', label: 'L-183' },
+                    { val: '184', label: 'L-184 (5KM)' }
+                  ] : layoutType === 'pn_oficina' ? [
+                    { val: '159', label: 'L-159' },
+                    { val: '173', label: 'L-173' }
                   ] : layoutType === 'reclassificacao_02' ? [
                     { val: '109', label: 'L-109' },
                     { val: '122', label: 'L-122' },
@@ -9593,7 +10158,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
                      ]).map(s => (
                          <button
                             key={s.val}
-                            onClick={() => { setDestLine(s.val as SpawnLine); if (layoutType === 'oficina_central' || layoutType === 'abaixo_oficina' || layoutType === 'passageiro_02' || layoutType === 'reclassificacao_02') { setSpawnLine(s.val as SpawnLine); setIsMoving(false); setResetKey(prev => prev + 1); } setIsAutoLineSelection(false); }}
+                            onClick={() => { setDestLine(s.val as SpawnLine); if (layoutType === 'triangulo_oficina' || layoutType === 'oficina_central' || layoutType === 'abaixo_oficina' || layoutType === 'passageiro_02' || layoutType === 'reclassificacao_02') { setSpawnLine(s.val as SpawnLine); setIsMoving(false); setResetKey(prev => prev + 1); } setIsAutoLineSelection(false); }}
                             className={`flex-1 min-w-[38px] p-2 rounded-xl border transition-all ${
                                destLine === s.val 
                                ? 'bg-orange-500/20 border-orange-500/40 text-orange-300' 

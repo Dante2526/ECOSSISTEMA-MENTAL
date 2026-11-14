@@ -121,9 +121,12 @@ export const useWhisperRecognition = ({ onStart, onEnd, onError, onResult, shoul
                     setIsProcessing(true);
                 }
             } else if (type === 'PRELOAD_PROGRESS') {
-                setIsLoadingModel(true);
                 if (typeof progress === 'number') {
                     setModelLoadProgress(Math.round(progress));
+                }
+                // Só exibe o estado de carregamento na UI principal se o usuário clicou para falar enquanto ainda carrega
+                if (isListeningRef.current) {
+                    setIsLoadingModel(true);
                 }
             } else if (type === 'PRELOAD_DONE') {
                 setIsLoadingModel(false);

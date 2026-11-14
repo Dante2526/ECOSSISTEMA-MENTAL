@@ -329,9 +329,11 @@ const App: React.FC = () => {
     // Feedback visual para o processamento do Whisper
     useEffect(() => {
         if (isLoadingModel) {
+            const isAlreadyCached = localStorage.getItem('ecossistema_offline_ready_v2') === 'true';
+            const label = isAlreadyCached ? 'CARREGANDO IA NA MEMÓRIA' : 'BAIXANDO MODELO';
             const progressText = modelLoadProgress > 0 && modelLoadProgress < 100 
-                ? `BAIXANDO MODELO: ${modelLoadProgress}%` 
-                : "INICIANDO...";
+                ? `${label}: ${modelLoadProgress}%` 
+                : isAlreadyCached ? "ATIVANDO IA OFFLINE..." : "INICIANDO...";
             showFeedback(progressText, 10000);
         } else if (isProcessing) {
             showFeedback("PROCESSANDO...", 30000);
