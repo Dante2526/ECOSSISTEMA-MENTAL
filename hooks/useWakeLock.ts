@@ -1,10 +1,47 @@
 
 import { useState, useEffect } from 'react';
+import { App as CapacitorApp } from '@capacitor/app';
+import type { PluginListenerHandle } from '@capacitor/core';
+import { KeepAwake } from '@capacitor-community/keep-awake';
+import { isNativePlatform } from '../services/capacitorPlatform';
 
 export const useWakeLock = () => {
     const [wakeLock, setWakeLock] = useState<WakeLockSentinel | null>(null);
 
     useEffect(() => {
+        if (isNativePlatform()) {
+            let disposed = false;
+            let appStateListener: PluginListenerHandle | null = null;
+
+            const enableKeepAwake = async () => {
+                try {
+                    await KeepAwake.keepAwake();
+                } catch (err) {
+                    console.warn('KeepAwake error:', err);
+                }
+            };
+
+            enableKeepAwake();
+
+            CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+                if (isActive && !disposed) {
+                    enableKeepAwake();
+                }
+            }).then((handle) => {
+                if (disposed) {
+                    handle.remove().catch(() => {});
+                } else {
+                    appStateListener = handle;
+                }
+            }).catch(() => {});
+
+            return () => {
+                disposed = true;
+                appStateListener?.remove().catch(() => {});
+                KeepAwake.allowSleep().catch(() => {});
+            };
+        }
+
         let currentLock: WakeLockSentinel | null = null;
         const isSupported = 'wakeLock' in navigator;
 
@@ -46,3 +83,4 @@ export const useWakeLock = () => {
 
     return wakeLock;
 };
+

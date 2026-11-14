@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { OrbitalSystem, Satellite, Tour, LocationData } from '../types';
 import { TourAdmin } from './TourAdmin';
 import { useGeolocation } from '../hooks/useGeolocation';
+import { copyTextToClipboard } from '../services/exportService';
 
 interface AdminPanelProps {
     systemToEdit: OrbitalSystem | '__NEW__';
@@ -146,10 +147,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = React.memo(({ systemToEdit,
                     <button
                         onClick={() => {
                             const dataStr = JSON.stringify(systems, null, 2);
-                            navigator.clipboard.writeText(dataStr).then(() => {
+                            copyTextToClipboard(dataStr).then(() => {
                                 alert("Dados copiados para a área de transferência! Cole no chat para a IA atualizar o código-fonte.");
                             }).catch(err => {
-                                alert("Erro ao copiar dados. Verifique as permissões do navegador.");
+                                alert("Erro ao copiar dados. Verifique as permissões do aplicativo ou navegador.");
                                 console.error(err);
                             });
                         }}

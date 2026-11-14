@@ -25,6 +25,7 @@ export default defineConfig(({ mode }) => {
       react(),
       VitePWA({
         registerType: 'prompt',
+        injectRegister: false,
         includeAssets: ['favicon.svg'],
         manifest: false, // Usamos o manifest.json em public/
         workbox: {

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { OrbitalSystem } from '../types';
 import { whisperWorkerManager, WhisperWorkerMessage } from '../services/whisperWorkerManager';
+import { isNativePlatform } from '../services/capacitorPlatform';
 
 export interface PreloadProgress {
     totalItems: number;
@@ -26,31 +27,37 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
     });
 
     useEffect(() => {
+        const isNative = isNativePlatform();
+
         // 1. Verificar no localStorage se nós JÁ finalizamos o download 100% no passado
         // para não encher a tela do usuário com contadores desnecessários em visitas futuras.
         const CACHE_FLAG = 'ecossistema_offline_ready_v2';
         if (localStorage.getItem(CACHE_FLAG) === 'true') {
             setProgress(prev => ({ ...prev, isFinished: true, percentage: 100 }));
 
-            // Mesmo com flag, disparamos os pré-carregamentos SILENCIOSOS apenas
-            // para puxar imagens novas que tenham entrado em atualizações
-            silentPreloadAll(systems);
+            // Em Web/PWA disparamos pré-carregamentos silenciosos de novas imagens.
+            // No Capacitor nativo, as imagens já estão empacotadas nos assets locais do APK.
+            if (!isNative) {
+                silentPreloadAll(systems);
+            }
             return;
         }
 
-        // 2. Coletar todas as URLs que precisamos garantir cache
+        // 2. Coletar todas as URLs que precisamos garantir cache (apenas na Web)
         const urlsToCache = new Set<string>();
-        urlsToCache.add("/images/MINHA-LOGO.svg");
-        urlsToCache.add("/images/Layout-1-page-0001.webp"); // Mapa
+        if (!isNative) {
+            urlsToCache.add("/images/MINHA-LOGO.svg");
+            urlsToCache.add("/images/Layout-1-page-0001.webp"); // Mapa
 
-        systems.forEach(system => {
-            urlsToCache.add(system.iconUrl);
-            system.modalUrls.forEach(url => urlsToCache.add(url));
-        });
+            systems.forEach(system => {
+                urlsToCache.add(system.iconUrl);
+                system.modalUrls.forEach(url => urlsToCache.add(url));
+            });
+        }
 
         const urls = Array.from(urlsToCache);
         // Peso maior pro arquivo do Whisper por ser maior, para fluir bem na barra
-        const WHISPER_WEIGHT = 70; 
+        const WHISPER_WEIGHT = 70;
         const totalDownloads = urls.length + WHISPER_WEIGHT;
 
         progressState.current.total = totalDownloads;
@@ -88,9 +95,11 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
             }
         };
 
-        // 3. Pré-carregar Imagens (lotes de 5 para não travar a UI) usando Cache API para garantir persistência offline
+        // 3. Pré-carregar Imagens na Web (no Capacitor nativo os assets já vêm no APK)
         const BATCH_SIZE = 5;
         let i = 0;
+        let imageStartTimer: ReturnType<typeof setTimeout> | null = null;
+        let imageBatchTimer: ReturnType<typeof setTimeout> | null = null;
 
         const preloadImageToCache = async (url: string) => {
             try {
@@ -129,12 +138,14 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
                 tickProgress(1); // Imagens = peso 1
             }));
 
-            setTimeout(loadNextBatch, 50); // Respirar UI antes do próximo lote
+            imageBatchTimer = setTimeout(loadNextBatch, 50); // Respirar UI antes do próximo lote
         };
 
-        setTimeout(() => {
-            loadNextBatch();
-        }, 500);
+        if (urls.length > 0) {
+            imageStartTimer = setTimeout(() => {
+                loadNextBatch();
+            }, 500);
+        }
 
         // 4. Pré-carregar Model Whisper (Xenova) via gerenciador unificado
         let unsubscribeWhisper: (() => void) | null = null;
@@ -143,7 +154,7 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
         const preloadWhisperModel = () => {
             if (localStorage.getItem(CACHE_FLAG) === 'true') return;
             
-            console.log("⚡ [PWA] Conectando ao Worker compartilhado para download da IA...");
+            console.log("⚡ [Offline] Conectando ao Worker compartilhado para download da IA...");
             
             unsubscribeWhisper = whisperWorkerManager.subscribe((data: WhisperWorkerMessage) => {
                 const { type, progress } = data;
@@ -159,7 +170,7 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
                         lastTickWeight = currentWeight;
                     }
                 } else if (type === 'PRELOAD_DONE') {
-                    console.log("⚡ [PWA] Worker finalizou download da IA com sucesso.");
+                    console.log("⚡ [Offline] Worker finalizou download da IA com sucesso.");
                     const remaining = WHISPER_WEIGHT - lastTickWeight;
                     if (remaining > 0) tickProgress(remaining);
                     if (unsubscribeWhisper) {
@@ -167,7 +178,7 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
                         unsubscribeWhisper = null;
                     }
                 } else if (type === 'PRELOAD_ERROR') {
-                    console.warn("⚠️ [PWA] Aviso no download do Whisper:", data.error);
+                    console.warn("⚠️ [Offline] Aviso no download do Whisper:", data.error);
                     // Pular peso para não travar a barra se falhar (ex: sem internet já no começo)
                     const remaining = WHISPER_WEIGHT - lastTickWeight;
                     if (remaining > 0) tickProgress(remaining);
@@ -184,6 +195,8 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
         const timerId = setTimeout(preloadWhisperModel, 1000);
 
         return () => {
+            if (imageStartTimer) clearTimeout(imageStartTimer);
+            if (imageBatchTimer) clearTimeout(imageBatchTimer);
             clearTimeout(timerId);
             if (unsubscribeWhisper) {
                 unsubscribeWhisper();
@@ -194,6 +207,8 @@ export const usePreloadProgress = (systems: OrbitalSystem[]) => {
 
 
     const silentPreloadAll = (systems: OrbitalSystem[]) => {
+        if (isNativePlatform()) return;
+
         // Usado para visitas subsequentes: apenas chuta as requisições em background
         // para o Service Worker pegar imagens novas se houverem, sem mexer na UI
         const urlsToCache = new Set<string>(["/images/MINHA-LOGO.svg", "/images/Layout-1-page-0001.webp"]);

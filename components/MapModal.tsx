@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { OrbitalSystem } from '../types';
 import { motion, useMotionValue } from 'motion/react';
+import { useBackButtonHandler } from '../services/backButtonHandler';
 
 interface MapModalProps {
     isOpen: boolean;
@@ -30,6 +31,8 @@ export const MapModal: React.FC<MapModalProps> = React.memo(({
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
     const [selectedSystemToPlace, setSelectedSystemToPlace] = useState<string | null>(null);
     const [isMapLoading, setIsMapLoading] = useState(true);
+
+    useBackButtonHandler(isOpen && !!selectedSystemToPlace, () => setSelectedSystemToPlace(null));
 
     const containerRef = useRef<HTMLDivElement>(null);
     const imageRef = useRef<HTMLImageElement>(null);
@@ -356,7 +359,7 @@ export const MapModal: React.FC<MapModalProps> = React.memo(({
 
                 {/* Placement Controls */}
                 {selectedSystemToPlace && (
-                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3 z-30">
+                    <div className="absolute bottom-[calc(1.5rem+var(--app-safe-bottom))] left-1/2 -translate-x-1/2 flex gap-3 z-30">
                         <button
                             onClick={() => setSelectedSystemToPlace(null)}
                             className="px-4 py-3 bg-slate-800 text-white font-bold rounded-full border border-slate-600 shadow-lg"
@@ -375,7 +378,7 @@ export const MapModal: React.FC<MapModalProps> = React.memo(({
 
             {/* Admin Sidebar */}
             {isAdmin && (
-                <div className="w-full h-1/3 md:w-80 md:h-full bg-slate-900 border-t md:border-t-0 md:border-l border-white/10 flex flex-col z-20 shadow-2xl">
+                <div className="w-full h-1/3 md:w-80 md:h-full bg-slate-900 border-t md:border-t-0 md:border-l border-white/10 flex flex-col z-20 shadow-2xl safe-area-pb">
                     <div className="p-3 md:p-4 border-b border-white/10 bg-slate-800 flex-shrink-0">
                         <div className="flex justify-between items-center">
                             <h2 className="text-white font-bold text-base md:text-lg">Posicionar Orbes</h2>
@@ -427,13 +430,13 @@ export const MapModal: React.FC<MapModalProps> = React.memo(({
             {/* Close Button */}
             <button
                 onClick={onClose}
-                className="absolute top-4 right-4 w-12 h-12 bg-black/60 text-white border border-white/30 rounded-full grid place-items-center text-xl z-30 hover:bg-white/20 transition-colors"
+                className="absolute top-[calc(1rem+var(--app-safe-top))] right-[calc(1rem+var(--app-safe-right))] w-12 h-12 bg-black/60 text-white border border-white/30 rounded-full grid place-items-center text-xl z-30 hover:bg-white/20 transition-colors"
             >
                 ✕
             </button>
 
             {/* Zoom Controls */}
-            <div className={`absolute right-4 hidden md:flex flex-col gap-2 z-30 ${isAdmin ? 'bottom-[35%] md:bottom-6' : 'bottom-6'}`}>
+            <div className={`absolute right-[calc(1rem+var(--app-safe-right))] hidden md:flex flex-col gap-2 z-30 ${isAdmin ? 'bottom-[35%] md:bottom-[calc(1.5rem+var(--app-safe-bottom))]' : 'bottom-[calc(1.5rem+var(--app-safe-bottom))]'}`}>
                 <button onClick={zoomIn} className="w-10 h-10 bg-black/80 text-white rounded-full border border-white/20 hover:bg-white/20 flex items-center justify-center text-xl">+</button>
                 <button onClick={zoomOut} className="w-10 h-10 bg-black/80 text-white rounded-full border border-white/20 hover:bg-white/20 flex items-center justify-center text-xl">-</button>
                 <button onClick={resetMap} className="w-10 h-10 bg-black/80 text-white rounded-full border border-white/20 hover:bg-white/20 text-xs flex items-center justify-center">Reset</button>

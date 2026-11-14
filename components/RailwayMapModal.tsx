@@ -340,7 +340,7 @@ export const RailwayMapModal: React.FC<RailwayMapModalProps> = ({
             style={{ background: '#0a0a12' }}
         >
             {/* Header */}
-            <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#0d0d1a]/80 backdrop-blur-md">
+            <div className="shrink-0 flex items-center justify-between px-4 pb-3 pt-[calc(0.75rem+var(--app-safe-top))] border-b border-white/10 bg-[#0d0d1a]/80 backdrop-blur-md">
                 <div className="flex items-center gap-3">
                     <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
                     <span className="text-white font-bold tracking-widest text-sm uppercase">Mapa dos Trilhos</span>
@@ -391,7 +391,7 @@ export const RailwayMapModal: React.FC<RailwayMapModalProps> = ({
             />
 
             {/* Bottom info */}
-            <div className="shrink-0 flex items-center justify-between px-4 py-2 border-t border-white/5 bg-[#0d0d1a]/60 text-xs text-gray-500">
+            <div className="shrink-0 flex items-center justify-between px-4 pt-2 pb-[calc(0.5rem+var(--app-safe-bottom))] border-t border-white/5 bg-[#0d0d1a]/60 text-xs text-gray-500">
                 <span>🖱️ Arraste para mover · Scroll para zoom</span>
                 {userLocation && (
                     <span className="font-mono">

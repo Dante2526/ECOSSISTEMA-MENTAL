@@ -33,7 +33,7 @@ export const OfflineSetupProgress: React.FC<OfflineSetupProgressProps> = React.m
     const isComplete = progress.isFinished;
 
     return (
-        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[9999] transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isVisible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-12 scale-95 pointer-events-none'
+        <div className={`fixed safe-area-top-banner left-1/2 -translate-x-1/2 z-[9999] transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isVisible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-12 scale-95 pointer-events-none'
             }`}>
             <div className={`backdrop-blur-xl border rounded-full px-5 py-3 shadow-2xl flex items-center gap-4 transition-colors duration-500 min-w-[320px] ${isComplete
                     ? 'bg-emerald-900/80 border-emerald-500/50 shadow-emerald-900/40'

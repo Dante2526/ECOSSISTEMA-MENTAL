@@ -12,7 +12,7 @@ interface TourControlsProps {
 
 export const TourControls: React.FC<TourControlsProps> = ({ tourName, currentStep, totalSteps, onNext, onPrev, onExit }) => {
     return (
-        <div className="fixed top-0 left-0 right-0 bg-black/80 text-white z-50 flex items-center justify-between p-3 border-b border-purple-500/30 shadow-lg">
+        <div className="fixed top-0 left-0 right-0 bg-black/80 text-white z-50 flex items-center justify-between px-3 pb-3 pt-[calc(0.75rem+var(--app-safe-top))] border-b border-purple-500/30 shadow-lg">
             <div className="flex-1 text-left">
                 <h3 className="font-bold text-lg">{tourName}</h3>
                 <p className="text-sm text-slate-300">Etapa {currentStep} de {totalSteps}</p>

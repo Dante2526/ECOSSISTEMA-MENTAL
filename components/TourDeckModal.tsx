@@ -120,7 +120,7 @@ export const TourDeckModal: React.FC<TourDeckModalProps> = React.memo(({ isOpen,
         <div className={`fixed inset-0 z-[9999] bg-black/80 flex flex-col transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`} style={{ height: '100dvh' }}>
 
             {/* Top Bar for Tour Header */}
-            <div className="w-full shrink-0 p-3 md:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between text-white z-50 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
+            <div className="w-full shrink-0 px-3 pb-3 md:px-4 md:pb-4 safe-area-pt flex flex-col sm:flex-row items-start sm:items-center justify-between text-white z-50 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
                 <div className="pointer-events-auto flex-1 pr-2">
                     <h2 className="text-xl md:text-2xl font-bold drop-shadow-md truncate">{tour?.name}</h2>
                     <p className="text-sm md:text-md text-gray-300 drop-shadow-md truncate">
@@ -136,7 +136,7 @@ export const TourDeckModal: React.FC<TourDeckModalProps> = React.memo(({ isOpen,
 
                 {/* Real-time Distance Indicator - Apenas ADMIN */}
                 {isAdmin && distanceToTarget !== null && (
-                    <div className="absolute top-20 left-4 pointer-events-auto flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-2 rounded-lg border border-blue-500/50 shadow-lg animate-fade-in">
+                    <div className="absolute top-[calc(5.5rem+var(--app-safe-top))] left-4 pointer-events-auto flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-2 rounded-lg border border-blue-500/50 shadow-lg animate-fade-in">
                         <div className={`h-3 w-3 rounded-full ${distanceToTarget < 20 ? 'bg-emerald-500 animate-pulse' : 'bg-blue-500'}`}></div>
                         <span className="text-xs font-bold tracking-widest text-white uppercase">
                             Distância: <span className="text-blue-400 font-mono text-sm">{Math.round(distanceToTarget)}m</span>
@@ -222,7 +222,7 @@ export const TourDeckModal: React.FC<TourDeckModalProps> = React.memo(({ isOpen,
             </div>
 
             {/* Navigation Buttons (Bottom Bar / Footer) */}
-            <div className="w-full shrink-0 flex justify-center items-center gap-12 md:gap-24 p-4 md:p-8 z-50 pointer-events-none safe-area-pb bg-gradient-to-t from-black/80 to-transparent">
+            <div className="w-full shrink-0 flex justify-center items-center gap-12 md:gap-24 px-4 pt-4 md:px-8 md:pt-8 pb-[calc(1rem+var(--app-safe-bottom))] md:pb-[calc(2rem+var(--app-safe-bottom))] z-50 pointer-events-none bg-gradient-to-t from-black/80 to-transparent">
                 <button
                     onClick={handlePrev}
                     disabled={currentIndex === 0}

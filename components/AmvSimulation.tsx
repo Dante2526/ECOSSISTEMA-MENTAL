@@ -10,6 +10,7 @@ import {
   ChevronDown, ChevronUp, RotateCcw, Gauge, Play, Pause,
   Palette, Check, Paintbrush, SlidersHorizontal, Volume2, VolumeX
 } from 'lucide-react';
+import { useBackButtonHandler } from '../services/backButtonHandler';
 
 type Direction = 'NORTE_SUL' | 'SUL_NORTE';
 type SwitchState = 'NORMAL' | 'REVERSO' | 'FALHA';
@@ -8163,6 +8164,8 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
   });
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
 
+  useBackButtonHandler(isCustomizerOpen, () => setIsCustomizerOpen(false));
+
   const handleUpdatePlateBg = (bg: string) => {
     setPlateColors(prev => {
       const next = { ...prev, bg };
@@ -8398,7 +8401,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
       <div className="flex-1 lg:flex-1 flex flex-col relative overflow-hidden bg-[#0a0a0c] shrink-0 min-h-[30svh]">
          
          {/* TOP CONTROL BAR */}
-         <header className="absolute top-12 left-4 right-4 lg:top-6 lg:left-8 lg:right-8 z-10 flex justify-center items-start pointer-events-none">
+         <header className={`absolute ${inlineMode ? 'top-12 lg:top-6' : 'top-[calc(0.75rem+var(--app-safe-top))] lg:top-[calc(1.5rem+var(--app-safe-top))]'} left-4 right-4 lg:left-8 lg:right-8 z-10 flex justify-center items-start pointer-events-none`}>
 
             {/* Camera Controls, Sky Mode & Close Button */}
             <div className="flex items-center gap-2.5">
@@ -9275,7 +9278,7 @@ export default function AmvSimulation({ systemId, systemName, onClose, inlineMod
       </aside>
 
       {/* MOBILE BOTTOM CONTROL AREA */}
-      <div className={`lg:hidden w-full bg-[#0a0a0c] border-t border-white/5 flex flex-col relative z-20 shrink-0 transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] ${isMobilePanelOpen ? 'p-3 pb-10 gap-0 overflow-y-auto' : 'p-3 pb-10 gap-0 overflow-hidden'}`}>
+      <div className={`lg:hidden w-full bg-[#0a0a0c] border-t border-white/5 flex flex-col relative z-20 shrink-0 transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] ${inlineMode ? 'p-3 pb-10' : 'p-3 pb-[calc(1.5rem+var(--app-safe-bottom))]'} gap-0 ${isMobilePanelOpen ? 'overflow-y-auto' : 'overflow-hidden'}`}>
           
           {/* STATUS TOGGLE */}
           <button 

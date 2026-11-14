@@ -14,12 +14,16 @@ import { TourSelectionModal } from './components/TourSelectionModal';
 import { TourDeckModal } from './components/TourDeckModal';
 import { FeedbackMessage } from './components/FeedbackMessage';
 import { MapModal } from './components/MapModal';
-import { UpdatePrompt } from './components/UpdatePrompt';
-import { useRegisterSW } from 'virtual:pwa-register/react';
+import { PwaUpdater } from './components/PwaUpdater';
 import { OfflineSetupProgress } from './components/OfflineSetupProgress';
 import { FromToModal } from './components/FromToModal';
 import { useGeolocation } from './hooks/useGeolocation';
 import { RailwayMapModal } from './components/RailwayMapModal';
+import { useCapacitorApp } from './hooks/useCapacitorApp';
+import { isNativePlatform } from './services/capacitorPlatform';
+import { useBackButtonHandler } from './services/backButtonHandler';
+import { speakText } from './services/ttsService';
+import { exportJsonFile } from './services/exportService';
 
 const App: React.FC = () => {
     const [modalImages, setModalImages] = useState<string[]>([]);
@@ -40,6 +44,8 @@ const App: React.FC = () => {
 
     const orbitalSystemRef = useRef<OrbitalSystemRef>(null);
 
+    useCapacitorApp();
+
     // Temporizador para sumir os nomes dos ícones após 10 segundos
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -47,20 +53,6 @@ const App: React.FC = () => {
         }, 10000);
         return () => clearTimeout(timer);
     }, []);
-
-    // PWA Service Worker registration
-    const {
-        offlineReady: [offlineReady],
-        needRefresh: [needRefresh, setNeedRefresh],
-        updateServiceWorker,
-    } = useRegisterSW({
-        onRegistered(r) {
-            console.log('SW Registrado:', r);
-        },
-        onRegisterError(error) {
-            console.error('Erro ao registrar SW:', error);
-        },
-    });
 
     const [systems, setSystems] = useState<OrbitalSystemType[]>(() => {
         const normalizeImageUrl = (url: string) => {
@@ -471,17 +463,18 @@ const App: React.FC = () => {
         orbitalSystemRef.current?.focusSystem(systemId);
     }, []);
 
-    const handleExportSystems = useCallback(() => {
-        const dataStr = JSON.stringify(systems, null, 2);
-        const blob = new Blob([dataStr], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = "systems_data.json";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        showFeedback("Dados exportados!");
+    const handleExportSystems = useCallback(async () => {
+        try {
+            const result = await exportJsonFile("systems_data.json", systems);
+            if (result === "shared") {
+                showFeedback("COMPARTILHAMENTO DE SISTEMAS INICIADO!");
+            } else if (result === "exported") {
+                showFeedback("Dados exportados!");
+            }
+        } catch (err) {
+            console.error("Erro ao exportar sistemas:", err);
+            showFeedback("ERRO AO EXPORTAR DADOS.");
+        }
     }, [systems, showFeedback]);
 
     const handleCloseLoginModal = useCallback(() => setIsLoginModalOpen(false), []);
@@ -492,33 +485,9 @@ const App: React.FC = () => {
     const handleCloseMapModal = useCallback(() => setIsMapModalOpen(false), []);
     const handleOpenFromToModal = useCallback(() => setIsFromToModalOpen(true), []);
     const handleCloseFromToModal = useCallback(() => setIsFromToModalOpen(false), []);
-    const handleUpdateSW = useCallback(() => updateServiceWorker(true), [updateServiceWorker]);
-    const handleDismissRefresh = useCallback(() => setNeedRefresh(false), [setNeedRefresh]);
-
-
 
     const speak = useCallback((text: string) => {
-        if (!window.speechSynthesis) return;
-
-        // Cancela falas anteriores para não encavalar
-        window.speechSynthesis.cancel();
-
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'pt-BR';
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-
-        // Tenta encontrar uma voz masculina natural
-        const voices = window.speechSynthesis.getVoices();
-        const preferredVoice = voices.find(v => 
-            (v.name.includes('Google') || v.name.includes('Natural')) && 
-            v.lang.includes('pt-BR') && 
-            (v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('homem') || v.name.includes('Daniel') || v.name.includes('Antonio'))
-        ) || voices.find(v => v.lang.includes('pt-BR'));
-
-        if (preferredVoice) utterance.voice = preferredVoice;
-
-        window.speechSynthesis.speak(utterance);
+        void speakText(text);
     }, []);
 
     const { getStablePosition, findNearestSystem, isLocating: isLocatingGPS, startWatching, stopWatching, lastLocation } = useGeolocation();
@@ -540,6 +509,16 @@ const App: React.FC = () => {
     const handleOpenRailwayMap = useCallback(() => {
         setIsRailwayMapOpen(true);
     }, []);
+
+    useBackButtonHandler(!!activeTour, endTour);
+    useBackButtonHandler(!!editingSystem, handleCloseEditingSystem);
+    useBackButtonHandler(isLoginModalOpen, handleCloseLoginModal);
+    useBackButtonHandler(isRailwayMapOpen, handleCloseRailwayMap);
+    useBackButtonHandler(isTourSelectionOpen, handleCloseTourSelection);
+    useBackButtonHandler(isQuickSearchOpen, handleCloseQuickSearch);
+    useBackButtonHandler(isMapModalOpen, handleCloseMapModal);
+    useBackButtonHandler(isModalOpen, handleCloseModal);
+    useBackButtonHandler(isFromToModalOpen, handleCloseFromToModal);
 
     const [currentTargetId, setCurrentTargetId] = useState<string | null>(null);
     const [distanceToTarget, setDistanceToTarget] = useState<number | null>(null);
@@ -778,12 +757,7 @@ const App: React.FC = () => {
                 onClose={handleCloseModal}
             />
 
-            <UpdatePrompt
-                offlineReady={offlineReady}
-                needRefresh={needRefresh}
-                onUpdate={handleUpdateSW}
-                onClose={handleDismissRefresh}
-            />
+            {!isNativePlatform() && <PwaUpdater />}
 
             <MapModal
                 isOpen={isMapModalOpen}
@@ -795,7 +769,7 @@ const App: React.FC = () => {
                 onExport={handleExportSystems}
             />
 
-            <div className="fixed bottom-6 left-6 z-50 flex flex-col gap-4">
+            <div className="fixed left-[calc(1.5rem+var(--app-safe-left))] safe-area-bottom-fab z-50 flex flex-col gap-4">
                 {!editingSystem && !activeTour && (
                     <>
                         <button

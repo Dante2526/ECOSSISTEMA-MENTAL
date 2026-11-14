@@ -1,6 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { Tour, OrbitalSystem } from '../types';
+import { useBackButtonHandler } from '../services/backButtonHandler';
 
 interface TourAdminProps {
     systems: OrbitalSystem[];
@@ -12,6 +13,8 @@ export const TourAdmin: React.FC<TourAdminProps> = React.memo(({ systems, tours,
     const [editingTour, setEditingTour] = useState<Tour | null>(null);
     const [isDraggingOver, setIsDraggingOver] = useState(false);
     const draggedOverIndex = useRef<number | null>(null);
+
+    useBackButtonHandler(!!editingTour, () => setEditingTour(null));
 
     const handleCreateTour = () => {
         const newTour: Tour = {

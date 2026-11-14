@@ -797,7 +797,7 @@ const OrbitalSystemComponent: React.ForwardRefRenderFunction<OrbitalSystemRef, O
                 </div>
             </div>
 
-            <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-4">
+            <div className="fixed right-[calc(1.5rem+var(--app-safe-right))] safe-area-bottom-fab z-50 flex flex-col gap-4">
                 {isAdmin && !isEditing && (
                     <button
                         title="Adicionar Novo Sistema"

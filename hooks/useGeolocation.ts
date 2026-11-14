@@ -1,27 +1,115 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { Geolocation } from '@capacitor/geolocation';
 import { LocationData, OrbitalSystem } from '../types';
+import { isNativePlatform } from '../services/capacitorPlatform';
+
+function mapCapacitorGeoError(err: any, fallback: string): { message: string; isPermissionDenied: boolean } {
+    const code = String(err?.code || '');
+    const msg = String(err?.message || err || '').toLowerCase();
+
+    if (code === 'OS-PLUG-GLOC-0003' || msg.includes('permission') || msg.includes('denied')) {
+        return { message: 'Permissão de GPS negada.', isPermissionDenied: true };
+    }
+    if (code === 'OS-PLUG-GLOC-0010' || msg.includes('timeout')) {
+        return { message: 'Tempo esgotado ao buscar GPS.', isPermissionDenied: false };
+    }
+    if (
+        code === 'OS-PLUG-GLOC-0007' ||
+        code === 'OS-PLUG-GLOC-0009' ||
+        code === 'OS-PLUG-GLOC-0017' ||
+        msg.includes('not enabled') ||
+        msg.includes('disabled')
+    ) {
+        return { message: 'Serviço de GPS desativado no dispositivo.', isPermissionDenied: false };
+    }
+    return { message: fallback, isPermissionDenied: false };
+}
 
 export function useGeolocation() {
     const [isLocating, setIsLocating] = useState(false);
     const [isWatching, setIsWatching] = useState(false);
     const [lastLocation, setLastLocation] = useState<LocationData | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const watchId = useRef<number | null>(null);
+    const watchId = useRef<string | number | null>(null);
+    const watchSessionRef = useRef<number>(0);
 
     const stopWatching = useCallback(() => {
-        if (watchId.current !== null) {
-            navigator.geolocation.clearWatch(watchId.current);
+        watchSessionRef.current += 1;
+        const currentId = watchId.current;
+        if (currentId !== null) {
             watchId.current = null;
             setIsWatching(false);
+            if (typeof currentId === 'string') {
+                Geolocation.clearWatch({ id: currentId }).catch(() => {});
+            } else if (typeof navigator !== 'undefined' && navigator.geolocation) {
+                navigator.geolocation.clearWatch(currentId);
+            }
             console.log("📡 GPS: Monitoramento parado.");
+        } else {
+            setIsWatching(false);
         }
     }, []);
 
     const startWatching = useCallback((highAccuracy: boolean = true) => {
-        if (!navigator.geolocation) return;
-        
         stopWatching();
+        const session = watchSessionRef.current;
+
+        if (isNativePlatform()) {
+            setIsWatching(true);
+            console.log("📡 GPS Nativo: Iniciando monitoramento contínuo (Quente)...");
+
+            Geolocation.watchPosition(
+                {
+                    enableHighAccuracy: highAccuracy,
+                    timeout: 15000,
+                    maximumAge: 0,
+                    minimumUpdateInterval: 2000,
+                    enableLocationFallback: true,
+                },
+                (position, err) => {
+                    if (session !== watchSessionRef.current) return;
+
+                    if (err) {
+                        const mapped = mapCapacitorGeoError(err, 'Monitoramento de GPS indisponível.');
+                        console.warn(`📡 GPS Watch Warning [${err?.code || 'native'}]: ${err?.message || mapped.message}`);
+                        setError(mapped.message);
+                        if (mapped.isPermissionDenied) {
+                            stopWatching();
+                        }
+                        return;
+                    }
+
+                    if (position) {
+                        const data: LocationData = {
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude,
+                            altitude: position.coords.altitude,
+                            accuracy: position.coords.accuracy,
+                            timestamp: position.timestamp,
+                        };
+                        setLastLocation(data);
+                        setError(null);
+                    }
+                }
+            ).then((nativeWatchId) => {
+                if (session !== watchSessionRef.current) {
+                    Geolocation.clearWatch({ id: nativeWatchId }).catch(() => {});
+                    return;
+                }
+                watchId.current = nativeWatchId;
+            }).catch((err) => {
+                if (session !== watchSessionRef.current) return;
+                const mapped = mapCapacitorGeoError(err, 'Monitoramento de GPS indisponível.');
+                setError(mapped.message);
+                setIsWatching(false);
+            });
+
+            return;
+        }
+
+        if (!navigator.geolocation) return;
+
         setIsWatching(true);
         console.log("📡 GPS: Iniciando monitoramento contínuo (Quente)...");
 
@@ -36,7 +124,6 @@ export function useGeolocation() {
                 };
                 setLastLocation(data);
                 setError(null);
-                // console.log(`📡 GPS Quente: Accuracy=${data.accuracy}m`);
             },
             (err) => {
                 console.warn(`📡 GPS Watch Warning [code ${err.code}]: ${err.message || 'Sinal ou permissão indisponível'}`);
@@ -59,9 +146,35 @@ export function useGeolocation() {
         return () => stopWatching();
     }, [stopWatching]);
 
-    const getCurrentPosition = useCallback((): Promise<LocationData> => {
+    const getCurrentPosition = useCallback(async (): Promise<LocationData> => {
         setIsLocating(true);
         setError(null);
+
+        if (isNativePlatform()) {
+            try {
+                const position = await Geolocation.getCurrentPosition({
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0,
+                    enableLocationFallback: true,
+                });
+                const data: LocationData = {
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude,
+                    altitude: position.coords.altitude,
+                    accuracy: position.coords.accuracy,
+                    timestamp: position.timestamp,
+                };
+                setIsLocating(false);
+                setLastLocation(data);
+                return data;
+            } catch (err: any) {
+                const mapped = mapCapacitorGeoError(err, 'Erro ao capturar localização.');
+                setError(mapped.message);
+                setIsLocating(false);
+                throw mapped.message;
+            }
+        }
 
         return new Promise((resolve, reject) => {
             if (!navigator.geolocation) {

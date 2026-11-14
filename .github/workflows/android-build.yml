@@ -1,0 +1,295 @@
+name: Android Build (APK & AAB)
+
+# Gera automaticamente:
+# - APK Debug (pronto para instalar e testar em qualquer celular Android)
+# - APK Release (assinado se os 4 secrets abaixo existirem, ou unsigned caso contrário)
+# - AAB Release (Android App Bundle para Google Play Console)
+#
+# Secrets opcionais em Settings -> Secrets and variables -> Actions -> Repository secrets:
+# - ANDROID_KEYSTORE_BASE64: conteúdo do arquivo .jks/.keystore convertido em Base64
+# - ANDROID_KEYSTORE_PASSWORD: senha da keystore
+# - ANDROID_KEY_ALIAS: alias da chave
+# - ANDROID_KEY_PASSWORD: senha da chave
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Versão do app (ex: 1.0.2). Vazio = tag ou 1.0.<run_number>'
+        required: false
+        type: string
+      version_code:
+        description: 'versionCode numérico (Google Play). Vazio = github.run_number'
+        required: false
+        type: string
+      publish_release:
+        description: 'Criar GitHub Release com APK e AAB (automático ao enviar tag v*)'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  build:
+    name: Build Android APK & AAB
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 30
+
+    outputs:
+      version_name: ${{ steps.meta.outputs.version_name }}
+      version_code: ${{ steps.meta.outputs.version_code }}
+      is_signed: ${{ steps.keystore.outputs.is_signed }}
+      debug_apk_name: ${{ steps.package.outputs.debug_apk_name }}
+      release_apk_name: ${{ steps.package.outputs.release_apk_name }}
+      release_aab_name: ${{ steps.package.outputs.release_aab_name }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install npm dependencies
+        env:
+          ONNXRUNTIME_NODE_INSTALL_CUDA: skip
+        run: npm ci
+
+      - name: Typecheck, build Web bundle, and sync Capacitor Android
+        run: npm run lint && npm run cap:sync
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-36'
+          log-accepted-android-sdk-licenses: false
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+
+      - name: Resolve version metadata
+        id: meta
+        env:
+          INPUT_VERSION_NAME: ${{ inputs.version_name }}
+          INPUT_VERSION_CODE: ${{ inputs.version_code }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          if [ -n "$INPUT_VERSION_CODE" ]; then
+            CLEAN_CODE=$(printf '%s' "$INPUT_VERSION_CODE" | tr -d '[:space:]')
+            if ! [[ "$CLEAN_CODE" =~ ^[0-9]+$ ]] || [ "$((10#$CLEAN_CODE))" -lt 1 ]; then
+              echo "::error::version_code precisa ser um número inteiro positivo (recebido: '$INPUT_VERSION_CODE')."
+              exit 1
+            fi
+            VERSION_CODE="$((10#$CLEAN_CODE))"
+          else
+            VERSION_CODE="$GITHUB_RUN_NUMBER"
+          fi
+
+          if [ -n "$INPUT_VERSION_NAME" ]; then
+            RAW_NAME=$(printf '%s' "$INPUT_VERSION_NAME" | tr -d '[:space:]/')
+            VERSION_NAME="${RAW_NAME#v}"
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            RAW_NAME=$(printf '%s' "$GITHUB_REF_NAME" | tr -d '[:space:]/')
+            VERSION_NAME="${RAW_NAME#v}"
+          else
+            VERSION_NAME="1.0.${GITHUB_RUN_NUMBER}"
+          fi
+
+          if [ -z "$VERSION_NAME" ]; then
+            VERSION_NAME="1.0.${GITHUB_RUN_NUMBER}"
+          fi
+
+          echo "ANDROID_VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "ANDROID_VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "Versão Android: ${VERSION_NAME} (versionCode=${VERSION_CODE})"
+
+      - name: Configure release keystore (if secrets are present)
+        id: keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ] && [ -n "$KEYSTORE_PASS" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASS" ]; then
+            KEYSTORE_FILE="$RUNNER_TEMP/release.keystore"
+            printf '%s' "$KEYSTORE_B64" | tr -d '\n\r ' | base64 --decode > "$KEYSTORE_FILE"
+            if [ ! -s "$KEYSTORE_FILE" ]; then
+              echo "::error::Falha ao decodificar ANDROID_KEYSTORE_BASE64."
+              exit 1
+            fi
+            echo "ANDROID_KEYSTORE_PATH=$KEYSTORE_FILE" >> "$GITHUB_ENV"
+            echo "is_signed=true" >> "$GITHUB_OUTPUT"
+            echo "Keystore de release configurado com sucesso."
+          else
+            echo "is_signed=false" >> "$GITHUB_OUTPUT"
+            echo "Secrets de assinatura não configurados: APK Release será gerado sem assinatura (APK Debug permanece instalável)."
+          fi
+
+      - name: Build Debug APK, Release APK, and Release AAB
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug assembleRelease bundleRelease
+
+      - name: Clean up temporary keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.keystore"
+
+      - name: Stage APK and AAB artifacts
+        id: package
+        run: |
+          mkdir -p android-artifacts
+          VERSION_TAG="v${ANDROID_VERSION_NAME}-b${ANDROID_VERSION_CODE}"
+
+          DEBUG_SRC="android/app/build/outputs/apk/debug/app-debug.apk"
+          if [ ! -f "$DEBUG_SRC" ]; then
+            echo "::error::APK Debug não encontrado em $DEBUG_SRC"
+            exit 1
+          fi
+          DEBUG_NAME="EcossistemaMental-${VERSION_TAG}-debug.apk"
+          cp "$DEBUG_SRC" "android-artifacts/${DEBUG_NAME}"
+
+          if [ -f "android/app/build/outputs/apk/release/app-release.apk" ]; then
+            RELEASE_APK_SRC="android/app/build/outputs/apk/release/app-release.apk"
+            RELEASE_APK_NAME="EcossistemaMental-${VERSION_TAG}-release.apk"
+          elif [ -f "android/app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
+            RELEASE_APK_SRC="android/app/build/outputs/apk/release/app-release-unsigned.apk"
+            RELEASE_APK_NAME="EcossistemaMental-${VERSION_TAG}-release-unsigned.apk"
+          else
+            echo "::error::APK Release não encontrado em android/app/build/outputs/apk/release/"
+            exit 1
+          fi
+          cp "$RELEASE_APK_SRC" "android-artifacts/${RELEASE_APK_NAME}"
+
+          AAB_SRC="android/app/build/outputs/bundle/release/app-release.aab"
+          if [ ! -f "$AAB_SRC" ]; then
+            echo "::error::AAB Release não encontrado em $AAB_SRC"
+            exit 1
+          fi
+          AAB_NAME="EcossistemaMental-${VERSION_TAG}-release.aab"
+          cp "$AAB_SRC" "android-artifacts/${AAB_NAME}"
+
+          sha256sum android-artifacts/* > android-artifacts/SHA256SUMS.txt
+
+          echo "debug_apk_name=${DEBUG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "release_apk_name=${RELEASE_APK_NAME}" >> "$GITHUB_OUTPUT"
+          echo "release_aab_name=${AAB_NAME}" >> "$GITHUB_OUTPUT"
+
+          ls -lh android-artifacts/
+
+      - name: Upload Debug APK (instalável direto)
+        uses: actions/upload-artifact@v7
+        with:
+          path: android-artifacts/${{ steps.package.outputs.debug_apk_name }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v7
+        with:
+          path: android-artifacts/${{ steps.package.outputs.release_apk_name }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Release AAB (Google Play)
+        uses: actions/upload-artifact@v7
+        with:
+          path: android-artifacts/${{ steps.package.outputs.release_aab_name }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Write build summary
+        run: |
+          {
+            echo "### Build Android Concluído"
+            echo ""
+            echo "- **Versão:** \`${ANDROID_VERSION_NAME}\` (\`versionCode=${ANDROID_VERSION_CODE}\`)"
+            echo "- **Assinatura Release:** \`${{ steps.keystore.outputs.is_signed }}\`"
+            echo "- **Debug APK (pronto para instalar no celular):** \`${{ steps.package.outputs.debug_apk_name }}\`"
+            echo "- **Release APK:** \`${{ steps.package.outputs.release_apk_name }}\`"
+            echo "- **Release AAB:** \`${{ steps.package.outputs.release_aab_name }}\`"
+            echo ""
+            echo "#### Checksums SHA-256"
+            echo '```text'
+            cat android-artifacts/SHA256SUMS.txt
+            echo '```'
+            if [ "${{ steps.keystore.outputs.is_signed }}" != "true" ]; then
+              echo ""
+              echo "> **Nota:** Para gerar Release APK instalável e AAB assinado para Google Play, configure os secrets \`ANDROID_KEYSTORE_BASE64\`, \`ANDROID_KEYSTORE_PASSWORD\`, \`ANDROID_KEY_ALIAS\` e \`ANDROID_KEY_PASSWORD\` em **Settings → Secrets and variables → Actions**."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.publish_release == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 10
+
+    steps:
+      - name: Download Android build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Flatten release assets and generate checksums
+        run: |
+          mkdir -p flat-release-assets
+          find release-assets -type f \( -name '*.apk' -o -name '*.aab' \) -exec cp -v {} flat-release-assets/ \;
+          if [ -z "$(ls -A flat-release-assets)" ]; then
+            echo "::error::Nenhum arquivo APK ou AAB encontrado nos artifacts para publicar na Release."
+            exit 1
+          fi
+          (cd flat-release-assets && sha256sum *.apk *.aab > ../SHA256SUMS.txt && mv ../SHA256SUMS.txt .)
+          ls -lh flat-release-assets/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', needs.build.outputs.version_name) }}
+          target_commitish: ${{ github.sha }}
+          name: Ecossistema Mental v${{ needs.build.outputs.version_name }}
+          prerelease: ${{ contains(needs.build.outputs.version_name, '-') }}
+          generate_release_notes: true
+          working_directory: flat-release-assets
+          files: '*'
+          fail_on_unmatched_files: true

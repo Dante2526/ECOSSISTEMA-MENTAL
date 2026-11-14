@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import AmvSimulation from './AmvSimulation';
+import { useBackButtonHandler } from '../services/backButtonHandler';
 
 interface ImageModalProps {
     isOpen: boolean;
@@ -18,6 +19,8 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
     const [isRendered, setIsRendered] = useState(isOpen);
     const [isVisible, setIsVisible] = useState(isOpen);
     const [isSimulationOpen, setIsSimulationOpen] = useState(false);
+
+    useBackButtonHandler(isOpen && isSimulationOpen, () => setIsSimulationOpen(false));
 
     useEffect(() => {
         if (isOpen) {
@@ -133,7 +136,7 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
             ></div>
 
             <div
-                className={`fixed inset-0 z-[9999] flex items-center justify-center transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
+                className={`fixed inset-0 z-[9999] flex items-center justify-center pt-[var(--app-safe-top)] pb-[var(--app-safe-bottom)] pl-[var(--app-safe-left)] pr-[var(--app-safe-right)] transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
                 onClick={onClose}
             >
                 <div
@@ -216,7 +219,7 @@ export const ImageModal: React.FC<ImageModalProps> = React.memo(({ isOpen, image
 
                 {isSimulationOpen && (
                     <div
-                        className="fixed inset-0 z-[10010] flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+                        className="fixed inset-0 z-[10010] flex items-center justify-center pt-[max(0.5rem,var(--app-safe-top))] pb-[max(0.5rem,var(--app-safe-bottom))] pl-[max(0.5rem,var(--app-safe-left))] pr-[max(0.5rem,var(--app-safe-right))] sm:pt-[max(1rem,var(--app-safe-top))] sm:pb-[max(1rem,var(--app-safe-bottom))] bg-black/80 backdrop-blur-sm animate-fade-in"
                         onClick={(e) => { e.stopPropagation(); setIsSimulationOpen(false); }}
                     >
                         <div
